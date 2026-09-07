@@ -19,7 +19,7 @@ binding = "ASSETS"
 binding = "DB"
 database_name = "dns_worker_db"
 # This field must be filled with your database ID; otherwise the deployment will fail.
-database_id = "31a81405-1a43-42e9-af40-4ec606f6eb7e"
+database_id = "8277464f-d370-4f7b-82a3-db4d412f65cf"
 
 [triggers]
 crons = ["* * * * *"]
