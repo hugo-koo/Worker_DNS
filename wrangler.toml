@@ -1,4 +1,4 @@
-name = "dns-worker"
+name = "dns"
 main = "src/index.ts"
 compatibility_date = "2026-02-28"
 compatibility_flags = ["nodejs_compat"]
@@ -19,7 +19,7 @@ binding = "ASSETS"
 binding = "DB"
 database_name = "dns_worker_db"
 # This field must be filled with your database ID; otherwise the deployment will fail.
-database_id = "13d8c24f-064a-40d6-8b10-fa70bb3f79ab"
+database_id = "8277464f-d370-4f7b-82a3-db4d412f65cf"
 
 [triggers]
 crons = ["* * * * *"]
@@ -28,11 +28,11 @@ crons = ["* * * * *"]
 # mode = "targeted"
 # region = "aws:ap-southeast-1"
 # Or
-# hostname = "dbs.com.sg"
+hostname = "dbs.com.sg"
 # Or
 # mode = "smart"
 # Or
-mode = "off"
+# mode = "off"
 
 [observability]
 enabled = true
