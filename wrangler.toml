@@ -28,9 +28,11 @@ crons = ["* * * * *"]
 # mode = "targeted"
 # region = "aws:ap-southeast-1"
 # Or
+hostname = "dbs.com.sg"
+# Or
 # mode = "smart"
 # Or
-mode = "off"
+# mode = "off"
 
 [observability]
 enabled = true
