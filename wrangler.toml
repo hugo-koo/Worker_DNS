@@ -25,10 +25,10 @@ database_id = "8277464f-d370-4f7b-82a3-db4d412f65cf"
 crons = ["* * * * *"]
 
 [placement]
-# mode = "targeted"
-# region = "aws:ap-southeast-1"
+mode = "targeted"
+region = "aws:ap-southeast-1"
 # Or
-hostname = "dbs.com.sg"
+# hostname = "dbs.com.sg"
 # Or
 # mode = "smart"
 # Or
