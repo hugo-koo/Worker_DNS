@@ -1,75 +1,69 @@
+import { build, type PlistValue } from 'plist';
+
+/**
+ * Generates an Apple Configuration Profile (.mobileconfig) using plist 5.0.0.
+ *
+ * @param profileKey - The secret token or access point token.
+ * @param profileName - The human-readable name of the profile or access point.
+ * @param origin - The server origin URL (e.g. https://dns.example.com).
+ * @returns The XML plist representation of the MobileConfig.
+ */
 export function generateMobileConfig(profileKey: string, profileName: string, origin: string): string {
   const dohUrl = `${origin}/${profileKey}`;
   const payloadUUID = crypto.randomUUID();
   const profileUUID = crypto.randomUUID();
-  
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
-	<key>PayloadContent</key>
-	<array>
-		<dict>
-			<key>DNSSettings</key>
-			<dict>
-				<key>DNSProtocol</key>
-				<string>HTTPS</string>
-				<key>ServerHTTPVersion</key>
-				<string>3</string>
-				<key>ServerURL</key>
-				<string>${dohUrl}</string>
-			</dict>
-			<key>OnDemandRules</key>
-			<array>
-				<dict>
-					<key>Action</key>
-					<string>Connect</string>
-					<key>InterfaceTypeMatch</key>
-					<string>WiFi</string>
-				</dict>
-				<dict>
-					<key>Action</key>
-					<string>Connect</string>
-					<key>InterfaceTypeMatch</key>
-					<string>Cellular</string>
-				</dict>
-				<dict>
-					<key>Action</key>
-					<string>Disconnect</string>
-				</dict>
-			</array>
-			<key>PayloadDescription</key>
-			<string>DNS Worker protects your network traffic</string>
-			<key>PayloadDisplayName</key>
-			<string>DNS Worker DoH (${profileName})</string>
-			<key>PayloadIdentifier</key>
-			<string>com.apple.dnsSettings.managed.${payloadUUID}</string>
-			<key>PayloadName</key>
-			<string>DNS Worker DoH (${profileName})</string>
-			<key>PayloadType</key>
-			<string>com.apple.dnsSettings.managed</string>
-			<key>PayloadUUID</key>
-			<string>${payloadUUID}</string>
-			<key>PayloadVersion</key>
-			<integer>1</integer>
-		</dict>
-	</array>
-	<key>PayloadDescription</key>
-	<string>DNS Worker protects your network traffic</string>
-	<key>PayloadDisplayName</key>
-	<string>DNS Worker - ${profileName}</string>
-	<key>PayloadIdentifier</key>
-	<string>DNSWorker.profile</string>
-	<key>PayloadName</key>
-	<string>DNS Worker - ${profileName}</string>
-	<key>PayloadRemovalDisallowed</key>
-	<false/>
-	<key>PayloadType</key>
-	<string>Configuration</string>
-	<key>PayloadUUID</key>
-	<string>${profileUUID}</string>
-	<key>PayloadVersion</key>
-	<integer>1</integer>
-</dict>
-</plist>`;
+  const rawName = profileName?.trim();
+  const safeProfileName = rawName || "DNS Worker";
+  const cleanOrigin = origin.trim();
+
+  // Prominently display origin and profile name under DNS Worker
+  const displayName = rawName && rawName !== "DNS Worker"
+    ? `DNS Worker - ${safeProfileName} (${cleanOrigin})`
+    : `DNS Worker (${cleanOrigin})`;
+
+  const dohPayloadName = rawName && rawName !== "DNS Worker"
+    ? `DNS Worker DoH - ${cleanOrigin} (${safeProfileName})`
+    : `DNS Worker DoH - ${cleanOrigin}`;
+
+  const mobileConfig: PlistValue = {
+    PayloadContent: [
+      {
+        DNSSettings: {
+          DNSProtocol: 'HTTPS',
+          ServerHTTPVersion: 3,
+          ServerURL: dohUrl,
+        },
+        OnDemandRules: [
+          {
+            Action: 'Connect',
+            InterfaceTypeMatch: 'WiFi',
+          },
+          {
+            Action: 'Connect',
+            InterfaceTypeMatch: 'Cellular',
+          },
+          {
+            Action: 'Disconnect',
+          },
+        ],
+        PayloadDescription: `Configures encrypted DNS over HTTPS (DoH) for ${safeProfileName} via ${cleanOrigin}`,
+        PayloadDisplayName: dohPayloadName,
+        PayloadIdentifier: `com.apple.dnsSettings.managed.${payloadUUID}`,
+        PayloadName: dohPayloadName,
+        PayloadType: 'com.apple.dnsSettings.managed',
+        PayloadUUID: payloadUUID,
+        PayloadVersion: 1,
+      },
+    ],
+    PayloadDescription: `DNS Worker DoH configuration profile for ${safeProfileName} (${cleanOrigin})`,
+    PayloadDisplayName: displayName,
+    PayloadIdentifier: `com.dnsworker.profile.${profileKey}`,
+    PayloadName: displayName,
+    PayloadRemovalDisallowed: false,
+    PayloadType: 'Configuration',
+    PayloadUUID: profileUUID,
+    PayloadVersion: 1,
+  };
+
+  return build(mobileConfig, { indent: '\t' });
 }
