@@ -53,7 +53,7 @@ export class LogCoreModel {
   createInsertStatement(log: ResolutionLog): D1PreparedStatement {
     const logId = log.id ?? generateLogId();
     return this.db.prepare(
-      "INSERT INTO logs (profile_id, timestamp, id, access_point_id, client_ip, geo_country, domain, record_type, action, reason, answer, dest_geoip, ecs, upstream, latency) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO logs (profile_id, timestamp, id, access_point_id, client_ip, geo_country, domain, record_type, action, reason, answer, dest_geoip, ecs, upstream, latency, dest_country_code, dest_country, dest_isp) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     ).bind(
       log.profile_id,
       log.timestamp,
@@ -69,7 +69,10 @@ export class LogCoreModel {
       log.dest_geoip || null,
       log.ecs || null,
       log.upstream || null,
-      log.latency || null
+      log.latency || null,
+      log.dest_country_code || null,
+      log.dest_country || null,
+      log.dest_isp || null
     );
   }
 
@@ -95,12 +98,12 @@ export class LogCoreModel {
     let baseSelect = "";
     if (options.export) {
       baseSelect = `
-        SELECT l.profile_id, l.access_point_id, l.timestamp, l.client_ip, l.geo_country, l.domain, l.record_type, l.action, l.reason, l.answer, l.dest_geoip, l.ecs, l.upstream, l.latency
+        SELECT l.profile_id, l.access_point_id, l.timestamp, l.client_ip, l.geo_country, l.domain, l.record_type, l.action, l.reason, l.answer, l.dest_geoip, l.ecs, l.upstream, l.latency, l.dest_country_code, l.dest_country, l.dest_isp
         FROM logs l
       `;
     } else {
       baseSelect = `
-        SELECT l.id, l.timestamp, l.domain, l.action, l.record_type, l.latency, l.answer, l.geo_country, l.reason, l.access_point_id, ap.name as access_point_name 
+        SELECT l.id, l.timestamp, l.domain, l.action, l.record_type, l.latency, l.answer, l.geo_country, l.reason, l.access_point_id, l.dest_country_code, l.dest_country, l.dest_isp, ap.name as access_point_name 
         FROM logs l
         LEFT JOIN access_points ap ON l.access_point_id = ap.id
       `;
@@ -120,7 +123,7 @@ export class LogCoreModel {
     }
     if (options.geo_country) {
       whereClauses.push("l.geo_country = ?");
-      params.push(options.geo_country);
+      params.push(options.geo_country.toUpperCase());
     }
     if (options.reason) {
       whereClauses.push("l.reason = ?");
@@ -149,11 +152,11 @@ export class LogCoreModel {
     params.push(options.until);
 
     if (options.dest_country) {
-      whereClauses.push("json_extract(l.dest_geoip, '$.country_code') = ?");
+      whereClauses.push("COALESCE(l.dest_country_code, json_extract(l.dest_geoip, '$.country_code')) = ?");
       params.push(options.dest_country.toUpperCase());
     }
     if (options.isp) {
-      whereClauses.push("json_extract(l.dest_geoip, '$.isp') = ?");
+      whereClauses.push("COALESCE(l.dest_isp, json_extract(l.dest_geoip, '$.isp')) = ?");
       params.push(options.isp);
     }
 
