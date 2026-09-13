@@ -37,11 +37,11 @@ export class LogDestinationAnalytics {
     if (cutoff <= since) {
       let queryStr = `
         SELECT 
-          json_extract(dest_geoip, '$.country_code') as country_code,
-          json_extract(dest_geoip, '$.country') as country,
+          COALESCE(dest_country_code, json_extract(dest_geoip, '$.country_code')) as country_code,
+          COALESCE(dest_country, json_extract(dest_geoip, '$.country')) as country,
           COUNT(*) as count
         FROM logs 
-        WHERE profile_id = ? AND timestamp >= ? AND timestamp <= ? AND dest_geoip IS NOT NULL
+        WHERE profile_id = ? AND timestamp >= ? AND timestamp <= ? AND (dest_country_code IS NOT NULL OR dest_geoip IS NOT NULL)
       `;
       const params: (string | number)[] = [profileId, since, until];
       if (accessPointId) {
@@ -87,7 +87,7 @@ export class LogDestinationAnalytics {
     }
 
     let logWhere =
-      "profile_id = ? AND timestamp >= ? AND timestamp <= ? AND dest_geoip IS NOT NULL AND json_extract(dest_geoip, '$.country_code') IS NOT NULL AND json_extract(dest_geoip, '$.country_code') != ''";
+      "profile_id = ? AND timestamp >= ? AND timestamp <= ? AND (dest_country_code IS NOT NULL OR dest_geoip IS NOT NULL) AND COALESCE(dest_country_code, json_extract(dest_geoip, '$.country_code'), '') != ''";
     const logParams: (string | number)[] = [profileId, cutoff, until];
     if (accessPointId) {
       logWhere += " AND access_point_id = ?";
@@ -101,8 +101,8 @@ export class LogDestinationAnalytics {
         WHERE ${rollupWhere}
         UNION ALL
         SELECT 
-          COALESCE(json_extract(dest_geoip, '$.country_code'), '') as country_code,
-          COALESCE(json_extract(dest_geoip, '$.country'), '') as country,
+          COALESCE(dest_country_code, json_extract(dest_geoip, '$.country_code'), '') as country_code,
+          COALESCE(dest_country, json_extract(dest_geoip, '$.country'), '') as country,
           COUNT(*) as count
         FROM logs
         WHERE ${logWhere}
@@ -139,17 +139,17 @@ export class LogDestinationAnalytics {
   ): Promise<ISPCountResult[]> {
     let queryStr = `
       SELECT 
-        json_extract(dest_geoip, '$.isp') as name, 
+        COALESCE(dest_isp, json_extract(dest_geoip, '$.isp')) as name, 
         COUNT(*) as count 
       FROM logs 
       WHERE profile_id = ? 
         AND timestamp >= ? 
         AND timestamp <= ? 
-        AND dest_geoip IS NOT NULL
+        AND (dest_country_code IS NOT NULL OR dest_geoip IS NOT NULL)
     `;
     const params: (string | number)[] = [profileId, since, until];
     if (countryCode) {
-      queryStr += " AND json_extract(dest_geoip, '$.country_code') = ?";
+      queryStr += " AND COALESCE(dest_country_code, json_extract(dest_geoip, '$.country_code')) = ?";
       params.push(countryCode.toUpperCase());
     }
     if (accessPointId) {

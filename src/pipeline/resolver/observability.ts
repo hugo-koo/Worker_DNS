@@ -46,9 +46,18 @@ export function recordSuccessAndCache(
           (a) => a.type === "A" || a.type === "AAAA"
         )?.data;
         let destGeoJson = "";
+        let destCountryCode: string | null = null;
+        let destCountry: string | null = null;
+        let destIsp: string | null = null;
+
         if (firstIp) {
           const geo = await fetchGeoIP(firstIp);
-          if (geo) destGeoJson = JSON.stringify(geo);
+          if (geo) {
+            destGeoJson = JSON.stringify(geo);
+            destCountryCode = geo.country_code ? geo.country_code.toUpperCase() : null;
+            destCountry = geo.country || null;
+            destIsp = geo.isp || null;
+          }
         }
 
         const latency = Date.now() - context.startTime;
@@ -65,6 +74,9 @@ export function recordSuccessAndCache(
             reason: effectiveReason,
             answer: parsedAnswers.map((a) => a.data).join(", "),
             dest_geoip: destGeoJson,
+            dest_country_code: destCountryCode,
+            dest_country: destCountry,
+            dest_isp: destIsp,
             upstream: rawUpstreamUrl,
             latency,
             ecs
@@ -170,6 +182,9 @@ export function recordFailure(
             reason: failReason,
             answer: "",
             dest_geoip: "",
+            dest_country_code: null,
+            dest_country: null,
+            dest_isp: null,
             upstream: rawUpstreamUrl,
             latency: Date.now() - context.startTime,
             ecs

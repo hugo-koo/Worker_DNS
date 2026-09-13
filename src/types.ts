@@ -152,6 +152,9 @@ export interface ResolutionLog {
   reason?: string;
   answer?: string;
   dest_geoip?: string;
+  dest_country_code?: string | null;
+  dest_country?: string | null;
+  dest_isp?: string | null;
   latency?: number;
   ecs?: string;
   upstream?: string;
