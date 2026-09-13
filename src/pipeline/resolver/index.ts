@@ -74,12 +74,11 @@ export const pipelineResolver = {
       endpoint = resolveUpstreamEndpoint(rawUpstreamUrl);
       const transportRes = await fetchFromUpstream(endpoint, queryRaw);
 
-      let parsedAnswers = parseDNSAnswer(transportRes.answer);
-      let effectiveReason = reason;
+      const initialParsedAnswers = parseDNSAnswer(transportRes.answer);
 
       const echRes = await processBestEffortEch(
         query,
-        parsedAnswers,
+        initialParsedAnswers,
         transportRes.answer,
         context,
         settings,
@@ -89,8 +88,8 @@ export const pipelineResolver = {
       );
 
       const answer = echRes.answer;
-      parsedAnswers = echRes.parsedAnswers;
-      effectiveReason = echRes.effectiveReason;
+      const parsedAnswers = echRes.parsedAnswers;
+      const effectiveReason = echRes.effectiveReason;
 
       const minTTL =
         parsedAnswers.length > 0

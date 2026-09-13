@@ -2,8 +2,7 @@ import { D1Database, D1PreparedStatement } from "@cloudflare/workers-types";
 import { ResolutionLog } from "../types";
 import {
   LogCoreModel,
-  GetLogsOptions,
-  generateLogId
+  GetLogsOptions
 } from "./log/core";
 import { LogAggregationModel } from "./log/aggregation";
 import { LogRetentionModel } from "./log/retention";

@@ -1,5 +1,3 @@
-import { ResolutionResult } from "../../types";
-
 /**
  * Custom error representing an upstream HTTP error response during DoH resolution.
  */
