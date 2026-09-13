@@ -1,182 +1,74 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React from "react";
 import {
   H4,
   Tag,
   Button,
   Intent,
-  Callout,
-  Dialog,
-  FormGroup,
-  InputGroup,
-  Classes,
-  Spinner,
-  Tooltip,
-  Position
+  Callout
 } from "@blueprintjs/core";
-import { KeyRound, Key, Plus, Trash2, Edit2, ShieldAlert } from "lucide-react";
+import { Key, Plus, ShieldAlert } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { formatDateTime } from "../../../utils/date";
-import { validatePasskeyName } from "../../../utils/auth";
-import {
-  getPasskeys,
-  getPasskeyRegistrationOptions,
-  verifyPasskeyRegistration,
-  renamePasskey,
-  deletePasskey
-} from "../../../services";
-import type { Passkey } from "../../../services";
-import { isPasskeySupported, startPasskeyRegistration } from "../../../utils/webauthn";
-
 import { TOTPRecoveryKeys } from "./totp/TOTPRecoveryKeys";
+import {
+  usePasskeys,
+  PasskeyList,
+  AddPasskeyDialog,
+  RenamePasskeyDialog,
+  DeletePasskeyDialog
+} from "./passkey";
 
 export interface PasskeyCardProps {
   onRefresh?: () => void;
 }
 
+/**
+ * PasskeyCard coordinates WebAuthn passkey management for the user account.
+ * Adheres to the Separation of Concerns principle by delegating state management
+ * to usePasskeys and view rendering to PasskeyList and specialized Dialog components.
+ *
+ * @param props - Component props containing optional refresh callback.
+ * @returns React component representing the Passkeys management card.
+ */
 export const PasskeyCard: React.FC<PasskeyCardProps> = ({ onRefresh }) => {
   const { t } = useTranslation();
-  const [passkeys, setPasskeys] = useState<Passkey[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [supported, setSupported] = useState(true);
 
-  // Recovery keys state (if generated upon first MFA factor creation)
-  const [recoveryKeys, setRecoveryKeys] = useState<string[] | null>(null);
-  const [copiedKeys, setCopiedKeys] = useState(false);
-
-  // Add Passkey state
-  const [isAddOpen, setIsAddOpen] = useState(false);
-  const [passkeyName, setPasskeyName] = useState("");
-  const [nameFocused, setNameFocused] = useState(false);
-  const [registering, setRegistering] = useState(false);
-  const [addError, setAddError] = useState("");
-
-  // Rename state
-  const [editingPasskey, setEditingPasskey] = useState<Passkey | null>(null);
-  const [editName, setEditName] = useState("");
-  const [renameFocused, setRenameFocused] = useState(false);
-  const [renaming, setRenaming] = useState(false);
-  const [renameError, setRenameError] = useState("");
-
-  // Delete state
-  const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [targetToDelete, setTargetToDelete] = useState<Passkey | null>(null);
-
-  const fetchPasskeys = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await getPasskeys();
-      setPasskeys(data || []);
-    } catch {
-      /* ignore */
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    setSupported(isPasskeySupported());
-    fetchPasskeys();
-  }, [fetchPasskeys]);
-
-  const handleOpenAdd = () => {
-    setPasskeyName("");
-    setAddError("");
-    setNameFocused(false);
-    setIsAddOpen(true);
-  };
-
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const trimmed = passkeyName.trim();
-    if (!validatePasskeyName(trimmed)) {
-      setAddError(t("account.passkey.formatTip", "1-30 characters, letters, numbers, hyphens and underscores allowed"));
-      return;
-    }
-
-    setRegistering(true);
-    setAddError("");
-
-    try {
-      const options = await getPasskeyRegistrationOptions();
-      const credential = await startPasskeyRegistration(options);
-      const res = await verifyPasskeyRegistration({
-        name: trimmed,
-        credential
-      });
-
-      setIsAddOpen(false);
-      setPasskeyName("");
-      await fetchPasskeys();
-      onRefresh?.();
-      if (res?.recovery_keys && res.recovery_keys.length > 0) {
-        setRecoveryKeys(res.recovery_keys);
-      }
-    } catch (err: any) {
-      console.error("Passkey registration failed:", err);
-      setAddError(err.message || t("account.passkey.regFailed", "Registration failed"));
-    } finally {
-      setRegistering(false);
-    }
-  };
-
-  const handleCopyRecoveryKeys = () => {
-    if (!recoveryKeys) return;
-    navigator.clipboard.writeText(recoveryKeys.join("\n")).then(() => {
-      setCopiedKeys(true);
-      setTimeout(() => setCopiedKeys(false), 2000);
-    });
-  };
-
-  const handleOpenRename = (pk: Passkey) => {
-    setEditingPasskey(pk);
-    setEditName(pk.name);
-    setRenameError("");
-    setRenameFocused(false);
-  };
-
-  const handleRenameSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const trimmed = editName.trim();
-    if (!editingPasskey || !trimmed) return;
-    if (!validatePasskeyName(trimmed)) {
-      setRenameError(t("account.passkey.formatTip", "1-30 characters, letters, numbers, hyphens and underscores allowed"));
-      return;
-    }
-
-    setRenaming(true);
-    setRenameError("");
-    try {
-      await renamePasskey(editingPasskey.id, trimmed);
-      setEditingPasskey(null);
-      await fetchPasskeys();
-    } catch (err: any) {
-      setRenameError(err.message || t("common.errorNetwork"));
-    } finally {
-      setRenaming(false);
-    }
-  };
-
-  const handleOpenDelete = (pk: Passkey) => {
-    setTargetToDelete(pk);
-    setDeleteConfirmOpen(true);
-  };
-
-  const handleDeleteSubmit = async () => {
-    if (!targetToDelete) return;
-    setDeletingId(targetToDelete.id);
-    try {
-      await deletePasskey(targetToDelete.id);
-      setDeleteConfirmOpen(false);
-      setTargetToDelete(null);
-      await fetchPasskeys();
-      onRefresh?.();
-    } catch (err: any) {
-      alert(err.message || t("common.errorNetwork"));
-    } finally {
-      setDeletingId(null);
-    }
-  };
+  const {
+    passkeys,
+    loading,
+    supported,
+    recoveryKeys,
+    setRecoveryKeys,
+    copiedKeys,
+    handleCopyRecoveryKeys,
+    isAddOpen,
+    setIsAddOpen,
+    passkeyName,
+    setPasskeyName,
+    nameFocused,
+    setNameFocused,
+    registering,
+    addError,
+    setAddError,
+    handleOpenAdd,
+    handleRegister,
+    editingPasskey,
+    setEditingPasskey,
+    editName,
+    setEditName,
+    renameFocused,
+    setRenameFocused,
+    renaming,
+    renameError,
+    setRenameError,
+    handleOpenRename,
+    handleRenameSubmit,
+    deletingId,
+    deleteConfirmOpen,
+    setDeleteConfirmOpen,
+    targetToDelete,
+    handleOpenDelete,
+    handleDeleteSubmit
+  } = usePasskeys({ onRefresh });
 
   // Phase 1: show recovery keys after setup if generated
   if (recoveryKeys) {
@@ -204,7 +96,10 @@ export const PasskeyCard: React.FC<PasskeyCardProps> = ({ onRefresh }) => {
             round
           >
             {passkeys.length > 0
-              ? t("account.passkey.count", { count: passkeys.length, defaultValue: `${passkeys.length} configured` })
+              ? t("account.passkey.count", {
+                  count: passkeys.length,
+                  defaultValue: `${passkeys.length} configured`
+                })
               : t("account.passkey.none", "None configured")}
           </Tag>
         </div>
@@ -227,245 +122,59 @@ export const PasskeyCard: React.FC<PasskeyCardProps> = ({ onRefresh }) => {
       </p>
 
       {!supported && (
-        <Callout intent={Intent.WARNING} icon={<ShieldAlert size={16} />} className="mb-4">
-          {t("account.passkey.notSupported", "Your browser or device does not support Passkeys (WebAuthn).")}
+        <Callout
+          intent={Intent.WARNING}
+          icon={<ShieldAlert size={16} />}
+          className="mb-4"
+        >
+          {t(
+            "account.passkey.notSupported",
+            "Your browser or device does not support Passkeys (WebAuthn)."
+          )}
         </Callout>
       )}
 
-      {loading ? (
-        <div className="py-6 text-center">
-          <Spinner size={24} />
-        </div>
-      ) : passkeys.length === 0 ? (
-        <div className="py-6 text-center text-sm text-gray-500 dark:text-gray-400 border border-dashed border-gray-200 dark:border-gray-800 rounded-lg">
-          <KeyRound size={28} className="mx-auto mb-2 opacity-40" />
-          <p>{t("account.passkey.empty", "No passkeys added yet.")}</p>
-        </div>
-      ) : (
-        <div className="divide-y divide-gray-100 dark:divide-gray-800 border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden">
-          {passkeys.map((pk) => (
-            <div
-              key={pk.id}
-              className="p-3 sm:p-4 flex items-center justify-between gap-3 hover:bg-gray-50 dark:hover:bg-gray-900/40 transition-colors"
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="p-2 bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 rounded-lg shrink-0">
-                  <KeyRound size={18} />
-                </div>
-                <div className="min-w-0">
-                  <div className="font-semibold text-sm truncate text-gray-900 dark:text-gray-100">
-                    {pk.name}
-                  </div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400 flex flex-wrap gap-x-3 gap-y-1 mt-0.5">
-                    <span>
-                      {t("account.passkey.created", "Added")}: {formatDateTime(new Date(pk.created_at * 1000))}
-                    </span>
-                    {pk.last_used_at ? (
-                      <span>
-                        {t("account.passkey.lastUsed", "Last used")}: {formatDateTime(new Date(pk.last_used_at * 1000))}
-                      </span>
-                    ) : (
-                      <span>{t("account.passkey.neverUsed", "Never used")}</span>
-                    )}
-                  </div>
-                </div>
-              </div>
+      <PasskeyList
+        passkeys={passkeys}
+        loading={loading}
+        deletingId={deletingId}
+        onOpenRename={handleOpenRename}
+        onOpenDelete={handleOpenDelete}
+      />
 
-              <div className="flex items-center gap-1 shrink-0">
-                <Button
-                  minimal
-                  small
-                  icon={<Edit2 size={14} />}
-                  title={t("common.rename", "Rename")}
-                  onClick={() => handleOpenRename(pk)}
-                />
-                <Button
-                  minimal
-                  small
-                  intent={Intent.DANGER}
-                  icon={<Trash2 size={14} />}
-                  title={t("common.delete", "Delete")}
-                  loading={deletingId === pk.id}
-                  onClick={() => handleOpenDelete(pk)}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Add Passkey Dialog */}
-      <Dialog
+      <AddPasskeyDialog
         isOpen={isAddOpen}
-        onClose={() => !registering && setIsAddOpen(false)}
-        title={t("account.passkey.addTitle", "Add New Passkey")}
-        className="max-w-md"
-      >
-        <form onSubmit={handleRegister}>
-          <div className={Classes.DIALOG_BODY}>
-            {addError && (
-              <Callout intent={Intent.DANGER} className="mb-4">
-                {addError}
-              </Callout>
-            )}
-            <FormGroup
-              label={t("account.passkey.nameLabel", "Passkey Name")}
-              labelFor="passkey-name-input"
-              helperText={t("account.passkey.formatTip", "1-30 characters, letters, numbers, hyphens and underscores allowed")}
-            >
-              <Tooltip
-                content={t("account.passkey.formatTip", "1-30 characters, letters, numbers, hyphens and underscores allowed")}
-                isOpen={nameFocused}
-                position={Position.TOP}
-                intent={Intent.PRIMARY}
-                className="w-full"
-              >
-                <div className="w-full block">
-                  <InputGroup
-                    id="passkey-name-input"
-                    autoFocus
-                    placeholder={t("account.passkey.namePlaceholder", "e.g. my_passkey")}
-                    value={passkeyName}
-                    onChange={(e) => {
-                      setPasskeyName(e.target.value);
-                      if (addError) setAddError("");
-                    }}
-                    onFocus={() => setNameFocused(true)}
-                    onBlur={() => setNameFocused(false)}
-                    disabled={registering}
-                  />
-                </div>
-              </Tooltip>
-            </FormGroup>
-            <p className="text-xs text-gray-500 dark:text-gray-400">
-              {t(
-                "account.passkey.promptNotice",
-                "After clicking continue, your browser will prompt you to authenticate via Key, face scan, PIN, or hardware key."
-              )}
-            </p>
-          </div>
-          <div className={Classes.DIALOG_FOOTER}>
-            <div className={Classes.DIALOG_FOOTER_ACTIONS}>
-              <Button
-                text={t("common.cancel", "Cancel")}
-                onClick={() => setIsAddOpen(false)}
-                disabled={registering}
-              />
-              <Button
-                intent={Intent.PRIMARY}
-                type="submit"
-                text={t("account.passkey.continue", "Continue")}
-                loading={registering}
-                disabled={!validatePasskeyName(passkeyName.trim()) || registering}
-              />
-            </div>
-          </div>
-        </form>
-      </Dialog>
+        onClose={() => setIsAddOpen(false)}
+        passkeyName={passkeyName}
+        setPasskeyName={setPasskeyName}
+        nameFocused={nameFocused}
+        setNameFocused={setNameFocused}
+        registering={registering}
+        addError={addError}
+        setAddError={setAddError}
+        onSubmit={handleRegister}
+      />
 
-      {/* Rename Dialog */}
-      <Dialog
-        isOpen={!!editingPasskey}
-        onClose={() => !renaming && setEditingPasskey(null)}
-        title={t("account.passkey.renameTitle", "Rename Passkey")}
-        className="max-w-md"
-      >
-        <form onSubmit={handleRenameSubmit}>
-          <div className={Classes.DIALOG_BODY}>
-            {renameError && (
-              <Callout intent={Intent.DANGER} className="mb-4">
-                {renameError}
-              </Callout>
-            )}
-            <FormGroup
-              label={t("account.passkey.appNameLabel", "Application (Domain)")}
-            >
-              <InputGroup
-                readOnly
-                disabled
-                leftIcon="globe"
-                value={window.location.hostname}
-              />
-            </FormGroup>
-            <FormGroup
-              label={t("account.passkey.nameLabel", "Passkey Name")}
-              helperText={t("account.passkey.formatTip", "1-30 characters, letters, numbers, hyphens and underscores allowed")}
-            >
-              <Tooltip
-                content={t("account.passkey.formatTip", "1-30 characters, letters, numbers, hyphens and underscores allowed")}
-                isOpen={renameFocused}
-                position={Position.TOP}
-                intent={Intent.PRIMARY}
-                className="w-full"
-              >
-                <div className="w-full block">
-                  <InputGroup
-                    autoFocus
-                    placeholder={t("account.passkey.namePlaceholder", "e.g. my_passkey")}
-                    value={editName}
-                    onChange={(e) => {
-                      setEditName(e.target.value);
-                      if (renameError) setRenameError("");
-                    }}
-                    onFocus={() => setRenameFocused(true)}
-                    onBlur={() => setRenameFocused(false)}
-                    disabled={renaming}
-                  />
-                </div>
-              </Tooltip>
-            </FormGroup>
-          </div>
-          <div className={Classes.DIALOG_FOOTER}>
-            <div className={Classes.DIALOG_FOOTER_ACTIONS}>
-              <Button
-                text={t("common.cancel", "Cancel")}
-                onClick={() => setEditingPasskey(null)}
-                disabled={renaming}
-              />
-              <Button
-                intent={Intent.PRIMARY}
-                type="submit"
-                text={t("common.save", "Save")}
-                loading={renaming}
-                disabled={!validatePasskeyName(editName.trim()) || renaming}
-              />
-            </div>
-          </div>
-        </form>
-      </Dialog>
+      <RenamePasskeyDialog
+        isOpen={Boolean(editingPasskey)}
+        onClose={() => setEditingPasskey(null)}
+        editName={editName}
+        setEditName={setEditName}
+        renameFocused={renameFocused}
+        setRenameFocused={setRenameFocused}
+        renaming={renaming}
+        renameError={renameError}
+        setRenameError={setRenameError}
+        onSubmit={handleRenameSubmit}
+      />
 
-      {/* Delete Confirmation Dialog */}
-      <Dialog
+      <DeletePasskeyDialog
         isOpen={deleteConfirmOpen}
-        onClose={() => !deletingId && setDeleteConfirmOpen(false)}
-        title={t("account.passkey.deleteTitle", "Delete Passkey")}
-        className="max-w-md"
-      >
-        <div className={Classes.DIALOG_BODY}>
-          <p>
-            {t(
-              "account.passkey.deleteConfirm",
-              "Are you sure you want to delete passkey \"{{name}}\"? You will no longer be able to use this passkey for MFA.",
-              { name: targetToDelete?.name }
-            )}
-          </p>
-        </div>
-        <div className={Classes.DIALOG_FOOTER}>
-          <div className={Classes.DIALOG_FOOTER_ACTIONS}>
-            <Button
-              text={t("common.cancel", "Cancel")}
-              onClick={() => setDeleteConfirmOpen(false)}
-              disabled={!!deletingId}
-            />
-            <Button
-              intent={Intent.DANGER}
-              text={t("common.delete", "Delete")}
-              onClick={handleDeleteSubmit}
-              loading={!!deletingId}
-            />
-          </div>
-        </div>
-      </Dialog>
+        onClose={() => setDeleteConfirmOpen(false)}
+        targetToDelete={targetToDelete}
+        deleting={Boolean(deletingId)}
+        onConfirm={handleDeleteSubmit}
+      />
     </div>
   );
 };
