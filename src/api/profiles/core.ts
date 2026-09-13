@@ -58,7 +58,7 @@ export async function handleProfilesCoreCollectionRequest(
       upstream: ["https://security.cloudflare-dns.com/dns-query"],
       ecs: { enabled: true, use_client_ip: true },
       log_retention_days: defaultRetentionDays,
-      log_filtered_only: false,
+      skip_log_on_pass: false,
       default_policy: 'ALLOW',
       best_effort_ech: { enabled: false, fronting_domain: "cloudflare-ech.com" }
     };

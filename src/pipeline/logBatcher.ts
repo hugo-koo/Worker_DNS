@@ -207,10 +207,9 @@ export function enqueueLog(
     return;
   }
 
-  // 2. Filtered-only check: if log_filtered_only is enabled, only record BLOCK or REDIRECT queries
+  // 2. Skip logging for PASS queries when skip_log_on_pass is enabled
   const action = (log.action || "PASS").toUpperCase();
-  const isFiltered = action === "BLOCK" || action === "REDIRECT";
-  if (settings?.log_filtered_only && !isFiltered) {
+  if (settings?.skip_log_on_pass && action === "PASS") {
     return;
   }
 
