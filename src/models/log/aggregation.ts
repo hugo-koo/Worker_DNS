@@ -92,84 +92,87 @@ export class LogAggregationModel {
     }
 
     try {
+      // Filter only profiles active in the aggregation window (with 2-hour buffer for cache throttling)
+      const activityThreshold = effectiveSince - 7200;
       const { results: profiles } = await this.db.prepare(
-        "SELECT id FROM profiles"
-      ).all<{ id: string }>();
+        "SELECT id FROM profiles WHERE last_active_at >= ? OR (last_active_at IS NULL AND created_at >= ?)"
+      ).bind(activityThreshold, activityThreshold).all<{ id: string }>();
 
       if (!profiles || profiles.length === 0) {
+        await systemSettings.set("last_hourly_rollup_timestamp", String(effectiveUntil));
         return 0;
       }
 
       const statements: D1PreparedStatement[] = [];
 
-      for (const profile of profiles) {
-        // 1. Log action hourly rollups
-        statements.push(
-          this.db.prepare(`
-            INSERT OR REPLACE INTO log_hourly_rollups (profile_id, hour_timestamp, action, count)
-            SELECT
-              profile_id,
-              (timestamp / 3600) * 3600 AS hour_timestamp,
-              action,
-              COUNT(*) AS count
-            FROM logs
-            WHERE profile_id = ? AND timestamp >= ? AND timestamp < ?
-            GROUP BY (timestamp / 3600) * 3600, action
-          `).bind(profile.id, effectiveSince, effectiveUntil)
-        );
+      // Iterate hour by hour so hour_timestamp is a fixed parameter, avoiding runtime arithmetic and simplifying GROUP BY
+      for (let hourStart = effectiveSince; hourStart < effectiveUntil; hourStart += 3600) {
+        const hourEnd = hourStart + 3600;
 
-        // 2. Client IP & Country hourly rollups
-        statements.push(
-          this.db.prepare(`
-            INSERT OR REPLACE INTO client_hourly_rollups (profile_id, hour_timestamp, client_ip, geo_country, access_point_id, count)
-            SELECT
-              profile_id,
-              (timestamp / 3600) * 3600 AS hour_timestamp,
-              client_ip,
-              COALESCE(geo_country, '') AS geo_country,
-              COALESCE(access_point_id, '') AS access_point_id,
-              COUNT(*) AS count
-            FROM logs
-            WHERE profile_id = ? AND timestamp >= ? AND timestamp < ?
-            GROUP BY (timestamp / 3600) * 3600, client_ip, COALESCE(geo_country, ''), COALESCE(access_point_id, '')
-          `).bind(profile.id, effectiveSince, effectiveUntil)
-        );
+        for (const profile of profiles) {
+          // 1. Log action hourly rollups
+          statements.push(
+            this.db.prepare(`
+              INSERT OR REPLACE INTO log_hourly_rollups (profile_id, hour_timestamp, action, count)
+              SELECT ?, ?, action, COUNT(*) AS count
+              FROM logs
+              WHERE profile_id = ? AND timestamp >= ? AND timestamp < ?
+              GROUP BY action
+            `).bind(profile.id, hourStart, profile.id, hourStart, hourEnd)
+          );
 
-        // 3. Destination Country hourly rollups
-        statements.push(
-          this.db.prepare(`
-            INSERT OR REPLACE INTO destination_hourly_rollups (profile_id, hour_timestamp, country_code, country, access_point_id, count)
-            SELECT
-              profile_id,
-              (timestamp / 3600) * 3600 AS hour_timestamp,
-              COALESCE(json_extract(dest_geoip, '$.country_code'), '') AS country_code,
-              COALESCE(json_extract(dest_geoip, '$.country'), '') AS country,
-              COALESCE(access_point_id, '') AS access_point_id,
-              COUNT(*) AS count
-            FROM logs
-            WHERE profile_id = ? AND timestamp >= ? AND timestamp < ?
-              AND dest_geoip IS NOT NULL
-              AND json_extract(dest_geoip, '$.country_code') IS NOT NULL
-              AND json_extract(dest_geoip, '$.country_code') != ''
-            GROUP BY (timestamp / 3600) * 3600, COALESCE(json_extract(dest_geoip, '$.country_code'), ''), COALESCE(json_extract(dest_geoip, '$.country'), ''), COALESCE(access_point_id, '')
-          `).bind(profile.id, effectiveSince, effectiveUntil)
-        );
+          // 2. Client IP & Country hourly rollups
+          statements.push(
+            this.db.prepare(`
+              INSERT OR REPLACE INTO client_hourly_rollups (profile_id, hour_timestamp, client_ip, geo_country, access_point_id, count)
+              SELECT
+                ?,
+                ?,
+                client_ip,
+                COALESCE(geo_country, '') AS geo_country,
+                COALESCE(access_point_id, '') AS access_point_id,
+                COUNT(*) AS count
+              FROM logs
+              WHERE profile_id = ? AND timestamp >= ? AND timestamp < ?
+              GROUP BY client_ip, COALESCE(geo_country, ''), COALESCE(access_point_id, '')
+            `).bind(profile.id, hourStart, profile.id, hourStart, hourEnd)
+          );
 
-        // 4. Domain hourly rollups (aggregated offline per hour to save real-time D1 write quotas)
-        statements.push(
-          this.db.prepare(`
-            INSERT OR REPLACE INTO domain_hourly_rollups (profile_id, action, hour_timestamp, domain, count)
-            SELECT
-              profile_id,
-              action,
-              (timestamp / 3600) * 3600 AS hour_timestamp,
-              domain,
-              COUNT(*) AS count
-            FROM logs
-            WHERE profile_id = ? AND timestamp >= ? AND timestamp < ?
-            GROUP BY (timestamp / 3600) * 3600, action, domain
-          `).bind(profile.id, effectiveSince, effectiveUntil)
-        );
+          // 3. Destination Country hourly rollups
+          statements.push(
+            this.db.prepare(`
+              INSERT OR REPLACE INTO destination_hourly_rollups (profile_id, hour_timestamp, country_code, country, access_point_id, count)
+              SELECT
+                ?,
+                ?,
+                COALESCE(dest_country_code, json_extract(dest_geoip, '$.country_code'), '') AS country_code,
+                COALESCE(dest_country, json_extract(dest_geoip, '$.country'), '') AS country,
+                COALESCE(access_point_id, '') AS access_point_id,
+                COUNT(*) AS count
+              FROM logs
+              WHERE profile_id = ? AND timestamp >= ? AND timestamp < ?
+                AND (dest_country_code IS NOT NULL OR dest_geoip IS NOT NULL)
+                AND COALESCE(dest_country_code, json_extract(dest_geoip, '$.country_code'), '') != ''
+              GROUP BY COALESCE(dest_country_code, json_extract(dest_geoip, '$.country_code'), ''), COALESCE(dest_country, json_extract(dest_geoip, '$.country'), ''), COALESCE(access_point_id, '')
+            `).bind(profile.id, hourStart, profile.id, hourStart, hourEnd)
+          );
+
+          // 4. Domain hourly rollups (aggregated offline per hour to save real-time D1 write quotas)
+          statements.push(
+            this.db.prepare(`
+              INSERT OR REPLACE INTO domain_hourly_rollups (profile_id, action, hour_timestamp, domain, count)
+              SELECT
+                ?,
+                action,
+                ?,
+                domain,
+                COUNT(*) AS count
+              FROM logs
+              WHERE profile_id = ? AND timestamp >= ? AND timestamp < ?
+              GROUP BY action, domain
+            `).bind(profile.id, hourStart, profile.id, hourStart, hourEnd)
+          );
+        }
       }
 
       if (statements.length === 0) {
