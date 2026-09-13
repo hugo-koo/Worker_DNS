@@ -1,5 +1,4 @@
 import { Context, DNSQuery, ResolutionResult, ProfileSettings } from "../types";
-import { LogModel } from "../models/log";
 import { fetchGeoIP } from "../utils/geoip";
 import { buildResponse, buildResponseMulti, buildDNSQuery, parseDNSAnswer, injectEcsIntoQuery, DNSRecord } from "../utils/dns";
 import { isCloudflareIp, buildCloudflareEchConfig, DEFAULT_ECH_FRONTING_DOMAIN, ensureCloudflareIpRangesLoaded, saveActiveCfEchConfig } from "../utils/ech";
@@ -68,7 +67,6 @@ async function readFramedDnsResponse(reader: ReadableStreamDefaultReader<Uint8Ar
 
 export const pipelineResolver = {
   async resolve(request: Request, query: DNSQuery, context: Context, settings: ProfileSettings, action: 'PASS', reason?: string): Promise<ResolutionResult> {
-    const logModel = new LogModel(context.env.DB);
     const rawUpstreamUrl = settings.upstream[0] || "https://security.cloudflare-dns.com/dns-query";
     let effectiveUpstreamUrl = rawUpstreamUrl;
     let diagMethod = "POST";
@@ -443,7 +441,6 @@ export const pipelineResolver = {
   },
 
   async block(request: Request, query: DNSQuery, context: Context, settings: ProfileSettings, action: 'BLOCK' | 'REDIRECT', reason: string, customAnswer?: string, responseType?: string): Promise<ResolutionResult> {
-    const logModel = new LogModel(context.env.DB);
     const clientIp = request.headers.get("CF-Connecting-IP") || "127.0.0.1";
     let answer: Uint8Array;
     let displayAnswer = customAnswer || "";
