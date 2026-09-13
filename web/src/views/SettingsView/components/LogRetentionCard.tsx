@@ -54,20 +54,20 @@ export const LogRetentionCard: React.FC<LogRetentionCardProps> = ({ settings, se
 
         <div className="pt-3 border-t border-gray-100 dark:border-gray-800/80">
           <Switch
-            label={t("settings.logFilteredOnly", "仅记录屏蔽或重定向域名")}
-            checked={!isLoggingDisabled && !!settings.log_filtered_only}
+            label={t("settings.skipLogOnPass", "不记录放行记录")}
+            checked={!isLoggingDisabled && !!settings.skip_log_on_pass}
             disabled={isLoggingDisabled}
             onChange={(e) =>
               setSettings({
                 ...settings,
-                log_filtered_only: e.currentTarget.checked,
+                skip_log_on_pass: e.currentTarget.checked,
               })
             }
           />
           <p className="text-xs opacity-60 mt-1">
             {t(
-              "settings.logFilteredOnlyDesc",
-              "仅保存被规则拦截或重定向的域名查询，正常放行的访问不入库，大幅减少存储占用与写操作。"
+              "settings.skipLogOnPassDesc",
+              "启用后不记录正常放行的 DNS 查询，仅记录被拦截、重定向或解析失败的记录。可大幅减少存储占用与写操作。"
             )}
           </p>
         </div>
