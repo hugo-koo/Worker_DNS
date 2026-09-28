@@ -11,7 +11,7 @@ import type {
 /**
  * 包装 fetch 方法，当请求 Profile 相关接口遇到 404 (不存在或无权限) 时，直接引导前端至 404 界面
  */
-async function profileFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+export async function profileFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const res = await fetch(input, init);
   if (res.status === 404) {
     window.location.href = "/404";
@@ -61,9 +61,45 @@ export async function getProfileLists(profileId: string): Promise<FilterList[]> 
   return res.json();
 }
 
+/** Result of testing one domain against a single external list's bloom filter. */
+export interface ListCheckResult {
+  domain: string;
+  blocked: boolean;
+  /** The entry that matched: the domain itself, or a parent when a wildcard higher up matched. */
+  matchedEntry?: string | null;
+  /** False when the list has not finished syncing, so no filter exists yet. */
+  synced: boolean;
+  /** Configured bloom false-positive rate, so the UI can qualify a match. */
+  falsePositiveRate?: number;
+  /** Whether the list is currently active. A disabled list still has a bloom. */
+  enabled?: boolean;
+}
+
+/**
+ * Asks whether a list blocks a domain. External lists are stored only as bloom
+ * filters, so their entries cannot be listed or substring-searched - but
+ * membership is answerable in microseconds, which is what the UI needs.
+ */
+export async function checkDomainAgainstList(
+  profileId: string,
+  listId: number,
+  domain: string
+): Promise<ListCheckResult> {
+  const res = await profileFetch(
+    `/api/profiles/${profileId}/lists/${listId}/check?domain=${encodeURIComponent(domain)}`
+  );
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+/**
+ * Enables or disables an external list without deleting it. Disabled lists are
+ * skipped by the sync orchestrator and excluded when the merged profile bloom
+ * is rebuilt, so the subscription and its sync history are preserved.
+ */
 export async function toggleProfileList(profileId: string, listId: number, enabled: boolean): Promise<void> {
   const res = await profileFetch(`/api/profiles/${profileId}/lists/${listId}`, {
-    method: "POST",
+    method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ enabled })
   });
