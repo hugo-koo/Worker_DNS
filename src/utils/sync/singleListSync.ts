@@ -22,28 +22,35 @@ export async function syncSingleList(
   listBloomModel: ListBloomModel,
   now: number
 ): Promise<string | null> {
-  const timeoutMs = Number(env.SYNC_TIMEOUT_MS) || 30000;
+  const timeoutMs = Number(env.SYNC_TIMEOUT_MS) || 90000;
   const maxListDomains = Number(env.MAX_LIST_DOMAINS) || 500000;
   const maxDomains = Number(env.MAX_SYNC_DOMAINS) || 1000000;
   const falsePositiveRate = Number(env.BLOOM_FALSE_POSITIVE_RATE) || 0.0001;
 
+  // 协作式调度参数：降低单次持续计算量，适度平摊 CPU 峰值
+  const yieldBatchSize = Number(env.SYNC_YIELD_BATCH_SIZE) || 5000;
+  const yieldSleepMs = Number(env.SYNC_YIELD_SLEEP_MS) || 10;
+
   // 创建对应的列表布隆过滤器
   const listBloom = BloomFilter.create(maxDomains, falsePositiveRate);
   let count = 0;
+  let domainsSinceYield = 0;
 
   // 流式下载并按行解析域名，直接往布隆过滤器里塞
   const { error: fetchError } = await fetchListContent(
     list.url,
     MAX_LIST_BYTES,
     timeoutMs,
-    async (domain) => {
+    (domain: string) => {
       if (count < maxListDomains) {
         listBloom.add(domain);
         count++;
+        domainsSinceYield++;
 
-        // 每处理 50k 个域名让出一次 CPU 喘息时间，平摊高能 CPU 负载
-        if (count % 50000 === 0) {
-          await new Promise((resolve) => setTimeout(resolve, 0));
+        // 协作式调度：每处理 yieldBatchSize 个域名让出事件循环，注入喘息延迟平摊 CPU 负载
+        if (domainsSinceYield >= yieldBatchSize) {
+          domainsSinceYield = 0;
+          return new Promise<void>((resolve) => setTimeout(resolve, yieldSleepMs));
         }
       }
     }

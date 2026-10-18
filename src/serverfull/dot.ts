@@ -9,9 +9,12 @@ import { Buffer } from 'node:buffer';
 import { Env, Context, ExecutionContext } from '../types';
 import { parseDNSQueryFromRaw } from '../utils/dns';
 import { pipeline } from '../pipeline';
-import { resolveDefaultProfile, resolveProfileByKey } from '../api/doh';
+import { resolveProfileByKey } from '../api/doh';
 import { resolveUpstreamEndpoint, fetchFromUpstream } from '../pipeline/resolver/transport';
+import { DEFAULT_FAIL_OPEN_UPSTREAM } from '../constants/presets';
 import { ACCESS_KEY_REGEX } from '../utils/validator';
+import { formatDiagnostic, formatPortError } from './format';
+import { inspectTlsCertificate, getCertbotCommand } from './cert';
 
 export interface DotServerOptions {
   port: number;
@@ -19,6 +22,7 @@ export interface DotServerOptions {
   tlsKeyPath: string;
   tlsCertPath: string;
   defaultProfileKey?: string;
+  dotDomain?: string;
   env: Env;
 }
 
@@ -33,14 +37,51 @@ export class DotDnsServer {
       const { tlsKeyPath, tlsCertPath, port, host } = this.options;
 
       if (!tlsKeyPath || !tlsCertPath) {
-        console.warn('[DoT] TLS key or certificate path not configured. Skipping DoT server start.');
-        console.warn('[DoT] Set SERVERFULL_TLS_KEY_PATH and SERVERFULL_TLS_CERT_PATH to enable DoT.');
+        console.warn(formatDiagnostic({
+          level: 'warning',
+          title: 'DoT - TLS Not Configured',
+          message: 'TLS key or certificate path not provided. Skipping DoT server startup.',
+          solutions: [
+            'Set SERVERFULL_TLS_KEY_PATH and SERVERFULL_TLS_CERT_PATH to enable DNS over TLS (DoT).'
+          ]
+        }));
         resolve();
         return;
       }
 
       if (!fs.existsSync(tlsKeyPath) || !fs.existsSync(tlsCertPath)) {
-        console.warn(`[DoT] TLS files not found:\n  Key: ${tlsKeyPath}\n  Cert: ${tlsCertPath}\nSkipping DoT server.`);
+        console.warn(formatDiagnostic({
+          level: 'warning',
+          title: 'DoT - TLS Files Missing',
+          message: 'Configured TLS key or certificate files were not found on disk. Skipping DoT server startup.',
+          details: [
+            `Key path  : ${tlsKeyPath}`,
+            `Cert path : ${tlsCertPath}`
+          ],
+          solutions: [
+            'Verify the file paths or generate TLS certificates before enabling DoT.'
+          ]
+        }));
+        resolve();
+        return;
+      }
+
+      const certInfo = inspectTlsCertificate(tlsCertPath, tlsKeyPath);
+      if (!certInfo.isWildcard) {
+        console.warn(formatDiagnostic({
+          level: 'warning',
+          title: 'DoT - Paused (No Wildcard Certificate)',
+          message: 'DNS over TLS (DoT) is paused because no valid wildcard certificate (*.domain) was detected.',
+          details: [
+            'DoT requires a wildcard certificate (*.domain) to securely route queries to specific profiles via TLS SNI (<profileKey>.your.domain).',
+            'Accessing default profile without a wildcard certificate has been disabled.'
+          ],
+          solutions: [
+            'Register a wildcard certificate using Certbot via DNS challenge:',
+            `  ${getCertbotCommand(this.options.dotDomain)}`,
+            'Install the wildcard certificate and restart dns-worker to resume DoT service.'
+          ]
+        }));
         resolve();
         return;
       }
@@ -49,7 +90,8 @@ export class DotDnsServer {
         const tlsOptions: tls.TlsOptions = {
           key: fs.readFileSync(tlsKeyPath),
           cert: fs.readFileSync(tlsCertPath),
-          ALPNProtocols: ['dot']
+          ALPNProtocols: ['dot'],
+          sessionIdContext: 'dns-worker-dot'
         };
 
         this.server = tls.createServer(tlsOptions, (socket: tls.TLSSocket) => {
@@ -59,20 +101,14 @@ export class DotDnsServer {
         const startupErrorHandler = (err: any) => {
           this.server = null;
 
-          if (err.code === 'EADDRINUSE') {
-            console.error(`\n[Port Conflict] DoT port ${port} is already in use.`);
-            console.error('  Solution:');
-            console.error(`    - Use --dot-port <port> (e.g. --dot-port 8853) to specify an alternate DoT port.`);
-            console.error(`    - Or use --disable-dot to disable DoT.\n`);
-          } else if (err.code === 'EACCES') {
-            console.error(`\n[Permission Denied] Permission denied binding to DoT port ${port}.`);
-            console.error('  Port numbers below 1024 require elevated privileges on Linux/macOS.');
-            console.error('  Solution:');
-            console.error('    - Run with sudo (e.g. sudo npx dns-worker).');
-            console.error(`    - Or use --dot-port 8853 to bind to an unprivileged port.\n`);
-          } else {
-            console.error('[DoT] Server error:', err.message || err);
-          }
+          console.error(formatPortError({
+            serviceName: 'DNS over TLS (DoT)',
+            protocol: 'DoT',
+            port,
+            err,
+            alternateOption: '--dot-port <port> (e.g. --dot-port 8853)',
+            disableOption: '--disable-dot'
+          }));
 
           reject(err);
         };
@@ -85,7 +121,8 @@ export class DotDnsServer {
             console.error('[DoT] Runtime error:', err);
           });
           this.isRunning = true;
-          console.log(`[DoT] DNS over TLS listening on tls://${host}:${port}`);
+          const domainInfo = this.options.dotDomain ? ` (${this.options.dotDomain})` : '';
+          console.log(`[DoT] DNS over TLS listening on tls://${host}:${port}${domainInfo}`);
           resolve();
         });
       } catch (err) {
@@ -96,13 +133,35 @@ export class DotDnsServer {
   }
 
   private handleConnection(socket: tls.TLSSocket): void {
+    // Disable Nagle's algorithm (RFC 7858) and enable TCP keepalive
+    socket.setNoDelay(true);
+    socket.setKeepAlive(true, 60000);
+
     const remoteIp = socket.remoteAddress?.replace(/^::ffff:/, '') || '127.0.0.1';
     let buffer = Buffer.alloc(0);
 
     // Extract profile key from TLS SNI (e.g. "k7d9w2.dns.example.com" -> "k7d9w2")
-    const serverName = socket.servername || '';
+    const serverName = (socket.servername || '').toLowerCase().trim();
     let candidateKey = '';
-    if (serverName) {
+
+    const baseDomain = this.options.dotDomain?.toLowerCase().trim().replace(/^\*\./, '');
+    if (baseDomain && serverName) {
+      if (serverName === baseDomain) {
+        // Direct connection to base domain (single-domain cert or base domain client)
+        candidateKey = '';
+      } else if (serverName.endsWith('.' + baseDomain)) {
+        // Subdomain of base domain: e.g. "k7d9w2.dns.example.com" or "k7d9w2.sub.dns.example.com"
+        const prefix = serverName.slice(0, -(baseDomain.length + 1));
+        const firstPart = prefix.split('.')[0];
+        if (ACCESS_KEY_REGEX.test(firstPart)) {
+          candidateKey = firstPart;
+        } else if (ACCESS_KEY_REGEX.test(prefix)) {
+          candidateKey = prefix;
+        }
+      }
+    }
+
+    if (!candidateKey && serverName) {
       const firstPart = serverName.split('.')[0];
       if (ACCESS_KEY_REGEX.test(firstPart)) {
         candidateKey = firstPart;
@@ -162,20 +221,19 @@ export class DotDnsServer {
       } as any;
 
       // Profile selection:
-      // 1. Matched SNI Profile Key (Android Private DNS standard)
-      // 2. Default Profile Key from config
-      // 3. Fallback default profile from database
-      let profile = null;
-      if (sniKey) {
-        profile = await resolveProfileByKey(sniKey, env, ctx);
+      // In strict wildcard SNI routing mode, query must provide an SNI profile key (<profileKey>.<domain>).
+      // Accessing default profile without a wildcard profile key is completely disabled.
+      if (!sniKey) {
+        socket.destroy();
+        return;
       }
-      if (!profile && this.options.defaultProfileKey) {
-        profile = await resolveProfileByKey(this.options.defaultProfileKey, env, ctx);
-      }
+
+      const profile = await resolveProfileByKey(sniKey, env, ctx);
       if (!profile) {
-        profile = await resolveDefaultProfile(env, ctx);
+        // Unknown or invalid profile key, drop connection
+        socket.destroy();
+        return;
       }
-      if (!profile) return;
 
       const context: Context = {
         profileId: profile.id,
@@ -208,7 +266,7 @@ export class DotDnsServer {
     } catch (err) {
       console.error('[DoT] Query processing exception:', err);
       try {
-        const failOpenUpstream = this.options.env.FAIL_OPEN_UPSTREAM || 'https://freedns.controld.com/no-ads-malware-typo';
+        const failOpenUpstream = this.options.env.FAIL_OPEN_UPSTREAM || DEFAULT_FAIL_OPEN_UPSTREAM;
         const endpoint = resolveUpstreamEndpoint(failOpenUpstream);
         const transportRes = await fetchFromUpstream(endpoint, rawMsg);
         if (!socket.destroyed && socket.writable) {

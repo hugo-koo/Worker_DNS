@@ -5,10 +5,23 @@ import { ProfileBloomModel } from "../models/profileBloom";
 import { BloomFilter } from "../utils/bloom";
 import { cacheUtils } from "../utils/cache";
 import { configCache, bloomMemoryMap } from "./cache";
+import { DEFAULT_FAIL_OPEN_UPSTREAM } from "../constants/presets";
 
 export const pipelineConfig = {
   async load(context: Context, track: (name: string) => void): Promise<{ settings: ProfileSettings; rules: Rule[]; bloom?: BloomFilter } | null> {
     const { profileId, env, ctx } = context;
+
+    // Fast-path: Default profile for unauthenticated access points or emergency fail-open
+    if (profileId === 'default') {
+      const failOpenUpstream = env.FAIL_OPEN_UPSTREAM || DEFAULT_FAIL_OPEN_UPSTREAM;
+      const defaultSettings: ProfileSettings = {
+        upstream: [failOpenUpstream],
+        default_policy: "ALLOW",
+        log_retention_days: 0,
+        ecs: { enabled: true, use_client_ip: true }
+      };
+      return { settings: defaultSettings, rules: [], bloom: undefined };
+    }
 
     // 1. 检查 L1 Memory (Isolate Global)
     const inMem = bloomMemoryMap.get(profileId);
@@ -116,7 +129,7 @@ export const pipelineConfig = {
       // 容灾模式 2: Emergency Safe Default Fallback
       // 当 D1 读额度耗尽且无缓存时，使用内置安全上游兜底，保证 DNS 绝不报 500 断网
       console.warn(`[Config] Serving emergency fail-open safe fallback for profile ${profileId}`);
-      const failOpenUpstream = env.FAIL_OPEN_UPSTREAM || "https://freedns.controld.com/no-ads-malware-typo";
+      const failOpenUpstream = env.FAIL_OPEN_UPSTREAM || DEFAULT_FAIL_OPEN_UPSTREAM;
       const fallbackSettings: ProfileSettings = {
         upstream: [failOpenUpstream],
         default_policy: "ALLOW",

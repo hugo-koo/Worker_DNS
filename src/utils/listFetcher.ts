@@ -1,4 +1,4 @@
-import { isSafeUrl } from "./validator";
+import { isSafeUrlWithDnsCheck } from "./validator";
 import { parseLine } from "./parser";
 
 /** 单个列表的拉取结果 */
@@ -9,24 +9,27 @@ export interface FetchListResult {
   error: string | null;
 }
 
+/** 回调函数：支持同步返回 void（绝大多数场景），仅在出让 CPU 时返回 Promise */
+export type DomainConsumer = (domain: string) => void | Promise<void>;
+
 /**
  * 流式拉取单个订阅列表并逐行解析域名。
  *
  * 性能优化：不再将完整的网络流存入大二进制缓冲区、解码为大字符串并拆分大数组。
- * 而是流式（chunk-by-chunk）进行 UTF-8 文本解码与行切分，对每个域名触发异步回调。
- * 这将内存开销由 40MB+ 降为 <1MB，并将大列表 CPU 运行时间完全打散，从根本上防止 exceeded CPU limit。
+ * 而是流式（chunk-by-chunk）进行 UTF-8 文本解码与行切分，对每个域名触发回调。
+ * 回调支持同步优先，彻底消除 30 万次 Promise 分配与微任务入队，并将大列表 CPU 运行时间完全打散。
  *
  * @param url - 订阅列表的 HTTP(S) URL
  * @param maxBytes - 单个列表的字节数上限（软截断，超出后停止读取）
  * @param timeoutMs - 请求超时时间（毫秒）
- * @param onDomain - 当提取出有效域名时的异步回调函数
+ * @param onDomain - 当提取出有效域名时的回调函数（支持同步与协作式出让 Promise）
  * @returns 解析的域名数量与错误信息
  */
 export async function fetchListContent(
   url: string,
   maxBytes: number,
   timeoutMs: number,
-  onDomain: (domain: string) => Promise<void>
+  onDomain: DomainConsumer
 ): Promise<FetchListResult> {
   const deadline = Date.now() + timeoutMs;
   let currentUrl = url;
@@ -36,7 +39,7 @@ export async function fetchListContent(
 
   try {
     while (true) {
-      if (!isSafeUrl(currentUrl)) {
+      if (!(await isSafeUrlWithDnsCheck(currentUrl))) {
         return {
           count: 0,
           error: "Invalid list URL. Private networks, localhosts, and internal domains are not allowed.",
@@ -143,7 +146,10 @@ export async function fetchListContent(
         for (const line of lines) {
           const domain = parseLine(line);
           if (domain) {
-            await onDomain(domain);
+            const res = onDomain(domain);
+            if (res instanceof Promise) {
+              await res;
+            }
             count++;
           }
         }
@@ -154,7 +160,10 @@ export async function fetchListContent(
     if (buffer) {
       const domain = parseLine(buffer);
       if (domain) {
-        await onDomain(domain);
+        const res = onDomain(domain);
+        if (res instanceof Promise) {
+          await res;
+        }
         count++;
       }
     }

@@ -5,6 +5,11 @@
 
 export class MemoryCache {
   private store = new Map<string, { body: Uint8Array; headers: Headers; status: number; statusText: string; expires: number }>();
+  private readonly maxEntries: number;
+
+  constructor(maxEntries = 5000) {
+    this.maxEntries = maxEntries;
+  }
 
   async match(request: string | Request): Promise<Response | undefined> {
     const url = typeof request === 'string' ? request : request.url;
@@ -14,6 +19,10 @@ export class MemoryCache {
       this.store.delete(url);
       return undefined;
     }
+    // 更新 LRU 访问次序
+    this.store.delete(url);
+    this.store.set(url, entry);
+
     return new Response(entry.body, {
       status: entry.status,
       statusText: entry.statusText,
@@ -27,13 +36,30 @@ export class MemoryCache {
     const maxAgeMatch = cc.match(/max-age=(\d+)/i);
     const ttl = maxAgeMatch ? parseInt(maxAgeMatch[1], 10) : 3600;
     const bodyBuf = await response.clone().arrayBuffer();
+    const now = Date.now();
 
+    // 容量受限防御：超出上限时先惰性清理过期项，仍超限则按 LRU 淘汰最旧项
+    if (!this.store.has(url) && this.store.size >= this.maxEntries) {
+      for (const [k, v] of this.store) {
+        if (now > v.expires) {
+          this.store.delete(k);
+        }
+      }
+
+      while (this.store.size >= this.maxEntries) {
+        const oldestKey = this.store.keys().next().value;
+        if (oldestKey === undefined) break;
+        this.store.delete(oldestKey);
+      }
+    }
+
+    this.store.delete(url);
     this.store.set(url, {
       body: new Uint8Array(bodyBuf),
       headers: new Headers(response.headers),
       status: response.status,
       statusText: response.statusText,
-      expires: Date.now() + ttl * 1000
+      expires: now + ttl * 1000
     });
   }
 

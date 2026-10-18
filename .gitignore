@@ -1,6 +1,7 @@
 node_modules
 static
 dist
+dist-*
 build
 .wrangler
 package-lock.json
@@ -12,3 +13,5 @@ data/
 dev-dist
 .dev.vars
 temp_*
+.astro
+.vite-cache

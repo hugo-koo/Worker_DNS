@@ -102,7 +102,49 @@ export class NodeD1PreparedStatement implements D1PreparedStatement {
 }
 
 export class NodeD1Database implements D1Database {
-  constructor(public readonly rawDb: DatabaseSync) {}
+  constructor(
+    public readonly rawDb: DatabaseSync,
+    public readonly dbPath?: string
+  ) {}
+
+  /**
+   * Calculates the physical disk size in bytes for the SQLite database.
+   * Includes main database file, WAL file, and SHM file.
+   * Falls back to logical allocated pages * page size.
+   */
+  getDatabaseSize(): number {
+    let total = 0;
+    if (this.dbPath && this.dbPath !== ':memory:') {
+      try {
+        if (fs.existsSync(this.dbPath)) total += fs.statSync(this.dbPath).size;
+        const walPath = `${this.dbPath}-wal`;
+        if (fs.existsSync(walPath)) total += fs.statSync(walPath).size;
+        const shmPath = `${this.dbPath}-shm`;
+        if (fs.existsSync(shmPath)) total += fs.statSync(shmPath).size;
+      } catch {}
+    }
+    if (total === 0) {
+      try {
+        const pageCount = (this.rawDb.prepare('PRAGMA page_count').get() as Record<string, unknown> | undefined)?.page_count ?? 0;
+        const freelistCount = (this.rawDb.prepare('PRAGMA freelist_count').get() as Record<string, unknown> | undefined)?.freelist_count ?? 0;
+        const pageSize = (this.rawDb.prepare('PRAGMA page_size').get() as Record<string, unknown> | undefined)?.page_size ?? 4096;
+        total = Math.max(0, (Number(pageCount) - Number(freelistCount)) * Number(pageSize));
+      } catch {}
+    }
+    return total;
+  }
+
+  /**
+   * Performs an immediate SQLite VACUUM and truncates the WAL write-ahead log to reclaim disk space.
+   */
+  vacuum(): void {
+    try {
+      this.rawDb.exec('VACUUM;');
+      this.rawDb.exec('PRAGMA wal_checkpoint(TRUNCATE);');
+    } catch (err: unknown) {
+      console.warn('[SQLite D1] VACUUM / checkpoint warning:', err);
+    }
+  }
 
   prepare(query: string): D1PreparedStatement {
     return new NodeD1PreparedStatement(this.rawDb, query) as unknown as D1PreparedStatement;
@@ -131,6 +173,12 @@ export class NodeD1Database implements D1Database {
 
   async dump(): Promise<ArrayBuffer> {
     throw new Error('dump() is not supported in NodeD1Database');
+  }
+
+  close(): void {
+    try {
+      this.rawDb.close();
+    } catch {}
   }
 
   withSession(_constraintOrBookmark?: string): D1DatabaseSession {
@@ -204,17 +252,34 @@ export function initServerfullDb(dbPath: string, rootDir: string = getPackageRoo
     fs.mkdirSync(dir, { recursive: true });
   }
 
+  // Seamlessly migrate legacy database from ./data/dns_worker.sqlite if target database does not exist yet
+  if (!fs.existsSync(dbPath)) {
+    const legacyPath = path.join(process.cwd(), 'data', 'dns_worker.sqlite');
+    if (fs.existsSync(legacyPath) && path.resolve(legacyPath) !== path.resolve(dbPath)) {
+      try {
+        fs.copyFileSync(legacyPath, dbPath);
+        console.log(`[SQLite D1] Seamlessly migrated existing database from ${legacyPath} to ${dbPath}`);
+      } catch {
+        /* If copy fails, fresh database will be initialized */
+      }
+    }
+  }
+
   console.log(`[SQLite D1] Connecting to database at: ${dbPath}`);
   const rawDb = new DatabaseSync(dbPath);
 
-  // Configure SQLite for high concurrency & integrity
+  // Configure SQLite for high concurrency, zero-copy memory reads & integrity
   rawDb.exec('PRAGMA journal_mode = WAL;');
   rawDb.exec('PRAGMA synchronous = NORMAL;');
+  rawDb.exec('PRAGMA busy_timeout = 5000;');
   rawDb.exec('PRAGMA foreign_keys = ON;');
+  rawDb.exec('PRAGMA temp_store = MEMORY;');
+  rawDb.exec('PRAGMA cache_size = -64000;'); // 64 MB in-memory page cache
+  rawDb.exec('PRAGMA mmap_size = 268435456;'); // 256 MB zero-copy memory-mapped I/O
 
   // Run migrations
   const migrationsDir = path.join(rootDir, 'migrations');
   runMigrations(rawDb, migrationsDir);
 
-  return new NodeD1Database(rawDb);
+  return new NodeD1Database(rawDb, dbPath);
 }

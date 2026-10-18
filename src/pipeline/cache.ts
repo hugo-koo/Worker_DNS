@@ -45,6 +45,12 @@ export const dnsCache = new SizeCappedMap<string, any>(500);
 // Profile Key 到 Profile 元数据映射缓存 (L1 内存缓存，限制最多 100 个 Key)
 export const profileKeyMemoryMap = new SizeCappedMap<string, { data: any; ts: number }>(100);
 
+// 默认 Profile 元数据内存缓存 (L1 内存缓存，5 分钟 TTL，防范 UDP DNS 高频穿透)
+export let defaultProfileMemoryCache: { data: any; ts: number } | null = null;
+export function setDefaultProfileMemoryCache(entry: { data: any; ts: number } | null): void {
+  defaultProfileMemoryCache = entry;
+}
+
 /**
  * 通过 Cloudflare Zone Cache Purge API 全球按 Tag 主动失效缓存。
  * 需配置 CF_ZONE_ID 与 CF_PURGE_TOKEN (具备 Zone -> Cache Purge 权限)。
@@ -107,6 +113,7 @@ export const pipelineCache = {
       bloomMemoryMap.delete(profileId);
     }
     profileKeyMemoryMap.clear();
+    defaultProfileMemoryCache = null;
     for (const key of dnsCache.keys()) {
       if (key.startsWith(`${profileId}:`)) {
         dnsCache.delete(key);

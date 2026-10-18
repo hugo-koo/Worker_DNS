@@ -4,8 +4,13 @@ import { pipeline } from '../pipeline';
 import { ProfileModel, ProfileWithBloom } from '../models/profile';
 import { UserModel } from '../models/user';
 import { cacheUtils } from '../utils/cache';
-import { profileKeyMemoryMap } from '../pipeline/cache';
+import {
+  profileKeyMemoryMap,
+  defaultProfileMemoryCache,
+  setDefaultProfileMemoryCache
+} from '../pipeline/cache';
 import { resolveUpstreamEndpoint, fetchFromUpstream } from '../pipeline/resolver/transport';
+import { DEFAULT_FAIL_OPEN_UPSTREAM } from '../constants/presets';
 
 /**
  * Safely extracts raw wire-format DNS query bytes from incoming HTTP GET or POST request.
@@ -82,7 +87,7 @@ export async function resolveProfileByKey(
 
     // Emergency fail-open fallback if D1 has exceeded its read quota or is unavailable:
     // Generate a temporary fallback profile so DNS resolution doesn't return 404 or 500
-    const failOpenUpstream = env.FAIL_OPEN_UPSTREAM || "https://freedns.controld.com/no-ads-malware-typo";
+    const failOpenUpstream = env.FAIL_OPEN_UPSTREAM || DEFAULT_FAIL_OPEN_UPSTREAM;
     console.warn(`[DoH] D1 unavailable. Providing emergency fallback profile for key ${profileKey} -> ${failOpenUpstream}`);
     return {
       id: profileKey,
@@ -103,42 +108,49 @@ export async function resolveProfileByKey(
 }
 
 /**
- * Resolves default profile when no profile key is specified in connection or query.
+ * Resolves default profile when no profile key is specified in connection or query (such as Classic UDP DNS).
+ * If an explicit default profile key is configured (`SERVERFULL_DEFAULT_PROFILE_KEY` or `DEFAULT_PROFILE_KEY`),
+ * that profile is resolved and returned.
+ * Otherwise, unauthenticated requests safely fall back to FAIL_OPEN_UPSTREAM (`env.FAIL_OPEN_UPSTREAM || DEFAULT_FAIL_OPEN_UPSTREAM`)
+ * with zero logging (`log_retention_days: 0`), preventing policy leakage, profile hijacking, or log contamination
+ * of user profiles stored in the database.
+ * Uses L1 in-memory caching to eliminate redundant processing under high UDP DNS load.
  */
 export async function resolveDefaultProfile(
   env: Env,
   ctx: ExecutionContext
 ): Promise<(ProfileWithBloom & { access_point_id?: string; access_point_name?: string }) | null> {
+  const now = Date.now();
+  if (defaultProfileMemoryCache && now - defaultProfileMemoryCache.ts < 300_000) {
+    return defaultProfileMemoryCache.data;
+  }
+
   const defaultKey = env.SERVERFULL_DEFAULT_PROFILE_KEY || env.DEFAULT_PROFILE_KEY;
   if (defaultKey) {
     const profile = await resolveProfileByKey(defaultKey, env, ctx);
-    if (profile) return profile;
-  }
-
-  try {
-    const profileModel = new ProfileModel(env.DB);
-    const profiles = await profileModel.list("ORDER BY created_at ASC LIMIT 1", []);
-    if (profiles && profiles.length > 0) {
-      const fullProfile = await profileModel.getById(profiles[0].id);
-      if (fullProfile) return fullProfile;
+    if (profile) {
+      setDefaultProfileMemoryCache({ data: profile, ts: now });
+      return profile;
     }
-  } catch (e: any) {
-    console.warn("[Profile] Failed to query fallback default profile:", e.message || e);
   }
 
-  return {
+  const fallbackUpstream = env.FAIL_OPEN_UPSTREAM || DEFAULT_FAIL_OPEN_UPSTREAM;
+  const fallbackProfile = {
     id: "default",
     name: "Default Profile",
     settings: JSON.stringify({
-      upstream: [env.FAIL_OPEN_UPSTREAM || "https://security.cloudflare-dns.com/dns-query"],
+      upstream: [fallbackUpstream],
       default_policy: "ALLOW",
       log_retention_days: 0,
       ecs: { enabled: true, use_client_ip: true }
     }),
     owner_id: "system",
-    created_at: Math.floor(Date.now() / 1000),
-    updated_at: Math.floor(Date.now() / 1000)
+    created_at: Math.floor(now / 1000),
+    updated_at: Math.floor(now / 1000)
   } as any;
+
+  setDefaultProfileMemoryCache({ data: fallbackProfile, ts: now });
+  return fallbackProfile;
 }
 
 /**
@@ -220,7 +232,7 @@ export async function handleDoHRequest(
     try {
       // Emergency fail-open: dispatch DNS wire query directly to FAIL_OPEN_UPSTREAM
       // Supports HTTPS (DoH), TLS/DoT (RFC 7858), TCP (RFC 7766), and DNS Stamps (sdns://)
-      const failOpenUpstream = env.FAIL_OPEN_UPSTREAM || "https://freedns.controld.com/no-ads-malware-typo";
+      const failOpenUpstream = env.FAIL_OPEN_UPSTREAM || DEFAULT_FAIL_OPEN_UPSTREAM;
       const rawBytes = queryRaw || (await extractRawQuery(request));
 
       if (rawBytes && rawBytes.length > 0) {

@@ -87,7 +87,7 @@ export async function handleScheduled(
     // Idle periods are throttled to every 10 minutes (600s) to eliminate redundant D1 polls.
     try {
       const lastIdleSyncKey = "cron:last_idle_sync_check";
-      const IDLE_SYNC_INTERVAL_SEC = 600;
+      const IDLE_SYNC_INTERVAL_SEC = Number(env.SYNC_IDLE_INTERVAL_SEC) || 1800;
       const lastIdleCheck = await cacheUtils.get<number>(cache, lastIdleSyncKey);
       const isIdleThrottled = Boolean(lastIdleCheck && (now - lastIdleCheck < IDLE_SYNC_INTERVAL_SEC));
 

@@ -1,0 +1,366 @@
+/**
+ * @file status.ts
+ * @description Runtime status and service diagnostic inspector for Serverfull mode.
+ */
+
+import fs from 'node:fs';
+import net from 'node:net';
+import dgram from 'node:dgram';
+import { DatabaseSync } from 'node:sqlite';
+import {
+  ServerfullConfig,
+  getDefaultDataDir,
+  getDefaultConfigDir,
+  getDefaultConfigFilePath,
+  getLoadedEnvFiles
+} from './config';
+import { formatBanner, formatKeyValueSection, formatTip } from './format';
+import { getPortOccupant, formatOccupantSummary } from './port';
+import { isUsableJwtSecret, isStrongJwtSecret } from '../lib/jwt';
+import { inspectTlsCertificate, getCertbotCommand } from './cert';
+
+/**
+ * Result of a network port accessibility probe.
+ */
+export type PortProbeState = 'active' | 'free' | 'disabled';
+
+/**
+ * Probes a TCP port to determine if a service is actively listening.
+ *
+ * @param port - TCP port number to probe.
+ * @param host - Network address to connect to.
+ * @param timeoutMs - Connection timeout in milliseconds.
+ * @returns 'active' if listening, 'free' if connection is refused/times out.
+ */
+export function probeTcpPort(port: number, host: string, timeoutMs: number = 300): Promise<'active' | 'free'> {
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+    let isSettled = false;
+
+    const finish = (state: 'active' | 'free') => {
+      if (isSettled) return;
+      isSettled = true;
+      try { socket.destroy(); } catch {}
+      resolve(state);
+    };
+
+    socket.setTimeout(timeoutMs);
+    socket.once('connect', () => finish('active'));
+    socket.once('timeout', () => finish('free'));
+    socket.once('error', () => finish('free'));
+
+    // If host is wildcard 0.0.0.0 or ::, probe loopback
+    const targetHost = host === '0.0.0.0' || host === '::' ? '127.0.0.1' : host;
+    try {
+      socket.connect(port, targetHost);
+    } catch {
+      finish('free');
+    }
+  });
+}
+
+/**
+ * Probes a UDP port to determine if it is currently occupied or available to bind.
+ *
+ * @param port - UDP port number to probe.
+ * @param host - Network host to test.
+ * @returns 'active' if already occupied (EADDRINUSE), 'free' if available.
+ */
+export function probeUdpPort(port: number, host: string): Promise<'active' | 'free'> {
+  return new Promise((resolve) => {
+    const socket = dgram.createSocket('udp4');
+    let isSettled = false;
+
+    const finish = (state: 'active' | 'free') => {
+      if (isSettled) return;
+      isSettled = true;
+      try { socket.close(); } catch {}
+      resolve(state);
+    };
+
+    socket.once('error', (err: unknown) => {
+      const code = (err as { code?: string })?.code;
+      if (code === 'EADDRINUSE') {
+        finish('active');
+      } else {
+        finish('free');
+      }
+    });
+
+    try {
+      socket.bind(port, host, () => {
+        finish('free');
+      });
+    } catch {
+      finish('active');
+    }
+  });
+}
+
+/**
+ * Information regarding SQLite database file and schema state.
+ */
+export interface DbStatusInfo {
+  exists: boolean;
+  sizeFormatted?: string;
+  migrationsCount?: number;
+  usersCount?: number;
+  profilesCount?: number;
+  statusText: string;
+}
+
+/**
+ * Inspects the SQLite database file and queries metadata if available.
+ *
+ * @param dbPath - Path to the SQLite database file.
+ * @returns Database status metrics.
+ */
+export function inspectDatabase(dbPath: string): DbStatusInfo {
+  if (!fs.existsSync(dbPath)) {
+    return {
+      exists: false,
+      statusText: 'Not Initialized (File does not exist yet; created on first start)'
+    };
+  }
+
+  try {
+    const stats = fs.statSync(dbPath);
+    const sizeFormatted = stats.size > 1024 * 1024
+      ? `${(stats.size / (1024 * 1024)).toFixed(2)} MB`
+      : `${(stats.size / 1024).toFixed(1)} KB`;
+
+    let migrationsCount = 0;
+    let usersCount = 0;
+    let profilesCount = 0;
+
+    try {
+      const rawDb = new DatabaseSync(dbPath, { readOnly: true });
+
+      const migTable = rawDb.prepare("SELECT count(*) as cnt FROM sqlite_master WHERE type='table' AND name='d1_migrations'").get() as { cnt: number } | undefined;
+      if (migTable && migTable.cnt > 0) {
+        const migRow = rawDb.prepare('SELECT count(*) as count FROM d1_migrations').get() as { count: number } | undefined;
+        migrationsCount = migRow?.count || 0;
+      }
+
+      const usersTable = rawDb.prepare("SELECT count(*) as cnt FROM sqlite_master WHERE type='table' AND name='users'").get() as { cnt: number } | undefined;
+      if (usersTable && usersTable.cnt > 0) {
+        const userRow = rawDb.prepare('SELECT count(*) as count FROM users').get() as { count: number } | undefined;
+        usersCount = userRow?.count || 0;
+      }
+
+      const profTable = rawDb.prepare("SELECT count(*) as cnt FROM sqlite_master WHERE type='table' AND name='profiles'").get() as { cnt: number } | undefined;
+      if (profTable && profTable.cnt > 0) {
+        const profRow = rawDb.prepare('SELECT count(*) as count FROM profiles').get() as { count: number } | undefined;
+        profilesCount = profRow?.count || 0;
+      }
+
+      rawDb.close();
+    } catch {
+      // Ignore database inspection query errors (e.g. locked database)
+    }
+
+    const details = [
+      sizeFormatted,
+      migrationsCount > 0 ? `${migrationsCount} migrations` : null,
+      usersCount > 0 ? `${usersCount} user(s)` : null,
+      profilesCount > 0 ? `${profilesCount} profile(s)` : null
+    ].filter(Boolean).join(', ');
+
+    return {
+      exists: true,
+      sizeFormatted,
+      migrationsCount,
+      usersCount,
+      profilesCount,
+      statusText: `Ready (${details})`
+    };
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    return {
+      exists: true,
+      statusText: `Exists (Read warning: ${errorMsg})`
+    };
+  }
+}
+
+/**
+ * Inspects all Serverfull service ports, database, and configurations, printing a declarative status report.
+ *
+ * @param config - The parsed serverfull configuration.
+ * @param envJwtSecret - The JWT_SECRET environment variable value.
+ */
+export async function showServerfullStatus(config: ServerfullConfig, envJwtSecret?: string): Promise<void> {
+  const certInfo = inspectTlsCertificate(config.tlsCertPath, config.tlsKeyPath);
+  const canProbeHttps = !config.disableHttps && certInfo.configured && certInfo.filesExist;
+
+  const [httpState, httpsState, udpState, dotState] = await Promise.all([
+    probeTcpPort(config.httpPort, config.host),
+    canProbeHttps ? probeTcpPort(config.httpsPort, config.host) : Promise.resolve('disabled' as const),
+    !config.disableUdp ? probeUdpPort(config.udpPort, config.host) : Promise.resolve('disabled' as const),
+    !config.disableDot ? probeTcpPort(config.dotPort, config.host) : Promise.resolve('disabled' as const)
+  ]);
+
+  const dbStatus = inspectDatabase(config.dbPath);
+
+  let jwtStatus = 'Default (Insecure fallback, please configure JWT_SECRET)';
+  if (isUsableJwtSecret(envJwtSecret)) {
+    jwtStatus = isStrongJwtSecret(envJwtSecret)
+      ? 'Configured (Strong, >= 32 characters)'
+      : 'Configured (Warning: Shorter than 32 characters)';
+  }
+
+  const httpOccupant = httpState === 'active' ? getPortOccupant(config.httpPort, 'TCP') : null;
+  const httpOccupantText = httpOccupant ? `: ${formatOccupantSummary(httpOccupant)}` : '';
+  const httpStatusText = httpState === 'active'
+    ? `http://${config.host}:${config.httpPort} [Active / Listening${httpOccupantText}]`
+    : `http://${config.host}:${config.httpPort} [Stopped / Port Available]`;
+
+  let httpsStatusText = '';
+  if (config.disableHttps) {
+    httpsStatusText = 'Disabled (--disable-https)';
+  } else if (!certInfo.configured) {
+    httpsStatusText = `https://${config.host}:${config.httpsPort} [Disabled - TLS Certificates Not Configured]`;
+  } else if (!certInfo.filesExist) {
+    httpsStatusText = `https://${config.host}:${config.httpsPort} [Warning - TLS Certificate Files Missing]`;
+  } else if (httpsState === 'active') {
+    const httpsOccupant = getPortOccupant(config.httpsPort, 'TCP');
+    const httpsOccupantText = httpsOccupant ? `: ${formatOccupantSummary(httpsOccupant)}` : '';
+    httpsStatusText = `https://${config.host}:${config.httpsPort} [Active / Listening${httpsOccupantText}]`;
+  } else {
+    httpsStatusText = `https://${config.host}:${config.httpsPort} [Stopped / Port Available]`;
+  }
+
+  const udpOccupant = (!config.disableUdp && udpState === 'active') ? getPortOccupant(config.udpPort, 'UDP') : null;
+  const udpOccupantText = udpOccupant ? `: ${formatOccupantSummary(udpOccupant)}` : '';
+  const udpStatusText = config.disableUdp
+    ? 'Disabled (--disable-udp)'
+    : udpState === 'active'
+      ? `udp://${config.host}:${config.udpPort} [Active / In Use${udpOccupantText}]`
+      : `udp://${config.host}:${config.udpPort} [Stopped / Port Available]`;
+
+  let dotStatusText = '';
+  const domainPart = config.dotDomain ? ` (${config.dotDomain})` : '';
+  if (config.disableDot) {
+    dotStatusText = 'Disabled (--disable-dot)';
+  } else if (!certInfo.configured) {
+    dotStatusText = `tls://${config.host}:${config.dotPort}${domainPart} [Disabled - TLS Certificates Not Configured]`;
+  } else if (!certInfo.filesExist) {
+    dotStatusText = `tls://${config.host}:${config.dotPort}${domainPart} [Warning - TLS Certificate Files Missing]`;
+  } else if (!certInfo.isWildcard) {
+    dotStatusText = `tls://${config.host}:${config.dotPort}${domainPart} [Paused - Requires Wildcard Certificate (*.domain)]`;
+  } else if (dotState === 'active') {
+    const dotOccupant = getPortOccupant(config.dotPort, 'TCP');
+    const dotOccupantText = dotOccupant ? `: ${formatOccupantSummary(dotOccupant)}` : '';
+    dotStatusText = `tls://${config.host}:${config.dotPort}${domainPart} [Active / Listening${dotOccupantText}]`;
+  } else {
+    dotStatusText = `tls://${config.host}:${config.dotPort}${domainPart} [Stopped / Port Available]`;
+  }
+
+  const defaultProfileText = config.defaultProfileKey
+    ? `Explicit (${config.defaultProfileKey})`
+    : 'Auto (Database default profile)';
+
+  const banner = formatBanner({
+    title: 'DNS Worker Runtime Status (Serverfull Mode)',
+    borderChar: '=',
+    bullet: '• '
+  });
+
+  const servicesSection = formatKeyValueSection({
+    title: '\nService Transports:',
+    items: [
+      { label: 'Web Dashboard (HTTP)', value: httpStatusText },
+      { label: 'Web Dashboard (HTTPS)', value: httpsStatusText },
+      { label: 'Classic UDP DNS', value: udpStatusText },
+      { label: 'DNS over TLS (DoT)', value: dotStatusText }
+    ]
+  });
+
+  const loadedEnvs = getLoadedEnvFiles();
+  const configSourceText = loadedEnvs.length > 0
+    ? `${loadedEnvs.join(', ')} [Loaded]`
+    : `None found (Using built-in presets & defaults; default path: ${getDefaultConfigFilePath()})`;
+
+  const databaseSection = formatKeyValueSection({
+    title: '\nDatabase & Storage:',
+    items: [
+      { label: 'SQLite Path', value: config.dbPath },
+      { label: 'Database Status', value: dbStatus.statusText },
+      { label: 'Persistent Data Dir', value: getDefaultDataDir() }
+    ]
+  });
+
+  let tlsCertText = 'Not Configured (HTTP only, HTTPS & DoT disabled)';
+  if (certInfo.configured) {
+    if (!certInfo.filesExist) {
+      tlsCertText = 'Configured [Files Missing]';
+    } else if (certInfo.error) {
+      tlsCertText = `Configured [Invalid Certificate: ${certInfo.error}]`;
+    } else {
+      const typeStr = certInfo.isWildcard ? 'Wildcard (*.domain)' : 'Single Domain';
+      const expireStr = certInfo.expiresAt ? certInfo.expiresAt.toISOString().split('T')[0] : 'Unknown';
+      tlsCertText = `Valid (${typeStr}, Expires: ${expireStr})`;
+    }
+  }
+
+  const dotDomainText = config.dotDomain
+    ? `${config.dotDomain} (Wildcard / Single-domain compatible)`
+    : 'Not Configured (Auto SNI prefix matching)';
+
+  const http3Status = (!config.disableHttps && certInfo.configured && certInfo.filesExist)
+    ? `Enabled via Alt-Svc (UDP :${config.httpsPort}, RFC 9114)`
+    : 'Disabled (Requires active HTTPS with TLS certificate)';
+
+  const doqStatus = (certInfo.configured && certInfo.filesExist)
+    ? `Compatible (RFC 9250 / RFC 9460 DDR, UDP :${config.dotPort})`
+    : 'Disabled (Requires TLS certificate)';
+
+  const echStatus = config.echEnabled
+    ? `Enabled (RFC 9460, Outer SNI: ${config.echFrontingDomain || 'cloudflare-ech.com'})`
+    : 'Disabled';
+
+  const envSection = formatKeyValueSection({
+    title: '\nEnvironment & Security:',
+    items: [
+      { label: 'Node.js Runtime', value: `v${process.versions.node} (${process.platform} ${process.arch})` },
+      { label: 'Config Directory', value: getDefaultConfigDir() },
+      { label: 'Config Source', value: configSourceText },
+      { label: 'TLS Certificate', value: tlsCertText },
+      { label: 'JWT Secret', value: jwtStatus },
+      { label: 'DoT Base Domain', value: dotDomainText },
+      { label: 'HTTP/3 (h3)', value: http3Status },
+      { label: 'DNS over QUIC (DoQ)', value: doqStatus },
+      { label: 'ECH (Encrypted Client Hello)', value: echStatus },
+      { label: 'Default Profile Key', value: defaultProfileText }
+    ]
+  });
+
+  const tips: string[] = [];
+  if (httpState === 'free' && (udpState === 'free' || config.disableUdp)) {
+    const serviceInstallCmd = process.platform === 'win32'
+      ? 'dns-worker service install (in Administrator terminal)'
+      : 'sudo dns-worker service install';
+
+    tips.push('Services are currently stopped.');
+    tips.push(`To run continuously as a persistent background daemon: ${serviceInstallCmd}`);
+  }
+
+  const certbotCmd = getCertbotCommand(config.dotDomain);
+  if (!certInfo.configured || !certInfo.filesExist) {
+    tips.push(`To enable secure HTTPS (port ${config.httpsPort}) and DoT (port ${config.dotPort}):`);
+    tips.push(`  ${certbotCmd}`);
+  } else if (!certInfo.isWildcard) {
+    tips.push('Current certificate is single-domain. To support per-profile DoT (<profile>.domain):');
+    tips.push(`  ${certbotCmd}`);
+  }
+
+  tips.push("Run 'dns-worker ech' to view active ECH configuration, outer SNI, and RFC 9460 DNS records.");
+
+  const tipSection = tips.length > 0 ? formatTip(tips) : '';
+
+  const report = [banner, servicesSection, databaseSection, envSection, tipSection]
+    .filter(Boolean)
+    .join('\n');
+
+  console.log(report);
+}

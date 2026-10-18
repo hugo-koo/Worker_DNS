@@ -1,19 +1,35 @@
 /**
  * @file http.ts
- * @description Node.js HTTP server hosting Web UI, REST API, and DoH endpoints for Serverfull mode.
+ * @description Node.js HTTP & HTTPS servers hosting Web UI, REST API, and DoH endpoints for Serverfull mode.
  */
 
 import http from 'node:http';
+import https from 'node:https';
 import fs from 'node:fs';
 import path from 'node:path';
 import { Buffer } from 'node:buffer';
 import worker from '../index';
 import { Env, ExecutionContext } from '../types';
 import { getPackageRoot } from './config';
+import { formatPortError } from './format';
+import { isIPv4, isIPv6 } from '../utils/cidr';
 
 export interface HttpServerOptions {
   port: number;
   host: string;
+  staticDir?: string;
+  env: Env;
+  httpsRedirect?: {
+    enabled: boolean;
+    httpsPort: number;
+  };
+}
+
+export interface HttpsServerOptions {
+  port: number;
+  host: string;
+  certPath: string;
+  keyPath: string;
   staticDir?: string;
   env: Env;
 }
@@ -33,98 +49,188 @@ const MIME_TYPES: Record<string, string> = {
   '.wasm': 'application/wasm'
 };
 
-export class HttpServer {
-  private server: http.Server | null = null;
-  private isRunning: boolean = false;
+/**
+ * Attaches the static asset file-serving handler to the worker Env if not already attached.
+ *
+ * @param env - The Cloudflare/Serverfull Env object.
+ * @param staticDir - Optional path to the directory containing static frontend files.
+ */
+export function attachStaticAssetHandler(env: Env, staticDir?: string): void {
+  if (env.ASSETS) return;
 
-  constructor(private options: HttpServerOptions) {
-    const staticDir = options.staticDir || path.join(getPackageRoot(), 'static');
+  const targetDir = staticDir || path.join(getPackageRoot(), 'static');
 
-    // Attach static asset provider to env.ASSETS
-    this.options.env.ASSETS = {
-      fetch: async (req: Request): Promise<Response> => {
-        try {
-          const url = new URL(req.url);
-          let pathname = decodeURIComponent(url.pathname);
-          if (pathname === '/' || pathname === '') {
-            pathname = '/index.html';
-          }
-
-          const safePath = path.normalize(pathname).replace(/^(\.\.[\/\\])+/, '');
-          const filePath = path.join(staticDir, safePath);
-
-          if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
-            const ext = path.extname(filePath).toLowerCase();
-            const contentType = MIME_TYPES[ext] || 'application/octet-stream';
-            const fileContent = fs.readFileSync(filePath);
-
-            return new Response(fileContent, {
-              status: 200,
-              headers: {
-                'Content-Type': contentType,
-                'Cache-Control': ext === '.html' ? 'no-cache' : 'public, max-age=31536000, immutable',
-                'Cross-Origin-Opener-Policy': 'same-origin',
-                'Cross-Origin-Embedder-Policy': 'credentialless',
-                'Cross-Origin-Resource-Policy': 'same-origin'
-              }
-            });
-          }
-
-          return new Response('Not Found', { status: 404 });
-        } catch (err) {
-          return new Response('Asset Error', { status: 500 });
+  env.ASSETS = {
+    fetch: async (req: Request): Promise<Response> => {
+      try {
+        const url = new URL(req.url);
+        let pathname = decodeURIComponent(url.pathname);
+        if (pathname === '/' || pathname === '') {
+          pathname = '/index.html';
         }
+
+        const safePath = path.normalize(pathname).replace(/^(\.\.[\/\\])+/, '');
+        const filePath = path.join(targetDir, safePath);
+
+        if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+          const ext = path.extname(filePath).toLowerCase();
+          const contentType = MIME_TYPES[ext] || 'application/octet-stream';
+          const fileContent = fs.readFileSync(filePath);
+
+          return new Response(fileContent, {
+            status: 200,
+            headers: {
+              'Content-Type': contentType,
+              'Cache-Control': ext === '.html' ? 'no-cache' : 'public, max-age=31536000, immutable',
+              'Cross-Origin-Opener-Policy': 'same-origin',
+              'Cross-Origin-Embedder-Policy': 'credentialless',
+              'Cross-Origin-Resource-Policy': 'same-origin'
+            }
+          });
+        }
+
+        return new Response('Not Found', { status: 404 });
+      } catch {
+        return new Response('Asset Error', { status: 500 });
       }
-    };
+    }
+  };
+}
+
+/**
+ * Normalizes and validates an IP candidate string into a clean IPv4 or IPv6 address.
+ * Handles bracketed IPv6, IPv4 port suffixes, IPv4-mapped IPv6 prefixes, and whitespace.
+ */
+export function sanitizeClientIp(candidate?: string | null): string | null {
+  if (!candidate || typeof candidate !== 'string') return null;
+  let ip = candidate.trim();
+  if (!ip) return null;
+
+  // Handle bracketed IPv6 with optional port: [2001:db8::1]:8080 or [2001:db8::1]
+  if (ip.startsWith('[')) {
+    const closeBracket = ip.indexOf(']');
+    if (closeBracket > 1) {
+      ip = ip.substring(1, closeBracket);
+    }
+  } else if (ip.includes(':') && ip.indexOf(':') === ip.lastIndexOf(':')) {
+    // Single colon in string: likely IPv4 with port, e.g. "192.168.1.1:8080"
+    const [hostPart, portPart] = ip.split(':');
+    if (portPart && /^\d+$/.test(portPart) && isIPv4(hostPart)) {
+      ip = hostPart;
+    }
   }
 
-  start(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const { port, host } = this.options;
-
-      this.server = http.createServer(async (req: http.IncomingMessage, res: http.ServerResponse) => {
-        await this.handleHttpRequest(req, res);
-      });
-
-      const startupErrorHandler = (err: any) => {
-        this.server = null;
-
-        if (err.code === 'EADDRINUSE') {
-          console.error(`\n[Port Conflict] HTTP port ${port} is already in use.`);
-          console.error('  Solution:');
-          console.error(`    - Use -p, --port <port> (e.g. --port ${port + 1}) to specify an alternate HTTP port.`);
-          console.error(`    - Or set the PORT environment variable (e.g. PORT=${port + 1}).\n`);
-        } else if (err.code === 'EACCES') {
-          console.error(`\n[Permission Denied] Permission denied binding to HTTP port ${port}.`);
-          console.error('  Port numbers below 1024 require elevated privileges on Linux/macOS.');
-          console.error('  Solution:');
-          console.error(`    - Run with sudo, or use --port 3000 to bind to an unprivileged port.\n`);
-        } else {
-          console.error('[HTTP Server] Failed to start:', err.message || err);
-        }
-
-        reject(err);
-      };
-
-      this.server.once('error', startupErrorHandler);
-
-      this.server.listen(port, host, () => {
-        this.server?.removeListener('error', startupErrorHandler);
-        this.server?.on('error', (err: Error) => {
-          console.error('[HTTP Server] Runtime error:', err);
-        });
-        this.isRunning = true;
-        console.log(`[HTTP Server] Web Dashboard & DoH listening on http://${host}:${port}`);
-        resolve();
-      });
-    });
+  // Strip IPv4-mapped IPv6 prefix
+  if (ip.startsWith('::ffff:')) {
+    ip = ip.substring(7);
   }
 
-  private async handleHttpRequest(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+  if (isIPv4(ip) || isIPv6(ip)) {
+    return ip;
+  }
+  return null;
+}
+
+import { isPublicInternetIP } from '../utils/validator';
+
+/**
+ * Checks whether an IP matches the optional trusted proxies configuration.
+ */
+function isTrustedProxyIp(ip: string, trustedProxies?: string | string[]): boolean {
+  if (!trustedProxies) return false;
+  const list = Array.isArray(trustedProxies)
+    ? trustedProxies
+    : trustedProxies.split(',').map((p) => p.trim()).filter(Boolean);
+  return list.includes(ip);
+}
+
+/**
+ * Resolves the real client IP address from proxy headers (CF-Connecting-IP, X-Real-IP, X-Forwarded-For)
+ * only when connecting through a trusted reverse proxy (loopback, private network, or configured trusted proxies).
+ * If the connection arrives directly from a public Internet address, proxy headers are ignored to prevent spoofing (SEC-01).
+ *
+ * @param headers - HTTP request headers.
+ * @param socketRemoteAddress - Underlying TCP socket remote address.
+ * @param trustedProxies - Optional list or comma-separated string of trusted proxy IPs.
+ * @returns Sanitized client IP address.
+ */
+export function extractClientIp(
+  headers: Headers,
+  socketRemoteAddress?: string,
+  trustedProxies?: string | string[]
+): string {
+  const socketIp = sanitizeClientIp(socketRemoteAddress);
+
+  // If socket IP is a public Internet IP and not explicitly configured in trusted proxies,
+  // do not trust incoming proxy headers to prevent IP spoofing (CWE-290 / SEC-01).
+  if (socketIp && isPublicInternetIP(socketIp)) {
+    const isExplicitlyTrusted = isTrustedProxyIp(socketIp, trustedProxies);
+    if (!isExplicitlyTrusted) {
+      return socketIp;
+    }
+  }
+
+  // 1. Check CF-Connecting-IP (Cloudflare Edge standard)
+  const cfIp = sanitizeClientIp(headers.get('CF-Connecting-IP'));
+  if (cfIp) return cfIp;
+
+  // 2. Check X-Real-IP (Caddy / Nginx direct real IP)
+  const realIp = sanitizeClientIp(headers.get('X-Real-IP'));
+  if (realIp) return realIp;
+
+  // 3. Check X-Forwarded-For (standard reverse proxy chain)
+  const xff = headers.get('X-Forwarded-For');
+  if (xff) {
+    // The leftmost IP in X-Forwarded-For is the original client
+    const ips = xff.split(',');
+    for (const rawIp of ips) {
+      const sanitized = sanitizeClientIp(rawIp);
+      if (sanitized) return sanitized;
+    }
+  }
+
+  // 4. Fallback to socket remote address
+  return socketIp || '127.0.0.1';
+}
+
+/**
+ * Creates a shared request dispatch handler for Node.js http and https servers.
+ *
+ * @param env - Application Env bindings.
+ * @param defaultProto - Default protocol ('http' or 'https').
+ * @param host - Bound host address.
+ * @param port - Bound port number.
+ * @returns Request handler callback for http/https.createServer.
+ */
+export function createHttpRequestHandler(
+  env: Env,
+  defaultProto: 'http' | 'https',
+  host: string,
+  port: number,
+  httpsRedirect?: { enabled: boolean; httpsPort: number }
+): (req: http.IncomingMessage, res: http.ServerResponse) => Promise<void> {
+  return async (req: http.IncomingMessage, res: http.ServerResponse): Promise<void> => {
     try {
-      const proto = (req.headers['x-forwarded-proto'] as string) || 'http';
-      const host = req.headers.host || `${this.options.host}:${this.options.port}`;
-      const fullUrl = new URL(req.url || '/', `${proto}://${host}`);
+      const forwardedProto = (req.headers['x-forwarded-proto'] as string | undefined)?.toLowerCase();
+      const proto = forwardedProto || defaultProto;
+
+      // When TLS certificates are configured and HTTPS is active, automatically redirect plain HTTP requests to HTTPS
+      if (defaultProto === 'http' && httpsRedirect?.enabled && forwardedProto !== 'https') {
+        const hostHeader = (req.headers.host || `${host}:${port}`).trim();
+        const hostname = hostHeader.replace(/:\d+$/, '');
+        const targetPort = (httpsRedirect.httpsPort === 443 || httpsRedirect.httpsPort === 0) ? '' : `:${httpsRedirect.httpsPort}`;
+        const targetUrl = `https://${hostname}${targetPort}${req.url || '/'}`;
+
+        res.statusCode = (req.method === 'GET' || req.method === 'HEAD') ? 301 : 307;
+        res.setHeader('Location', targetUrl);
+        res.setHeader('Connection', 'close');
+        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+        res.end(`Redirecting to ${targetUrl}`);
+        return;
+      }
+
+      const hostHeader = req.headers.host || `${host}:${port}`;
+      const fullUrl = new URL(req.url || '/', `${proto}://${hostHeader}`);
 
       const headers = new Headers();
       for (const [k, v] of Object.entries(req.headers)) {
@@ -136,17 +242,17 @@ export class HttpServer {
         }
       }
 
-      // Populate remote IP if not set
-      if (!headers.has('CF-Connecting-IP')) {
-        const remoteIp = req.socket.remoteAddress?.replace(/^::ffff:/, '') || '127.0.0.1';
-        headers.set('CF-Connecting-IP', remoteIp);
-      }
+      // Populate remote client IP (supports direct connections, Cloudflare, Caddy, Nginx)
+      const clientIp = extractClientIp(headers, req.socket.remoteAddress, env.TRUSTED_PROXIES);
+      headers.set('CF-Connecting-IP', clientIp);
 
       // Populate fallback geolocation coordinates for serverfull environments without Cloudflare edge proxy
-      if (!headers.has('CF-IPLatitude')) {
+      const currentLatHeader = headers.get('CF-IPLatitude');
+      if (!currentLatHeader || currentLatHeader.trim() === '') {
         headers.set('CF-IPLatitude', '0.0');
       }
-      if (!headers.has('CF-IPLongitude')) {
+      const currentLonHeader = headers.get('CF-IPLongitude');
+      if (!currentLonHeader || currentLonHeader.trim() === '') {
         headers.set('CF-IPLongitude', '0.0');
       }
 
@@ -169,19 +275,54 @@ export class HttpServer {
 
       const ctx: ExecutionContext = {
         waitUntil(promise: Promise<any>) {
-          promise.catch((err) => console.error('[HTTP Background Task Error]:', err));
+          promise.catch((err) => console.error(`[${defaultProto.toUpperCase()} Background Task Error]:`, err));
         },
         passThroughOnException() {}
       } as any;
 
-      const response = await worker.fetch(request, this.options.env, ctx);
+      const response = await worker.fetch(request, env, ctx);
 
       res.statusCode = response.status;
       res.statusMessage = response.statusText;
 
+      // Extract all Set-Cookie headers properly without Node.js res.setHeader overwriting
+      let rawCookies: string[] = typeof (response.headers as any).getSetCookie === 'function'
+        ? (response.headers as any).getSetCookie()
+        : [];
+
+      if (rawCookies.length === 0 && response.headers.has('set-cookie')) {
+        const singleCookie = response.headers.get('set-cookie');
+        if (singleCookie) {
+          rawCookies = [singleCookie];
+        }
+      }
+
       response.headers.forEach((val, key) => {
-        res.setHeader(key, val);
+        const lowerKey = key.toLowerCase();
+        if (lowerKey === 'set-cookie') {
+          // Handled separately below to support multiple Set-Cookie headers
+          return;
+        }
+        if (defaultProto === 'https' && lowerKey === 'alt-svc') {
+          res.setHeader('Alt-Svc', `h3=":${port}"; ma=86400, h3-29=":${port}"; ma=86400`);
+        } else {
+          res.setHeader(key, val);
+        }
       });
+
+      if (rawCookies.length > 0) {
+        // Over plain HTTP (non-TLS), browsers reject cookies marked with 'Secure' (RFC 6265bis).
+        // Adapt outgoing cookies by stripping '; Secure' when accessed over plain http.
+        const isPlainHttp = proto === 'http';
+        const adaptedCookies = isPlainHttp
+          ? rawCookies.map((c) => c.replace(/;\s*Secure\b/gi, ''))
+          : rawCookies;
+        res.setHeader('Set-Cookie', adaptedCookies);
+      }
+
+      if (defaultProto === 'https' && !res.hasHeader('Alt-Svc')) {
+        res.setHeader('Alt-Svc', `h3=":${port}"; ma=86400, h3-29=":${port}"; ma=86400`);
+      }
 
       if (response.body) {
         const reader = response.body.getReader();
@@ -193,13 +334,70 @@ export class HttpServer {
       }
       res.end();
     } catch (err: any) {
-      console.error('[HTTP Server] Request processing failed:', err);
+      console.error(`[${defaultProto.toUpperCase()} Server] Request processing failed:`, err);
       if (!res.headersSent) {
         res.statusCode = 500;
         res.setHeader('Content-Type', 'application/json');
-        res.end(JSON.stringify({ error: 'Internal Server Error', message: err.message }));
+        res.end(JSON.stringify({ error: 'Internal Server Error' }));
       }
     }
+  };
+}
+
+/**
+ * Plain HTTP Server hosting Web UI and DoH (default port: 10080).
+ */
+export class HttpServer {
+  private server: http.Server | null = null;
+  private isRunning: boolean = false;
+
+  constructor(private options: HttpServerOptions) {
+    attachStaticAssetHandler(this.options.env, this.options.staticDir);
+  }
+
+  start(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const { port, host, env, httpsRedirect } = this.options;
+      const handler = createHttpRequestHandler(env, 'http', host, port, httpsRedirect);
+
+      this.server = http.createServer(handler);
+
+      // Optimize HTTP keepalive timeouts and disable Nagle's algorithm for low-latency DoH
+      this.server.keepAliveTimeout = 65000;
+      this.server.headersTimeout = 66000;
+      this.server.on('connection', (socket) => {
+        socket.setNoDelay(true);
+      });
+
+      const startupErrorHandler = (err: any) => {
+        this.server = null;
+
+        console.error(formatPortError({
+          serviceName: 'Web Dashboard & DoH (HTTP)',
+          protocol: 'HTTP',
+          port,
+          err,
+          alternateOption: `--http-port <port> (e.g. --http-port ${port + 1})`
+        }));
+
+        reject(err);
+      };
+
+      this.server.once('error', startupErrorHandler);
+
+      this.server.listen(port, host, () => {
+        this.server?.removeListener('error', startupErrorHandler);
+        this.server?.on('error', (err: Error) => {
+          console.error('[HTTP Server] Runtime error:', err);
+        });
+        this.isRunning = true;
+        const redirectNotice = httpsRedirect?.enabled
+          ? ` (Auto-redirecting to HTTPS on port ${httpsRedirect.httpsPort})`
+          : '';
+        console.log(`[HTTP Server] Web Dashboard & DoH listening on http://${host}:${port}${redirectNotice}`);
+        resolve();
+      });
+    });
   }
 
   stop(): Promise<void> {
@@ -208,6 +406,81 @@ export class HttpServer {
         this.server.close(() => {
           this.isRunning = false;
           console.log('[HTTP Server] Service stopped.');
+          resolve();
+        });
+      } else {
+        resolve();
+      }
+    });
+  }
+}
+
+/**
+ * Secure HTTPS Server hosting Web UI and DoH (default port: 10443).
+ * Activated only when valid TLS certificates are provided.
+ */
+export class HttpsServer {
+  private server: https.Server | null = null;
+  private isRunning: boolean = false;
+
+  constructor(private options: HttpsServerOptions) {
+    attachStaticAssetHandler(this.options.env, this.options.staticDir);
+  }
+
+  start(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const { port, host, certPath, keyPath, env } = this.options;
+
+      try {
+        const cert = fs.readFileSync(certPath);
+        const key = fs.readFileSync(keyPath);
+
+        const handler = createHttpRequestHandler(env, 'https', host, port);
+        this.server = https.createServer({ cert, key }, handler);
+
+        this.server.keepAliveTimeout = 65000;
+        this.server.headersTimeout = 66000;
+        this.server.on('connection', (socket) => {
+          socket.setNoDelay(true);
+        });
+
+        const startupErrorHandler = (err: any) => {
+          this.server = null;
+
+          console.error(formatPortError({
+            serviceName: 'Web Dashboard & DoH (HTTPS)',
+            protocol: 'HTTPS',
+            port,
+            err,
+            alternateOption: `--https-port <port> (e.g. --https-port ${port + 1})`
+          }));
+
+          reject(err);
+        };
+
+        this.server.once('error', startupErrorHandler);
+
+        this.server.listen(port, host, () => {
+          this.server?.removeListener('error', startupErrorHandler);
+          this.server?.on('error', (err: Error) => {
+            console.error('[HTTPS Server] Runtime error:', err);
+          });
+          this.isRunning = true;
+          console.log(`[HTTPS Server] Web Dashboard & DoH listening on https://${host}:${port}`);
+          resolve();
+        });
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
+  stop(): Promise<void> {
+    return new Promise((resolve) => {
+      if (this.server && this.isRunning) {
+        this.server.close(() => {
+          this.isRunning = false;
+          console.log('[HTTPS Server] Service stopped.');
           resolve();
         });
       } else {
