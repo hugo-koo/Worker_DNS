@@ -65,12 +65,12 @@ head_sampling_rate = 0.001
 # Database backend service engine selection ("D1" or "Turso").
 # Serverless (Cloudflare Workers) mode defaults to "D1". Set to "Turso" to switch database engine to Turso.
 # 数据库引擎选择（"D1" 或 "Turso"）。Serverless 模式下默认使用 "D1"；配置为 "Turso" 时自动切换使用远程 Turso 数据库。
-DATABASE_SERVICE = "D1"
+DATABASE_SERVICE = "Turso"
 
 # Turso (libSQL over HTTP) Database Configuration / Turso 远程数据库配置
 # When DATABASE_SERVICE is set to "Turso", configure your Turso database URL and auth token.
 # 当 DATABASE_SERVICE 配置为 "Turso" 时有效。支持 libsql:// 及 https:// 协议 (例如 "libsql://your-db-org.turso.io")。
-# TURSO_DATABASE_URL = "libsql://your-database-name.turso.io"
+TURSO_DATABASE_URL = "libsql://dnsworkerdb-kitty.aws-ap-northeast-1.turso.io"
 # Recommended: store TURSO_AUTH_TOKEN in Worker Secrets (`npx wrangler secret put TURSO_AUTH_TOKEN`) to avoid committing secrets to git.
 # 推荐使用 Worker Secrets 存储敏感鉴权令牌 (`npx wrangler secret put TURSO_AUTH_TOKEN`)，避免将密钥提交到代码仓库。
 # TURSO_AUTH_TOKEN = ""
