@@ -17,6 +17,7 @@ import {
   DEFAULT_FAIL_OPEN_UPSTREAM
 } from '../constants/presets';
 import { writeDefaultConfigFile } from './defaults';
+import { getDatabaseService, DatabaseServiceType } from '../lib/turso';
 
 export interface ServerfullCliArgs {
   port?: string;
@@ -28,12 +29,16 @@ export interface ServerfullCliArgs {
   'dot-domain'?: string;
   host?: string;
   db?: string;
+  'database-service'?: string;
+  'db-service'?: string;
   'default-profile'?: string;
   'disable-udp'?: boolean;
   'disable-dot'?: boolean;
   'ech-enabled'?: boolean;
   'ech-config'?: string;
   'ech-fronting-domain'?: string;
+  'turso-url'?: string;
+  'turso-token'?: string;
   user?: string;
   status?: boolean;
   version?: boolean;
@@ -50,6 +55,9 @@ export interface ServerfullConfig {
   httpsPort: number;
   host: string;
   dbPath: string;
+  databaseService: DatabaseServiceType;
+  tursoDatabaseUrl: string;
+  tursoAuthToken: string;
   defaultProfileKey: string;
   disableUdp: boolean;
   disableDot: boolean;
@@ -440,6 +448,17 @@ export function getServerfullConfig(cliArgs?: ServerfullCliArgs): { config: Serv
     : (process.env.SERVERFULL_ECH_ENABLED === undefined || process.env.SERVERFULL_ECH_ENABLED === 'true' || process.env.SERVERFULL_ECH_ENABLED === '1');
   const echConfig = (cliArgs?.['ech-config'] || process.env.SERVERFULL_ECH_CONFIG || '').trim();
   const echFrontingDomain = (cliArgs?.['ech-fronting-domain'] || process.env.SERVERFULL_ECH_FRONTING_DOMAIN || 'cloudflare-ech.com').trim();
+  const tursoDatabaseUrl = (cliArgs?.['turso-url'] || process.env.TURSO_DATABASE_URL || process.env.TURSO_URL || '').trim();
+  const tursoAuthToken = (cliArgs?.['turso-token'] || process.env.TURSO_AUTH_TOKEN || '').trim();
+  const rawService = cliArgs?.['database-service'] || cliArgs?.['db-service'] || process.env.DATABASE_SERVICE || process.env.DB_SERVICE;
+  const databaseService = getDatabaseService(
+    {
+      DATABASE_SERVICE: rawService,
+      TURSO_DATABASE_URL: tursoDatabaseUrl,
+      TURSO_AUTH_TOKEN: tursoAuthToken
+    },
+    true
+  );
 
   const config: ServerfullConfig = {
     tlsKeyPath: effectiveKeyPath,
@@ -451,6 +470,9 @@ export function getServerfullConfig(cliArgs?: ServerfullCliArgs): { config: Serv
     httpsPort,
     host,
     dbPath,
+    databaseService,
+    tursoDatabaseUrl,
+    tursoAuthToken,
     defaultProfileKey,
     disableUdp,
     disableDot,
@@ -462,7 +484,10 @@ export function getServerfullConfig(cliArgs?: ServerfullCliArgs): { config: Serv
   };
 
   const env: Env = {
-    DB: null as any, // Set by db.ts
+    DB: null as any, // Set by db.ts or turso client
+    DATABASE_SERVICE: databaseService,
+    TURSO_DATABASE_URL: tursoDatabaseUrl,
+    TURSO_AUTH_TOKEN: tursoAuthToken,
     ASSETS: null as any, // Set by http.ts
     JWT_SECRET: getOrInitPersistentJwtSecret(),
     FAIL_OPEN_UPSTREAM: process.env.FAIL_OPEN_UPSTREAM || DEFAULT_FAIL_OPEN_UPSTREAM,
