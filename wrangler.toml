@@ -1,6 +1,4 @@
-# Cloudflare Worker project name.
-name = "dns-worker"
-# TypeScript entry point for the Worker.
+name = "dns"
 main = "src/index.ts"
 # Runtime compatibility date used by Cloudflare Workers.
 compatibility_date = "2026-02-28"
@@ -32,21 +30,21 @@ run_worker_first = true
 binding = "DB"
 database_name = "dns_worker_db"
 # This field must be filled with your database ID; otherwise the deployment will fail.
-database_id = "13d8c24f-064a-40d6-8b10-fa70bb3f79ab"
+database_id = "8277464f-d370-4f7b-82a3-db4d412f65cf"
 
 [triggers]
 # Run scheduled maintenance tasks every minute.
 crons = ["* * * * *"]
 
 [placement]
-# mode = "targeted"
-# region = "aws:ap-southeast-1"
+mode = "targeted"
+region = "aws:ap-southeast-1"
 # Or
 # hostname = "dbs.com.sg"
 # Or
 # mode = "smart"
 # Or
-mode = "off"
+# mode = "off"
 
 [observability]
 # Enable Worker observability features.
@@ -67,12 +65,12 @@ head_sampling_rate = 0.001
 # Database backend service engine selection ("D1" or "Turso").
 # Serverless (Cloudflare Workers) mode defaults to "D1". Set to "Turso" to switch database engine to Turso.
 # 数据库引擎选择（"D1" 或 "Turso"）。Serverless 模式下默认使用 "D1"；配置为 "Turso" 时自动切换使用远程 Turso 数据库。
-DATABASE_SERVICE = "D1"
+DATABASE_SERVICE = "Turso"
 
 # Turso (libSQL over HTTP) Database Configuration / Turso 远程数据库配置
 # When DATABASE_SERVICE is set to "Turso", configure your Turso database URL and auth token.
 # 当 DATABASE_SERVICE 配置为 "Turso" 时有效。支持 libsql:// 及 https:// 协议 (例如 "libsql://your-db-org.turso.io")。
-# TURSO_DATABASE_URL = "libsql://your-database-name.turso.io"
+TURSO_DATABASE_URL = "libsql://dnsworkerdb-kitty.aws-ap-northeast-1.turso.io"
 # Recommended: store TURSO_AUTH_TOKEN in Worker Secrets (`npx wrangler secret put TURSO_AUTH_TOKEN`) to avoid committing secrets to git.
 # 推荐使用 Worker Secrets 存储敏感鉴权令牌 (`npx wrangler secret put TURSO_AUTH_TOKEN`)，避免将密钥提交到代码仓库。
 # TURSO_AUTH_TOKEN = ""
