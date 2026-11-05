@@ -360,7 +360,8 @@
     "close": "Đóng",
     "includeSubdomains": "Bao gồm tên miền phụ",
     "includeSubdomainsDesc": "Ví dụ: example.com cũng khớp với *.example.com; mặc định tắt (chỉ khớp chính xác)",
-    "subdomainsBadge": "+Tên miền phụ"
+    "subdomainsBadge": "+Tên miền phụ",
+    "wildcardDisclaimer": "Để khớp với các miền phụ, hãy sử dụng ký tự đại diện *.example.com; example.com sẽ không khớp với các miền phụ."
   },
   "analytics": {
     "customRange": "Khoảng thời gian tùy chỉnh",
@@ -476,9 +477,9 @@
     "scrollToTop": "Lên đầu"
   },
   "filtering": {
-    "title": "Danh sách chặn bên ngoài",
-    "subtitle": "Đăng ký danh sách chặn tên miền do bên thứ ba duy trì (như AdGuardHome, v.v.).",
-    "formatDisclaimer": "Hỗ trợ danh sách định dạng AdGuardHome hoặc danh sách tên miền thuần túy. Theo mặc định, hệ thống không tự động khớp các miền phụ (chỉ các quy tắc có tiền tố || mới chặn tất cả các miền phụ).",
+    "title": "Danh sách bên ngoài",
+    "subtitle": "Đăng ký danh sách chặn tên miền do bên thứ ba duy trì (như AdGuard Home, v.v.).",
+    "formatDisclaimer": "Hỗ trợ danh sách định dạng AdGuard Home hoặc danh sách tên miền thuần túy. Theo mặc định, hệ thống không tự động khớp các miền phụ (chỉ các quy tắc có tiền tố || mới chặn tất cả các miền phụ).",
     "syncAll": "Đồng bộ tất cả danh sách",
     "urlPlaceholder": "Nhập URL danh sách chặn...",
     "addSubscription": "Thêm đăng ký",

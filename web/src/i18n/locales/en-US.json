@@ -360,7 +360,8 @@
     "close": "Close",
     "includeSubdomains": "Match subdomains",
     "includeSubdomainsDesc": "E.g., example.com also matches *.example.com; off by default (exact match only)",
-    "subdomainsBadge": "+Subdomains"
+    "subdomainsBadge": "+Subdomains",
+    "wildcardDisclaimer": "To match subdomains, use the wildcard *.example.com; example.com will not match subdomains."
   },
   "analytics": {
     "customRange": "Custom Range",
@@ -476,9 +477,9 @@
     "scrollToTop": "Top"
   },
   "filtering": {
-    "title": "External Filters",
-    "subtitle": "Subscribe to third-party blocklists (e.g., AdGuardHome).",
-    "formatDisclaimer": "Supports AdGuardHome format lists or plain domain lists. By default, the system does not automatically match subdomains (only rules with the || prefix block all subdomains).",
+    "title": "External Lists",
+    "subtitle": "Subscribe to third-party blocklists (e.g., AdGuard Home).",
+    "formatDisclaimer": "Supports AdGuard Home format lists or plain domain lists. By default, the system does not automatically match subdomains (only rules with the || prefix block all subdomains).",
     "syncAll": "Sync All Lists",
     "urlPlaceholder": "Enter list URL...",
     "addSubscription": "Add List",

@@ -360,7 +360,8 @@
     "close": "關閉",
     "includeSubdomains": "同時匹配子網域",
     "includeSubdomainsDesc": "例如 example.com 同時匹配 *.example.com；預設關閉，僅精確匹配",
-    "subdomainsBadge": "+子網域"
+    "subdomainsBadge": "+子網域",
+    "wildcardDisclaimer": "若要比對子網域，需使用萬用字元 *.example.com ，example.com 不會比對子網域。"
   },
   "analytics": {
     "customRange": "自訂時間範圍",
@@ -476,9 +477,9 @@
     "scrollToTop": "至頂"
   },
   "filtering": {
-    "title": "外部攔截清單",
-    "subtitle": "訂閱第三方維護的域名屏蔽清單 (如 AdGuardHome 等)。",
-    "formatDisclaimer": "本系統支援 AdGuardHome 格式列表或純域名列表。系統預設不會自動匹配子域名（僅包含 || 前綴的規則會攔截其所有子域名）。",
+    "title": "外部清單",
+    "subtitle": "訂閱第三方維護的域名屏蔽清單 (如 AdGuard Home 等)。",
+    "formatDisclaimer": "本系統支援 AdGuard Home 格式列表或純域名列表。系統預設不會自動匹配子域名（僅包含 || 前綴的規則會攔截其所有子域名）。",
     "syncAll": "同步所有清单",
     "urlPlaceholder": "輸入攔截清單 URL...",
     "addSubscription": "添加訂閱",

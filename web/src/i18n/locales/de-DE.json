@@ -360,7 +360,8 @@
     "close": "Schließen",
     "includeSubdomains": "Subdomains einschließen",
     "includeSubdomainsDesc": "Z.B. entspricht example.com auch *.example.com; standardmäßig deaktiviert (nur exakte Übereinstimmung)",
-    "subdomainsBadge": "+Subdomains"
+    "subdomainsBadge": "+Subdomains",
+    "wildcardDisclaimer": "Verwenden Sie zum Abgleichen von Subdomains den Platzhalter *.example.com; example.com gleicht keine Subdomains ab."
   },
   "analytics": {
     "customRange": "Benutzerdefinierter Zeitraum",
@@ -476,9 +477,9 @@
     "scrollToTop": "Nach oben"
   },
   "filtering": {
-    "title": "Externe Blockierlisten",
-    "subtitle": "Abonnieren Sie von Drittanbietern gepflegte Domain-Sperrlisten (wie AdGuardHome usw.).",
-    "formatDisclaimer": "Unterstützt Listen im AdGuardHome-Format oder reine Domainlisten. Das System gleicht Subdomains standardmäßig nicht automatisch ab (nur Regeln mit dem Präfix || blockieren alle Subdomains).",
+    "title": "Externe Listen",
+    "subtitle": "Abonnieren Sie von Drittanbietern gepflegte Domain-Sperrlisten (wie AdGuard Home usw.).",
+    "formatDisclaimer": "Unterstützt Listen im AdGuard Home-Format oder reine Domainlisten. Das System gleicht Subdomains standardmäßig nicht automatisch ab (nur Regeln mit dem Präfix || blockieren alle Subdomains).",
     "syncAll": "Alle Listen synchronisieren",
     "urlPlaceholder": "Listen-URL eingeben...",
     "addSubscription": "Abonnement hinzufügen",

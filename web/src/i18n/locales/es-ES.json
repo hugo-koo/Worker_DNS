@@ -360,7 +360,8 @@
     "close": "Cerrar",
     "includeSubdomains": "Incluir subdominios",
     "includeSubdomainsDesc": "P. ej., example.com también coincidirá con *.example.com; desactivado por defecto (solo coincidencia exacta)",
-    "subdomainsBadge": "+Subdominios"
+    "subdomainsBadge": "+Subdominios",
+    "wildcardDisclaimer": "Para hacer coincidir subdominios, use el comodín *.example.com; example.com no coincidirá con subdominios."
   },
   "analytics": {
     "customRange": "Periodo personalizado",
@@ -476,9 +477,9 @@
     "scrollToTop": "Ir arriba"
   },
   "filtering": {
-    "title": "Listas de bloqueo externas",
-    "subtitle": "Suscríbete a listas de bloqueo de dominios mantenidas por terceros (como AdGuardHome, etc.).",
-    "formatDisclaimer": "Admite listas en formato AdGuardHome o listas de dominios puros. De forma predeterminada, el sistema no coincide automáticamente con subdominios (solo las reglas con el prefijo || bloquean todos los subdominios).",
+    "title": "Listas externas",
+    "subtitle": "Suscríbete a listas de bloqueo de dominios mantenidas por terceros (como AdGuard Home, etc.).",
+    "formatDisclaimer": "Admite listas en formato AdGuard Home o listas de dominios puros. De forma predeterminada, el sistema no coincide automáticamente con subdominios (solo las reglas con el prefijo || bloquean todos los subdominios).",
     "syncAll": "Sincronizar todas las listas",
     "urlPlaceholder": "Introduce la URL de la lista...",
     "addSubscription": "Añadir suscripción",

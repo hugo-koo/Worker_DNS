@@ -360,7 +360,8 @@
     "close": "閉じる",
     "includeSubdomains": "サブドメインも含める",
     "includeSubdomainsDesc": "例: example.com の場合に *.example.com も一致します（デフォルトはオフ、完全一致のみ）",
-    "subdomainsBadge": "+サブドメイン"
+    "subdomainsBadge": "+サブドメイン",
+    "wildcardDisclaimer": "サブドメインを一致させるには、ワイルドカード *.example.com を使用してください。example.com はサブドメインに一致しません。"
   },
   "analytics": {
     "customRange": "カスタム期間",
@@ -476,9 +477,9 @@
     "scrollToTop": "トップへ"
   },
   "filtering": {
-    "title": "外部ブロックリスト",
-    "subtitle": "サードパーティが管理するドメインブロックリスト（AdGuardHomeなど）を購読します。",
-    "formatDisclaimer": "本システムは AdGuardHome 形式のリストまたは純粋なドメインリストに対応しています。システムはデフォルトでサブドメインを自動一致しません（|| プレフィックスを含むルールのみがすべてのサブドメインをブロックします）。",
+    "title": "外部リスト",
+    "subtitle": "サードパーティが管理するドメインブロックリスト（AdGuard Homeなど）を購読します。",
+    "formatDisclaimer": "本システムは AdGuard Home 形式のリストまたは純粋なドメインリストに対応しています。システムはデフォルトでサブドメインを自動一致しません（|| プレフィックスを含むルールのみがすべてのサブドメインをブロックします）。",
     "syncAll": "すべてのリストを同期",
     "urlPlaceholder": "ブロックリストの URL を入力してください...",
     "addSubscription": "購読を追加",
