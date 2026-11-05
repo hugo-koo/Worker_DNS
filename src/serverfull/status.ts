@@ -23,6 +23,50 @@ export * from './status/probe';
 export * from './status/database';
 
 /**
+ * Inspects remote Turso database connectivity, migration status, and table metrics.
+ *
+ * @param url - Turso database URL.
+ * @param token - Turso authorization token.
+ * @returns Database status metrics.
+ */
+export async function inspectTursoDatabase(url: string, token: string): Promise<DbStatusInfo> {
+  try {
+    const db = createTursoClient(url, token);
+    const migStats = await getTursoMigrationStats(db);
+    let usersCount = 0;
+    let profilesCount = 0;
+    try {
+      const userRes = await db.prepare('SELECT count(*) as count FROM users').first<{ count: number }>();
+      usersCount = userRes?.count || 0;
+      const profRes = await db.prepare('SELECT count(*) as count FROM profiles').first<{ count: number }>();
+      profilesCount = profRes?.count || 0;
+    } catch {
+      // Tables might not exist if migrations haven't run yet
+    }
+
+    const details = [
+      migStats.count > 0 ? `${migStats.count} migrations` : null,
+      usersCount > 0 ? `${usersCount} user(s)` : null,
+      profilesCount > 0 ? `${profilesCount} profile(s)` : null
+    ].filter(Boolean).join(', ');
+
+    return {
+      exists: true,
+      migrationsCount: migStats.count,
+      usersCount,
+      profilesCount,
+      statusText: `Ready (Connected${details ? `: ${details}` : ''})`
+    };
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    return {
+      exists: false,
+      statusText: `Connection Failed (${errorMsg})`
+    };
+  }
+}
+
+/**
  * Inspects all Serverfull service ports, database, and configurations, printing a declarative status report.
  *
  * @param config - The parsed serverfull configuration.
