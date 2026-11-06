@@ -105,8 +105,8 @@ DNS Worker 在最底層的 DNS 解析階段即可攔截網路威脅——在建�
 flowchart TD
     REQ["收到查詢請求 (例如 sub.adserver.tracker.com)"]
     L1["階段 1: 自定義規則 (Local Rules)<br/>(白名單 / 重定向 / 黑名單，可選匹配子域)"]
-    L2["階段 2: AdGuard 白名單例外 (@@)<br/>(記憶體雜湊集合 O(1) 匹配 + 標籤逐級回溯)"]
-    L3["階段 3: AdGuard DNS 重寫 ($dnsrewrite)<br/>(A / AAAA / CNAME / NXDOMAIN / REFUSED)"]
+    L2["階段 2: 外部列表白名單例外 (@@)<br/>(記憶體雜湊集合 O(1) 匹配 + 標籤逐級回溯)"]
+    L3["階段 3: 外部列表 DNS 重寫 ($dnsrewrite)<br/>(A / AAAA / CNAME / NXDOMAIN / REFUSED)"]
     L4["階段 4: 雙態前綴布隆過濾器 (Bloom Filter)<br/>(|| 泛子域與精確域名黑名單 ~90%)"]
     L5["階段 5: 正則與複雜萬用字元池 (Regex Pool)<br/>(頂級域名索引加速，MAX_REGEX_RULES 上限保護)"]
     PASS["放行通過 (Clean / Whitelist)"]
@@ -132,8 +132,8 @@ flowchart TD
 
 1. **分級高效短路**：
    - **階段 1：本地自定義規則**：優先順序最高。支援單域名精確匹配與自定義子域名匹配。
-   - **階段 2：AdGuard 白名單例外（`@@`）**：採用記憶體雜湊集合（Hash Set，`Set<string>`）維護，先以 $O(1)$ 查表，再進行父級標籤逐級回溯（Parent Walk）。命中即刻放行，徹底消除布隆過濾器的假陽性誤判風險。
-   - **階段 3：AdGuard DNS 重寫（`$dnsrewrite`）**：支援將域名即時合成為指定 IPv4、IPv6、CNAME 或阻斷狀態（NXDOMAIN / REFUSED）。
+   - **階段 2：外部列表白名單例外（`@@`）**：採用記憶體雜湊集合（Hash Set，`Set<string>`）維護，先以 $O(1)$ 查表，再進行父級標籤逐級回溯（Parent Walk）。命中即刻放行，徹底消除布隆過濾器的假陽性誤判風險。
+   - **階段 3：外部列表 DNS 重寫（`$dnsrewrite`）**：支援將域名即時合成為指定 IPv4、IPv6、CNAME 或阻斷狀態（NXDOMAIN / REFUSED）。
    - **階段 4：雙態前綴布隆過濾器**：海量靜態黑名單的主力防線。透過字首區分單域名黑名單與帶 `||` 的泛子域黑名單，在微秒級時間內完成匹配，杜絕單域名規則誤殺子域名。
    - **階段 5：正則與複雜萬用字元池**：對 `/regex/` 及複雜萬用字元建立頂級域名（Apex Domain）倒排索引，大幅收窄正則評估範圍，單配置預設上限為 1000 條。
 
@@ -159,10 +159,10 @@ flowchart TD
 - **預設值**：`0.0001`（萬分之一）
 - **說明**：布隆過濾器的誤報率設計閾值。極低的萬分之一閾值在最小化記憶體開銷的同時徹底壓低了二次驗證頻率。
 
-### `MAX_SYNC_DOMAINS` & `MAX_LIST_DOMAINS`
+### `MAX_SYNC_DOMAINS`、`MAX_LIST_DOMAINS` & `MAX_LIST_BYTES`
 - **支援模式**：Serverless & Serverfull
-- **預設值**：`MAX_SYNC_DOMAINS=1000000`（總計 100 萬條上限），`MAX_LIST_DOMAINS=500000`（單列表 50 萬條上限）。
-- **說明**：安全保護邊界，防止抓取過大規則源時發生記憶體溢位。
+- **預設值**：`MAX_SYNC_DOMAINS=1000000`（總計 100 萬條上限），`MAX_LIST_DOMAINS=500000`（單列表 50 萬條上限），`MAX_LIST_BYTES=20971520`（單列表 20 MB 上限）。
+- **說明**：安全保護邊界，防止抓取過大規則源時發生無節制記憶體佔用與大流量耗盡。若外部列表超出 `MAX_LIST_BYTES`，系統將安全截斷至上限並於列表同步狀態明確標註警告，杜絕靜默丟失。
 
 ### `BLOOM_MEM_TTL` & `SYNC_TIMEOUT_MS`
 - **預設值**：`BLOOM_MEM_TTL=600000`（記憶體快取 10 分鐘），`SYNC_TIMEOUT_MS=30000`（規則下載超時 30 秒）。
