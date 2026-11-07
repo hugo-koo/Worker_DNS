@@ -1,5 +1,7 @@
 import { connectUniversal } from "../../utils/sockets";
 import { parseDnsStamp } from "../../utils/dnsStamp";
+import { http2SessionPool, isHttp2Supported } from "../../utils/http2Client";
+import { getAppUserAgent } from "../../constants/version";
 import { UpstreamHttpError, UpstreamTransportResult } from "./types";
 
 /**
@@ -107,6 +109,85 @@ export function parseHostAndPort(
 }
 
 /**
+ * Queries an upstream DNS server over DNS over TLS (DoT - RFC 7858).
+ *
+ * @param host - Remote DoT hostname or IP address.
+ * @param port - Remote port number (default 853).
+ * @param queryRaw - Wire-format DNS query packet.
+ * @param timeoutMs - Connection and read timeout in milliseconds (default 5000).
+ * @returns Complete wire-format DNS answer packet.
+ */
+export async function queryDoT(
+  host: string,
+  port = 853,
+  queryRaw: Uint8Array,
+  timeoutMs = 5000
+): Promise<Uint8Array> {
+  const socket = await connectUniversal({
+    hostname: host,
+    port,
+    secureTransport: "on"
+  });
+
+  try {
+    const writer = socket.writable.getWriter();
+    const reader = socket.readable.getReader();
+
+    // RFC 7858 Section 3.3: 2-byte length prefix + DNS message
+    const framedQuery = new Uint8Array(queryRaw.length + 2);
+    framedQuery[0] = (queryRaw.length >> 8) & 0xff;
+    framedQuery[1] = queryRaw.length & 0xff;
+    framedQuery.set(queryRaw, 2);
+
+    await writer.write(framedQuery);
+    writer.releaseLock();
+
+    return await readFramedDnsResponse(reader, timeoutMs);
+  } finally {
+    await socket.close().catch(() => {});
+  }
+}
+
+/**
+ * Queries an upstream DNS server over Classic TCP (RFC 1035).
+ *
+ * @param host - Remote TCP hostname or IP address.
+ * @param port - Remote port number (default 53).
+ * @param queryRaw - Wire-format DNS query packet.
+ * @param timeoutMs - Connection and read timeout in milliseconds (default 5000).
+ * @returns Complete wire-format DNS answer packet.
+ */
+export async function queryTcp(
+  host: string,
+  port = 53,
+  queryRaw: Uint8Array,
+  timeoutMs = 5000
+): Promise<Uint8Array> {
+  const socket = await connectUniversal({
+    hostname: host,
+    port,
+    secureTransport: "off"
+  });
+
+  try {
+    const writer = socket.writable.getWriter();
+    const reader = socket.readable.getReader();
+
+    const framedQuery = new Uint8Array(queryRaw.length + 2);
+    framedQuery[0] = (queryRaw.length >> 8) & 0xff;
+    framedQuery[1] = queryRaw.length & 0xff;
+    framedQuery.set(queryRaw, 2);
+
+    await writer.write(framedQuery);
+    writer.releaseLock();
+
+    return await readFramedDnsResponse(reader, timeoutMs);
+  } finally {
+    await socket.close().catch(() => {});
+  }
+}
+
+/**
  * Resolves raw upstream URL or DNS stamp into effective endpoint info and diagnostic targets.
  *
  * @param rawUpstreamUrl - Configured upstream URL or connection string.
@@ -177,6 +258,12 @@ export function resolveUpstreamEndpoint(rawUpstreamUrl: string): UpstreamEndpoin
 /**
  * Communicates with the upstream DNS server over DoH, DoT, TCP, or DNS Stamps.
  *
+ * Upstream Protocol Priority:
+ * 1. HTTP/3 (DoH3 / RFC 9114) -> Future extension point
+ * 2. HTTP/2 (RFC 8484 §5.2)   -> Prioritizes native multiplexed H2 connections (Node.js Serverfull)
+ * 3. HTTP/1.1 (Standard Fetch)-> Universal fallback for runtimes without native H2
+ * 4. DoT (RFC 7858)          -> Automatic resilient fallback on HTTP 505 (H2 required) or 525 (TLS error)
+ *
  * @param endpoint - Resolved upstream endpoint information.
  * @param queryRaw - Wire-format DNS query packet.
  * @returns Upstream resolution result containing raw answer, latency, and diagnostics.
@@ -193,30 +280,7 @@ export async function fetchFromUpstream(
     // ── DNS over TLS (DoT - RFC 7858) ──────────────────────────────────
     const rawHost = effectiveUrl.replace(/^(tls|dot):\/\//, "");
     const { host: dotHost, port: dotPort } = parseHostAndPort(rawHost, 853);
-
-    const socket = await connectUniversal({
-      hostname: dotHost,
-      port: dotPort,
-      secureTransport: "on"
-    });
-
-    try {
-      const writer = socket.writable.getWriter();
-      const reader = socket.readable.getReader();
-
-      // RFC 7858 Section 3.3: 2-byte length prefix + DNS message
-      const framedQuery = new Uint8Array(queryRaw.length + 2);
-      framedQuery[0] = (queryRaw.length >> 8) & 0xff;
-      framedQuery[1] = queryRaw.length & 0xff;
-      framedQuery.set(queryRaw, 2);
-
-      await writer.write(framedQuery);
-      writer.releaseLock();
-
-      answer = await readFramedDnsResponse(reader, 5000);
-    } finally {
-      await socket.close().catch(() => {});
-    }
+    answer = await queryDoT(dotHost, dotPort, queryRaw, 5000);
   } else if (
     !effectiveUrl.startsWith("http://") &&
     !effectiveUrl.startsWith("https://")
@@ -224,41 +288,85 @@ export async function fetchFromUpstream(
     // ── Classic DNS (TCP Socket) ──────────────────────────────────────────
     const rawHost = effectiveUrl.replace(/^(tcp|udp):\/\//, "");
     const { host: tcpHost, port: tcpPort } = parseHostAndPort(rawHost, 53);
-
-    const socket = await connectUniversal({
-      hostname: tcpHost,
-      port: tcpPort,
-      secureTransport: "off"
-    });
-
-    try {
-      const writer = socket.writable.getWriter();
-      const reader = socket.readable.getReader();
-
-      const framedQuery = new Uint8Array(queryRaw.length + 2);
-      framedQuery[0] = (queryRaw.length >> 8) & 0xff;
-      framedQuery[1] = queryRaw.length & 0xff;
-      framedQuery.set(queryRaw, 2);
-
-      await writer.write(framedQuery);
-      writer.releaseLock();
-
-      answer = await readFramedDnsResponse(reader, 5000);
-    } finally {
-      await socket.close().catch(() => {});
-    }
+    answer = await queryTcp(tcpHost, tcpPort, queryRaw, 5000);
   } else {
-    // ── DoH (DNS over HTTPS) ───────────────────────────────────────────
-    const response = await fetch(effectiveUrl, {
-      method: "POST",
-      headers: {
-        Accept: "application/dns-message",
-        "Content-Type": "application/dns-message",
-        "User-Agent": "DNS-Worker/1.0"
-      },
-      body: queryRaw,
-      signal: AbortSignal.timeout(5000)
-    });
+    // ── DoH (DNS over HTTPS - RFC 8484) ─────────────────────────────────
+    const dohUrl = new URL(effectiveUrl);
+
+    // 1. Prioritize HTTP/2 (H2) if supported in the current environment
+    if (isHttp2Supported()) {
+      try {
+        const h2Res = await http2SessionPool.request(dohUrl, queryRaw, 5000);
+        if (h2Res.status >= 200 && h2Res.status < 300) {
+          const latency = Date.now() - startFetch;
+          return {
+            answer: h2Res.answer,
+            latency,
+            diagMethod: "H2",
+            diagTarget: effectiveUrl
+          };
+        }
+
+        // If upstream responded with 505 (HTTP version not supported) or 525 over H2
+        if (h2Res.status === 505 || h2Res.status === 525) {
+          try {
+            const fallbackAnswer = await queryDoT(dohUrl.hostname, 853, queryRaw, 5000);
+            const latency = Date.now() - startFetch;
+            return {
+              answer: fallbackAnswer,
+              latency,
+              diagMethod: "DoT (fallback)",
+              diagTarget: `tls://${dohUrl.hostname}:853`
+            };
+          } catch {}
+        }
+
+        let snippet = "";
+        try {
+          snippet = new TextDecoder()
+            .decode(h2Res.answer)
+            .replace(/<[^>]*>?/gm, " ")
+            .replace(/\s+/g, " ")
+            .trim()
+            .slice(0, 300);
+        } catch {}
+        throw new UpstreamHttpError(h2Res.status, "HTTP/2 Error", snippet);
+      } catch (h2Err) {
+        if (h2Err instanceof UpstreamHttpError) {
+          throw h2Err;
+        }
+        // If H2 connection / ALPN negotiation failed, fall through to universal fetch
+      }
+    }
+
+    // 2. Fallback to standard fetch (Cloudflare Workers or H2 negotiation fallback)
+    let response: Response;
+    try {
+      response = await fetch(effectiveUrl, {
+        method: "POST",
+        headers: {
+          Accept: "application/dns-message",
+          "Content-Type": "application/dns-message",
+          "User-Agent": getAppUserAgent()
+        },
+        body: queryRaw,
+        signal: AbortSignal.timeout(5000)
+      });
+    } catch (fetchErr: unknown) {
+      // Outbound fetch failed with TLS/network failure (e.g. Cloudflare edge TLS error 525)
+      try {
+        const fallbackAnswer = await queryDoT(dohUrl.hostname, 853, queryRaw, 5000);
+        const latency = Date.now() - startFetch;
+        return {
+          answer: fallbackAnswer,
+          latency,
+          diagMethod: "DoT (fallback)",
+          diagTarget: `tls://${dohUrl.hostname}:853`
+        };
+      } catch {
+        throw fetchErr;
+      }
+    }
 
     if (!response.ok) {
       let snippet = "";
@@ -268,6 +376,27 @@ export async function fetchFromUpstream(
         snippet = rawBody.replace(/<[^>]*>?/gm, " ").replace(/\s+/g, " ").trim().slice(0, 300);
       } catch {}
       const cfRay = response.headers.get("cf-ray") || undefined;
+
+      // Resilient DoT fallback on RFC 8484 HTTP 505 (HTTP/2 required) or Cloudflare 525 (SSL handshake failed)
+      if (
+        response.status === 505 ||
+        response.status === 525 ||
+        (response.status === 400 && snippet.includes("HTTP/2"))
+      ) {
+        try {
+          const fallbackAnswer = await queryDoT(dohUrl.hostname, 853, queryRaw, 5000);
+          const latency = Date.now() - startFetch;
+          return {
+            answer: fallbackAnswer,
+            latency,
+            diagMethod: "DoT (fallback)",
+            diagTarget: `tls://${dohUrl.hostname}:853`
+          };
+        } catch {
+          // If fallback fails, preserve original HTTP error with rich snippet
+        }
+      }
+
       throw new UpstreamHttpError(response.status, response.statusText, snippet, cfRay);
     }
 

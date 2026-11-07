@@ -18,6 +18,7 @@ import { MfaCard } from "./components/MfaCard";
 import { ActivityLogCard } from "./components/ActivityLogCard";
 import { ActiveSessionsCard } from "./components/ActiveSessionsCard";
 import { UserManagementCard } from "./components/UserManagementCard";
+import { DistributeFilterCard } from "./components/DistributeFilterCard";
 import { SystemSettingsCard } from "./components/SystemSettingsCard";
 import { DatabaseMigrationCard } from "./components/DatabaseMigrationCard";
 import { DangerZoneCard } from "./components/DangerZoneCard";
@@ -281,7 +282,17 @@ export const AccountView: React.FC<AccountViewProps> = ({ onSavingChange, toaste
               currentUserId={me.id}
               onRefresh={fetchUsers}
               registrationEnabled={sysSettings.registration_enabled !== "false"}
+              maxUsers={sysSettings.max_users}
               onRefreshSettings={fetchSystemSettings}
+              onSavingChange={onSavingChange}
+              toasterRef={toasterRef}
+            />
+          </div>
+
+          {/* Admin: Distribute Filter */}
+          <Divider />
+          <div className="space-y-4">
+            <DistributeFilterCard
               onSavingChange={onSavingChange}
               toasterRef={toasterRef}
             />
