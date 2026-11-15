@@ -104,11 +104,33 @@ DNS-Worker/
 │   ├── serverfull/                    # 独立服务器守护进程（UDP 53、DoT 853、嵌入式 HTTP、CLI 与系统服务）
 │   └── utils/                         # 工具库（DNS 编解码、ECH 编解码、规则拉取清洗、布隆编译器等）
 │
-├── web/                               # 本地优先前端单页面应用 (React + TypeScript + Vite)
-│   ├── src/views/                     # 业务视图组件（仪表盘、日志流、规则管理、接入点配置、系统设置）
-│   ├── src/services/localDb/          # 本地优先 SQLite 领域服务体系（Worker 通信、增量同步、分析查询、存储维护）
-│   ├── src/workers/                   # 后台 Web Worker（承载 SQLite WASM 与 OPFS 驱动）
-│   └── src/crypto/                    # 浏览器端 NIST FIPS 203 ML-KEM-768 解密核心
+├── web/                               # 本地優先前端單頁面應用 (React + TypeScript + Vite)
+│   └── src/                           # 前端原始碼目錄
+│       ├── components/                # 通用 UI 與業務元件（登入、註冊精靈、部署模式、鎖定畫面等）
+│       ├── config/                    # 前端執行時設定與常數定義
+│       ├── hooks/                     # 全域複用 React Hooks（認證狀態、E2EE、Turnstile 等）
+│       ├── i18n/                      # 國際化設定與多語系詞條（locales/）
+│       ├── layouts/                   # 頁面版面骨架（側邊欄、行動端導覽與響應式容器）
+│       ├── routes/                    # 前端路由定義與權限守衛
+│       ├── services/                  # 前端核心領域服務層
+│       │   ├── e2ee/                  # 瀏覽器端 NIST FIPS 203 ML-KEM-768 / P-256 金鑰與解密服務
+│       │   └── localDb/               # 本地優先 SQLite 領域服務（Worker 通訊、增量同步、分析查詢、儲存維護）
+│       ├── types/                     # 前端 TypeScript 型別與介面定義
+│       ├── utils/                     # 前端通用工具函式
+│       ├── views/                     # 頁面級業務檢視目錄
+│       │   ├── AccountView/           # 帳戶安全、工作階段管理、WebAuthn/TOTP 與 E2EE 設定
+│       │   ├── AnalyticsView/         # 多維統計圖表、Top 網域與流量趨勢分析
+│       │   ├── DashboardHomeView/     # 概覽儀表板首頁
+│       │   ├── DeploymentGuideView/   # 接入與部署指引頁面
+│       │   ├── FilteringView/         # 外部訂閱過濾清單管理與同步狀態
+│       │   ├── LogsView/              # 即時/本地查詢日誌流、檢索、匯出與解密顯示
+│       │   ├── RulesView/             # 自訂過濾與 DNS 重寫規則管理
+│       │   ├── SettingsView/          # Profile 接入點設定、隱私與危險操作設定
+│       │   ├── SetupView/             # 裝置接入精靈（DoH / DoT / DoQ / 路由器設定）
+│       │   ├── SystemView/            # 系統級設定與管理員控制台
+│       │   └── NotFoundView/          # 404 兜底頁面
+│       ├── service-worker/            # PWA Service Worker（靜態資源與受控快取策略）
+│       └── web-worker/                # 背景 Web Worker（sqlite/：承載 SQLite WASM 與 OPFS 驅動）
 │
 ├── migrations/                        # 版本化 SQL 数据库结构迁移脚本
 └── test/                              # 自动化测试矩阵（Turnstile 门控、Turso 协议、Serverfull 守护进程集成测试）

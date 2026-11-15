@@ -105,10 +105,32 @@ DNS-Worker/
 │   └── utils/                         # 工具库（DNS 编解码、ECH 编解码、规则拉取清洗、布隆编译器等）
 │
 ├── web/                               # 本地优先前端单页面应用 (React + TypeScript + Vite)
-│   ├── src/views/                     # 业务视图组件（仪表盘、日志流、规则管理、接入点配置、系统设置）
-│   ├── src/services/localDb/          # 本地优先 SQLite 领域服务体系（Worker 通信、增量同步、分析查询、存储维护）
-│   ├── src/workers/                   # 后台 Web Worker（承载 SQLite WASM 与 OPFS 驱动）
-│   └── src/crypto/                    # 浏览器端 NIST FIPS 203 ML-KEM-768 解密核心
+│   └── src/                           # 前端源码目录
+│       ├── components/                # 通用 UI 与业务组件（登录、注册向导、部署模式、锁屏等）
+│       ├── config/                    # 前端运行时配置与常量定义
+│       ├── hooks/                     # 全局复用 React Hooks（认证态、E2EE、Turnstile 等）
+│       ├── i18n/                      # 国际化配置与多语言词条（locales/）
+│       ├── layouts/                   # 页面布局骨架（侧边栏、移动端导航与响应式容器）
+│       ├── routes/                    # 前端路由定义与权限守卫
+│       ├── services/                  # 前端核心领域服务层
+│       │   ├── e2ee/                  # 浏览器端 NIST FIPS 203 ML-KEM-768 / P-256 密钥与解密服务
+│       │   └── localDb/               # 本地优先 SQLite 领域服务（Worker 通信、增量同步、分析查询、存储维护）
+│       ├── types/                     # 前端 TypeScript 类型与接口定义
+│       ├── utils/                     # 前端通用工具函数
+│       ├── views/                     # 页面级业务视图目录
+│       │   ├── AccountView/           # 账户安全、会话管理、WebAuthn/TOTP 与 E2EE 设置
+│       │   ├── AnalyticsView/         # 多维统计图表、Top 域名与流量趋势分析
+│       │   ├── DashboardHomeView/     # 概览仪表盘首页
+│       │   ├── DeploymentGuideView/   # 接入与部署指引页面
+│       │   ├── FilteringView/         # 外部订阅过滤列表管理与同步状态
+│       │   ├── LogsView/              # 实时/本地查询日志流、检索、导出与解密展示
+│       │   ├── RulesView/             # 自定义过滤与 DNS 重写规则管理
+│       │   ├── SettingsView/          # Profile 接入点配置、隐私与危险操作设置
+│       │   ├── SetupView/             # 设备接入向导（DoH / DoT / DoQ / 路由器配置）
+│       │   ├── SystemView/            # 系统级配置与管理员控制台
+│       │   └── NotFoundView/          # 404 兜底页面
+│       ├── service-worker/            # PWA Service Worker（静态资源与受控缓存策略）
+│       └── web-worker/                # 后台 Web Worker（sqlite/：承载 SQLite WASM 与 OPFS 驱动）
 │
 ├── migrations/                        # 版本化 SQL 数据库结构迁移脚本
 └── test/                              # 自动化测试矩阵（Turnstile 门控、Turso 协议、Serverfull 守护进程集成测试）

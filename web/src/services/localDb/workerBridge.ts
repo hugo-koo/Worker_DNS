@@ -3,7 +3,7 @@
  * @description Web Worker communication bridge and RPC message router for SQLite WASM.
  */
 
-import SqliteWorker from '../../workers/sqlite.worker?worker';
+import SqliteWorker from '../../web-worker/sqlite.worker?worker';
 
 interface PendingRequest {
   resolve: (val: any) => void;

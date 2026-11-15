@@ -105,10 +105,32 @@ DNS-Worker/
 │   └── utils/                         # Utilities (DNS codecs, ECH codecs, rule sync, bloom compiler)
 │
 ├── web/                               # Local-First Frontend SPA (React + TypeScript + Vite)
-│   ├── src/views/                     # View components (Stats, Logs, Rules, Profiles, Settings)
-│   ├── src/services/localDb/          # Local SQLite domain services (Bridge, Sync, Query, Maintenance)
-│   ├── src/workers/                   # Background Web Worker (hosting SQLite WASM + OPFS)
-│   └── src/crypto/                    # Browser-side NIST FIPS 203 ML-KEM-768 decryptor
+│   └── src/                           # Frontend source root
+│       ├── components/                # Shared UI & feature components (login, signup wizard, deployment mode, lock screen)
+│       ├── config/                    # Runtime configuration and frontend constants
+│       ├── hooks/                     # Reusable React Hooks (auth state, E2EE, Turnstile, etc.)
+│       ├── i18n/                      # Internationalization config and translation bundles (locales/)
+│       ├── layouts/                   # Page layout shells (sidebar, mobile navigation, responsive containers)
+│       ├── routes/                    # Client-side route definitions and auth guards
+│       ├── services/                  # Frontend domain service layer
+│       │   ├── e2ee/                  # Browser-side NIST FIPS 203 ML-KEM-768 / P-256 key & decryption service
+│       │   └── localDb/               # Local SQLite domain services (Bridge, Sync, Query, Maintenance)
+│       ├── types/                     # Frontend TypeScript interfaces and type definitions
+│       ├── utils/                     # Shared frontend utility helpers
+│       ├── views/                     # Page-level feature views
+│       │   ├── AccountView/           # Account security, active sessions, WebAuthn/TOTP, and E2EE settings
+│       │   ├── AnalyticsView/         # Traffic analytics charts, top domains, and time-series trends
+│       │   ├── DashboardHomeView/     # Overview dashboard home view
+│       │   ├── DeploymentGuideView/   # Deployment & onboarding guide view
+│       │   ├── FilteringView/         # External blocklist subscriptions and sync status
+│       │   ├── LogsView/              # Real-time / local query logs, search, export, and E2EE decryption
+│       │   ├── RulesView/             # Custom filtering and DNS rewrite rule management
+│       │   ├── SettingsView/          # Profile settings, privacy options, and danger-zone actions
+│       │   ├── SetupView/             # Client setup wizard (DoH / DoT / DoQ / router guides)
+│       │   ├── SystemView/            # System-level configuration and admin console
+│       │   └── NotFoundView/          # 404 fallback view
+│       ├── service-worker/            # PWA Service Worker (static assets and controlled caching)
+│       └── web-worker/                # Background Web Workers (sqlite/: hosting SQLite WASM + OPFS)
 │
 ├── migrations/                        # Versioned SQL database schema migrations
 └── test/                              # Automated test suites (Turnstile, Turso, Serverfull daemon)
