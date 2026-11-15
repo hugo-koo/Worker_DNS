@@ -1151,5 +1151,18 @@
     "subtitle": "사용자 관리, 시스템 필터 목록, 시스템 환경설정 및 데이터베이스 유지 관리",
     "accessDenied": "액세스 거부",
     "accessDeniedDesc": "이 페이지는 관리자만 액세스할 수 있습니다."
+  },
+  "migrationAlert": {
+    "title": "데이터베이스 마이그레이션 미완료",
+    "summary": "{{applied}}/{{total}} 적용됨, {{pending}}개 대기 중",
+    "engine": "데이터베이스 엔진",
+    "lastApplied": "마지막 적용",
+    "pendingList": "대기 중인 마이그레이션",
+    "moreFiles": "... 외 {{count}}개 파일",
+    "cliHint": "온라인 마이그레이션이 제한된 경우 터미널에서 실행:",
+    "runNow": "지금 마이그레이션",
+    "migrating": "마이그레이션 중...",
+    "openSystem": "시스템 관리로 이동",
+    "migrateFailed": "데이터베이스 마이그레이션 실패"
   }
 }

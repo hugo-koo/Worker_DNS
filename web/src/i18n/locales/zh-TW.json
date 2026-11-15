@@ -1151,5 +1151,18 @@
     "subtitle": "管理使用者、系統過濾列表、系統設定與資料庫維護",
     "accessDenied": "存取受限",
     "accessDeniedDesc": "當前頁面僅限管理員存取。"
+  },
+  "migrationAlert": {
+    "title": "資料庫遷移未完成",
+    "summary": "已套用 {{applied}}/{{total}}，待執行 {{pending}} 項",
+    "engine": "資料庫引擎",
+    "lastApplied": "最後已套用",
+    "pendingList": "待執行遷移",
+    "moreFiles": "... 另有 {{count}} 個遷移檔案",
+    "cliHint": "若線上遷移受限，可在終端機執行：",
+    "runNow": "立即執行遷移",
+    "migrating": "遷移中...",
+    "openSystem": "前往系統管理",
+    "migrateFailed": "資料庫遷移執行失敗"
   }
 }

@@ -1151,5 +1151,18 @@
     "subtitle": "Gestione usuarios, listas de filtros del sistema, configuración y base de datos",
     "accessDenied": "Acceso denegado",
     "accessDeniedDesc": "Esta página está restringida únicamente a administradores."
+  },
+  "migrationAlert": {
+    "title": "Migraciones de base de datos incompletas",
+    "summary": "{{applied}}/{{total}} aplicadas, {{pending}} pendientes",
+    "engine": "Motor de base de datos",
+    "lastApplied": "Última aplicada",
+    "pendingList": "Migraciones pendientes",
+    "moreFiles": "... y {{count}} archivo(s) más",
+    "cliHint": "Si la migración en línea está restringida, ejecute en terminal:",
+    "runNow": "Ejecutar migraciones",
+    "migrating": "Migrando...",
+    "openSystem": "Ir al sistema",
+    "migrateFailed": "Error al ejecutar la migración"
   }
 }

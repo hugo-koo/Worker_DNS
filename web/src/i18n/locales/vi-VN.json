@@ -1151,5 +1151,18 @@
     "subtitle": "Quản lý người dùng, danh sách bộ lọc hệ thống, cấu hình và cơ sở dữ liệu",
     "accessDenied": "Truy cập bị từ chối",
     "accessDeniedDesc": "Trang này chỉ dành cho quản trị viên."
+  },
+  "migrationAlert": {
+    "title": "Di chuyển cơ sở dữ liệu chưa hoàn tất",
+    "summary": "Đã áp dụng {{applied}}/{{total}}, còn {{pending}} mục chờ",
+    "engine": "Công cụ CSDL",
+    "lastApplied": "Áp dụng gần nhất",
+    "pendingList": "Di chuyển đang chờ",
+    "moreFiles": "... và {{count}} tệp khác",
+    "cliHint": "Nếu di chuyển trực tuyến bị hạn chế, hãy chạy trong terminal:",
+    "runNow": "Chạy di chuyển ngay",
+    "migrating": "Đang di chuyển...",
+    "openSystem": "Mở Quản trị Hệ thống",
+    "migrateFailed": "Di chuyển cơ sở dữ liệu thất bại"
   }
 }

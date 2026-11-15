@@ -4,6 +4,7 @@ import { LogOut, User as UserIcon, Server } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { LanguageSwitcher } from "../../../components/LanguageSwitcher";
 import { SessionLockButton } from "../../../components/SessionLockButton";
+import { MigrationStatusBadge } from "../../../components/MigrationStatusBadge";
 import type { UserInfo } from "../../../types/auth";
 import LogoIcon from "../../../assets/obex_cat_eye_logo-256.webp";
 
@@ -55,6 +56,7 @@ export const Navbar: React.FC<NavbarProps> = ({ isMobile, navigate, handleLogout
       </div>
       <div className="flex items-center gap-3">
         <SessionLockButton currentUser={currentUser} />
+        <MigrationStatusBadge currentUser={currentUser} onNavigate={navigate} />
         <LanguageSwitcher />
         <div className="flex items-center gap-1">
           {currentUser?.role === "admin" && (

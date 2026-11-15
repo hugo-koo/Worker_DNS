@@ -1151,5 +1151,18 @@
     "subtitle": "管理用户、系统过滤列表、系统配置与数据库维护",
     "accessDenied": "访问受限",
     "accessDeniedDesc": "当前页面仅限管理员访问。"
+  },
+  "migrationAlert": {
+    "title": "数据库迁移未完成",
+    "summary": "已应用 {{applied}}/{{total}}，待执行 {{pending}} 项",
+    "engine": "数据库引擎",
+    "lastApplied": "最后已应用",
+    "pendingList": "待执行迁移",
+    "moreFiles": "... 另有 {{count}} 个迁移文件",
+    "cliHint": "若在线迁移受限，可在终端运行：",
+    "runNow": "立即执行迁移",
+    "migrating": "迁移中...",
+    "openSystem": "前往系统管理",
+    "migrateFailed": "数据库迁移执行失败"
   }
 }

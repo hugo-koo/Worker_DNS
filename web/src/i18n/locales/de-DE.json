@@ -1151,5 +1151,18 @@
     "subtitle": "Benutzer, System-Filterlisten, Systemeinstellungen und Datenbankverwaltung",
     "accessDenied": "Zugriff verweigert",
     "accessDeniedDesc": "Diese Seite ist nur für Administratoren zugänglich."
+  },
+  "migrationAlert": {
+    "title": "Datenbankmigrationen unvollständig",
+    "summary": "{{applied}}/{{total}} angewendet, {{pending}} ausstehend",
+    "engine": "Datenbank-Engine",
+    "lastApplied": "Zuletzt angewendet",
+    "pendingList": "Ausstehende Migrationen",
+    "moreFiles": "... und {{count}} weitere Datei(en)",
+    "cliHint": "Falls Online-Migration eingeschränkt ist, im Terminal ausführen:",
+    "runNow": "Migration jetzt ausführen",
+    "migrating": "Migriere...",
+    "openSystem": "Systemverwaltung",
+    "migrateFailed": "Datenbankmigration fehlgeschlagen"
   }
 }

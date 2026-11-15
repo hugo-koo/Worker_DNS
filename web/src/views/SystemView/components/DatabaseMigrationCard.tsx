@@ -51,6 +51,7 @@ export const DatabaseMigrationCard: React.FC<DatabaseMigrationCardProps> = ({
         icon: "tick",
       });
       await onRefresh();
+      window.dispatchEvent(new Event("db-migration-updated"));
     } catch (e: any) {
       console.error(e);
       toasterRef?.current?.show({
@@ -67,6 +68,7 @@ export const DatabaseMigrationCard: React.FC<DatabaseMigrationCardProps> = ({
     setRefreshing(true);
     try {
       await onRefresh();
+      window.dispatchEvent(new Event("db-migration-updated"));
     } finally {
       setRefreshing(false);
     }

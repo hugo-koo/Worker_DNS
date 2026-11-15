@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { Sun, Moon, Monitor, Menu as MenuIcon } from "lucide-react";
 import { LanguageSwitcher } from "../components/LanguageSwitcher";
 import { SessionLockButton } from "../components/SessionLockButton";
+import { MigrationStatusBadge } from "../components/MigrationStatusBadge";
 import type { Profile, UserInfo } from "../types/auth";
 import { useIsMobile } from "../hooks/useIsMobile";
 
@@ -98,6 +99,7 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
             </div>
           )}
           <SessionLockButton currentUser={currentUser} />
+          <MigrationStatusBadge currentUser={currentUser} onNavigate={navigate} />
           <LanguageSwitcher />
           <div className="flex items-center gap-1 bg-gray-100/50 dark:bg-gray-800/50 p-1 rounded-lg">
             <Button

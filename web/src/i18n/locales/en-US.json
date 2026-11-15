@@ -1151,5 +1151,18 @@
     "subtitle": "Manage users, system filter lists, system settings, and database maintenance",
     "accessDenied": "Access Denied",
     "accessDeniedDesc": "This page is restricted to administrators only."
+  },
+  "migrationAlert": {
+    "title": "Database Migrations Incomplete",
+    "summary": "Applied {{applied}}/{{total}}, {{pending}} pending",
+    "engine": "Database Engine",
+    "lastApplied": "Last Applied",
+    "pendingList": "Pending Migrations",
+    "moreFiles": "... and {{count}} more file(s)",
+    "cliHint": "If online migration is restricted, run in terminal:",
+    "runNow": "Run Migrations",
+    "migrating": "Migrating...",
+    "openSystem": "Open System",
+    "migrateFailed": "Database migration failed"
   }
 }

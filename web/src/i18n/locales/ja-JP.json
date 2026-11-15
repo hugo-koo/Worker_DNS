@@ -1151,5 +1151,18 @@
     "subtitle": "ユーザー、システムフィルターリスト、環境設定、データベースの管理",
     "accessDenied": "アクセス拒否",
     "accessDeniedDesc": "このページは管理者のみアクセスできます。"
+  },
+  "migrationAlert": {
+    "title": "データベースマイグレーション未完了",
+    "summary": "{{applied}}/{{total}} 適用済み、{{pending}} 件保留中",
+    "engine": "データベースエンジン",
+    "lastApplied": "最終適用",
+    "pendingList": "保留中のマイグレーション",
+    "moreFiles": "... 他 {{count}} 件のファイル",
+    "cliHint": "オンライン実行が制限されている場合は端末で実行：",
+    "runNow": "今すぐマイグレーション",
+    "migrating": "マイグレーション中...",
+    "openSystem": "システム管理へ",
+    "migrateFailed": "マイグレーションの実行に失敗しました"
   }
 }
