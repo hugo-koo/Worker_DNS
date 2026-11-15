@@ -1102,7 +1102,19 @@
     "serverfullStepEnvCmd": "sudo nano /etc/dns-worker/.env\n# Configure JWT_SECRET=<secreto_generado_abajo>",
     "serverfullStepServiceTitle": "3. Reiniciar y verificar el servicio",
     "serverfullStepServiceDesc": "Reinicie el servicio del sistema tras guardar la configuración y verifique su estado:",
-    "serverfullStepServiceCmd": "sudo dns-worker service restart\nsudo dns-worker status"
+    "serverfullStepServiceCmd": "sudo dns-worker service restart\nsudo dns-worker status",
+    "tursoDbStatus": "Base de datos Turso / libSQL",
+    "tursoDbMissing": "Error de conexión o autenticación",
+    "tursoStepDbTitle": "1. Configurar base de datos Turso / libSQL",
+    "tursoStepDbDesc": "Obtenga la URL de su base de datos Turso, genere un token de autenticación y súbalos como secretos del Worker:",
+    "tursoStepDbCommand1": "turso db show <db-name> --url\nturso db tokens create <db-name>\nwrangler secret put TURSO_DATABASE_URL\nwrangler secret put TURSO_AUTH_TOKEN",
+    "tursoStepDbDesc2": "Asegúrese de que DATABASE_SERVICE esté configurado como \"Turso\" en wrangler.toml (bajo [vars]) y aplique las migraciones si es necesario:",
+    "tursoStepDbCommand2": "[vars]\nDATABASE_SERVICE = \"Turso\"\n\n# Aplicar migraciones de esquema en Turso:\nnpx tsx scripts/migrate-prod.ts",
+    "tursoStepDbDashDesc": "1. Abra el panel de Turso, copie la URL de su base de datos (libsql://... o https://...) y genere un Auth Token válido.\n2. Vaya a Cloudflare Dashboard -> Workers & Pages -> Su Worker -> Configuración -> Variables y secretos.\n3. Establezca DATABASE_SERVICE = \"Turso\" y agregue TURSO_DATABASE_URL y TURSO_AUTH_TOKEN como variables Secret.\n4. Guarde los cambios y vuelva a desplegar su Worker.",
+    "tursoDashboardLink": "Panel de Turso",
+    "tursoServerfullStepTitle": "1. Configurar credenciales de Turso en .env",
+    "tursoServerfullStepDesc": "Verifique DATABASE_SERVICE, TURSO_DATABASE_URL y TURSO_AUTH_TOKEN en /etc/dns-worker/.env:",
+    "tursoServerfullStepCmd": "sudo nano /etc/dns-worker/.env\n# DATABASE_SERVICE=Turso\n# TURSO_DATABASE_URL=libsql://<your-db>.turso.io\n# TURSO_AUTH_TOKEN=<your-valid-token>"
   },
   "meta": {
     "defaultDesc": "Resolución DNS segura, rápida y personalizable para todos sus dispositivos. Basado en Cloudflare Workers, de código abierto y enfocado en la privacidad.",

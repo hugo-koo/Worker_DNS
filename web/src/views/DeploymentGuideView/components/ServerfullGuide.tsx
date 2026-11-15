@@ -5,6 +5,7 @@ import { CodeBlock } from "./CodeBlock";
 export interface ServerfullGuideProps {
   isDbMissing: boolean;
   isJwtSecretMissing: boolean;
+  isTurso?: boolean;
 }
 
 /**
@@ -13,28 +14,29 @@ export interface ServerfullGuideProps {
 export const ServerfullGuide: React.FC<ServerfullGuideProps> = ({
   isDbMissing,
   isJwtSecretMissing,
+  isTurso = false,
 }) => {
   const { t } = useTranslation();
 
   return (
     <div className="space-y-6">
-      {/* Step 1: Database (SQLite) */}
+      {/* Step 1: Database (Turso or SQLite) */}
       <div>
         <h3 className="text-sm font-bold text-gray-900 dark:text-zinc-100 mb-1 flex items-center gap-2 mt-0">
           <span className="flex items-center justify-center w-5 h-5 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 text-xs font-bold">
             1
           </span>
-          {t("deploymentGuide.serverfullStepInstallTitle")}
+          {isTurso ? t("deploymentGuide.tursoServerfullStepTitle") : t("deploymentGuide.serverfullStepInstallTitle")}
         </h3>
         <p className="text-gray-600 dark:text-zinc-400 text-xs mb-2">
-          {t("deploymentGuide.serverfullStepInstallDesc")}
+          {isTurso ? t("deploymentGuide.tursoServerfullStepDesc") : t("deploymentGuide.serverfullStepInstallDesc")}
         </p>
         <CodeBlock
-          code={t("deploymentGuide.serverfullStepInstallCmd")}
+          code={isTurso ? t("deploymentGuide.tursoServerfullStepCmd") : t("deploymentGuide.serverfullStepInstallCmd")}
           copyText={t("deploymentGuide.copy")}
           copiedText={t("deploymentGuide.copied")}
         />
-        {isDbMissing && (
+        {isDbMissing && !isTurso && (
           <p className="text-amber-600 dark:text-amber-400 text-xs mt-2 font-medium">
             ⚠️ {t("deploymentGuide.serverfullDbMissingHint")}
           </p>

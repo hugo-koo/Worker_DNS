@@ -1102,7 +1102,19 @@
     "serverfullStepEnvCmd": "sudo nano /etc/dns-worker/.env\n# Đặt JWT_SECRET=<khóa_được_tạo_bên_dưới>",
     "serverfullStepServiceTitle": "3. Khởi động lại và kiểm tra dịch vụ",
     "serverfullStepServiceDesc": "Khởi động lại dịch vụ sau khi lưu cấu hình và kiểm tra trạng thái hoạt động:",
-    "serverfullStepServiceCmd": "sudo dns-worker service restart\nsudo dns-worker status"
+    "serverfullStepServiceCmd": "sudo dns-worker service restart\nsudo dns-worker status",
+    "tursoDbStatus": "Cơ sở dữ liệu Turso / libSQL",
+    "tursoDbMissing": "Kết nối hoặc xác thực thất bại",
+    "tursoStepDbTitle": "1. Cấu hình cơ sở dữ liệu Turso / libSQL",
+    "tursoStepDbDesc": "Lấy URL cơ sở dữ liệu Turso và tạo mã xác thực, sau đó lưu dưới dạng Worker secrets:",
+    "tursoStepDbCommand1": "turso db show <db-name> --url\nturso db tokens create <db-name>\nwrangler secret put TURSO_DATABASE_URL\nwrangler secret put TURSO_AUTH_TOKEN",
+    "tursoStepDbDesc2": "Đảm bảo DATABASE_SERVICE được đặt thành \"Turso\" trong wrangler.toml (mục [vars]) và chạy migration nếu cần:",
+    "tursoStepDbCommand2": "[vars]\nDATABASE_SERVICE = \"Turso\"\n\n# Áp dụng migration lược đồ Turso:\nnpx tsx scripts/migrate-prod.ts",
+    "tursoStepDbDashDesc": "1. Mở Turso Dashboard, sao chép URL cơ sở dữ liệu (libsql://... hoặc https://...) và tạo Auth Token hợp lệ.\n2. Vào Cloudflare Dashboard -> Workers & Pages -> Worker của bạn -> Cài đặt -> Biến và Secret.\n3. Đặt DATABASE_SERVICE = \"Turso\", rồi thêm TURSO_DATABASE_URL và TURSO_AUTH_TOKEN dưới dạng biến Secret.\n4. Lưu lại và triển khai lại Worker.",
+    "tursoDashboardLink": "Turso Dashboard",
+    "tursoServerfullStepTitle": "1. Cấu hình thông tin kết nối Turso trong .env",
+    "tursoServerfullStepDesc": "Kiểm tra DATABASE_SERVICE, TURSO_DATABASE_URL và TURSO_AUTH_TOKEN trong /etc/dns-worker/.env:",
+    "tursoServerfullStepCmd": "sudo nano /etc/dns-worker/.env\n# DATABASE_SERVICE=Turso\n# TURSO_DATABASE_URL=libsql://<your-db>.turso.io\n# TURSO_AUTH_TOKEN=<your-valid-token>"
   },
   "meta": {
     "defaultDesc": "Phân giải DNS an toàn, nhanh chóng và có thể tùy chỉnh cho tất cả các thiết bị của bạn. Dựa trên Cloudflare Workers, mã nguồn mở và tập trung vào quyền riêng tư.",

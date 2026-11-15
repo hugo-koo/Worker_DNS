@@ -22,6 +22,7 @@ export const DeploymentGuideView: React.FC = () => {
   const isDbMissing = (window as any).DNS_WORKER_CONFIG?.isDbMissing ?? true;
   const dbError: string | undefined = (window as any).DNS_WORKER_CONFIG?.dbError;
   const isJwtSecretMissing = (window as any).DNS_WORKER_CONFIG?.isJwtSecretMissing ?? true;
+  const isTurso = Boolean((window as any).DNS_WORKER_CONFIG?.isTurso);
 
   const handleRefresh = () => {
     window.location.reload();
@@ -109,13 +110,15 @@ export const DeploymentGuideView: React.FC = () => {
                 <Callout
                   intent={isDbMissing ? Intent.DANGER : Intent.SUCCESS}
                   icon={isDbMissing ? "warning-sign" : "tick"}
-                  title={isServerfull ? t("deploymentGuide.serverfullDbStatus") : t("deploymentGuide.dbStatus")}
+                  title={isTurso ? t("deploymentGuide.tursoDbStatus") : (isServerfull ? t("deploymentGuide.serverfullDbStatus") : t("deploymentGuide.dbStatus"))}
                   className="flex-1"
                 >
                   <span className="font-semibold text-xs">
-                    {isServerfull
-                      ? (isDbMissing ? t("deploymentGuide.serverfullDbMissing") : t("deploymentGuide.serverfullDbConfigured"))
-                      : (isDbMissing ? t("deploymentGuide.missing") : t("deploymentGuide.configured"))}
+                    {isTurso
+                      ? (isDbMissing ? t("deploymentGuide.tursoDbMissing") : t("deploymentGuide.configured"))
+                      : isServerfull
+                        ? (isDbMissing ? t("deploymentGuide.serverfullDbMissing") : t("deploymentGuide.serverfullDbConfigured"))
+                        : (isDbMissing ? t("deploymentGuide.missing") : t("deploymentGuide.configured"))}
                   </span>
                   {isDbMissing && dbError ? (
                     <p className="text-xs mt-1.5 opacity-90 leading-normal break-words">
@@ -156,7 +159,7 @@ export const DeploymentGuideView: React.FC = () => {
               {/* Guides */}
               {isServerfull ? (
                 <div className="pt-2">
-                  <ServerfullGuide isDbMissing={isDbMissing} isJwtSecretMissing={isJwtSecretMissing} />
+                  <ServerfullGuide isDbMissing={isDbMissing} isJwtSecretMissing={isJwtSecretMissing} isTurso={isTurso} />
                 </div>
               ) : (
                 <>
@@ -191,7 +194,7 @@ export const DeploymentGuideView: React.FC = () => {
 
                   {/* Dynamic Setup Guides */}
                   <div className="space-y-6 pb-2">
-                    {activeTab === "cli" ? <CliGuide /> : <DashboardGuide />}
+                    {activeTab === "cli" ? <CliGuide isTurso={isTurso} /> : <DashboardGuide isTurso={isTurso} />}
                   </div>
                 </>
               )}

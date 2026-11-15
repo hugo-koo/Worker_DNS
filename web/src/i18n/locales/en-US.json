@@ -1102,7 +1102,19 @@
     "serverfullStepEnvCmd": "sudo nano /etc/dns-worker/.env\n# Set JWT_SECRET=<generated_secret_below>",
     "serverfullStepServiceTitle": "3. Restart & Verify Service",
     "serverfullStepServiceDesc": "Restart the system daemon after modifying configuration and check service status:",
-    "serverfullStepServiceCmd": "sudo dns-worker service restart\nsudo dns-worker status"
+    "serverfullStepServiceCmd": "sudo dns-worker service restart\nsudo dns-worker status",
+    "tursoDbStatus": "Turso / libSQL Database",
+    "tursoDbMissing": "Connection or Auth Failed",
+    "tursoStepDbTitle": "1. Configure Turso / libSQL Database",
+    "tursoStepDbDesc": "Retrieve your Turso database URL and create an auth token, then upload them as Worker secrets:",
+    "tursoStepDbCommand1": "turso db show <db-name> --url\nturso db tokens create <db-name>\nwrangler secret put TURSO_DATABASE_URL\nwrangler secret put TURSO_AUTH_TOKEN",
+    "tursoStepDbDesc2": "Ensure DATABASE_SERVICE is set to \"Turso\" in wrangler.toml (under [vars]), and apply schema migrations if needed:",
+    "tursoStepDbCommand2": "[vars]\nDATABASE_SERVICE = \"Turso\"\n\n# Apply Turso schema migrations:\nnpx tsx scripts/migrate-prod.ts",
+    "tursoStepDbDashDesc": "1. Open Turso Dashboard and copy your database URL (libsql://... or https://...) and create a valid Auth Token.\n2. Go to Cloudflare Dashboard -> Workers & Pages -> Your Worker -> Settings -> Variables and Secrets.\n3. Set DATABASE_SERVICE = 'Turso', and add TURSO_DATABASE_URL and TURSO_AUTH_TOKEN as Secret variables.\n4. Save and redeploy your Worker.",
+    "tursoDashboardLink": "Turso Dashboard",
+    "tursoServerfullStepTitle": "1. Configure Turso Credentials in .env",
+    "tursoServerfullStepDesc": "Verify DATABASE_SERVICE, TURSO_DATABASE_URL, and TURSO_AUTH_TOKEN in /etc/dns-worker/.env:",
+    "tursoServerfullStepCmd": "sudo nano /etc/dns-worker/.env\n# DATABASE_SERVICE=Turso\n# TURSO_DATABASE_URL=libsql://<your-db>.turso.io\n# TURSO_AUTH_TOKEN=<your-valid-token>"
   },
   "meta": {
     "defaultDesc": "Secure, fast, and customizable DNS resolution for all your devices. Based on Cloudflare Workers. Open-source and privacy-focused.",

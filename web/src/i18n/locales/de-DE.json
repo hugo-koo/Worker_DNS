@@ -1102,7 +1102,19 @@
     "serverfullStepEnvCmd": "sudo nano /etc/dns-worker/.env\n# Setzen Sie JWT_SECRET=<unten generiertes Geheimnis>",
     "serverfullStepServiceTitle": "3. Dienst neu starten und überprüfen",
     "serverfullStepServiceDesc": "Starten Sie den Hintergrunddienst neu und prüfen Sie den Status:",
-    "serverfullStepServiceCmd": "sudo dns-worker service restart\nsudo dns-worker status"
+    "serverfullStepServiceCmd": "sudo dns-worker service restart\nsudo dns-worker status",
+    "tursoDbStatus": "Turso / libSQL-Datenbank",
+    "tursoDbMissing": "Verbindung oder Authentifizierung fehlgeschlagen",
+    "tursoStepDbTitle": "1. Turso / libSQL-Datenbank konfigurieren",
+    "tursoStepDbDesc": "Rufen Sie Ihre Turso-Datenbank-URL ab, erstellen Sie ein Auth-Token und speichern Sie beide als Worker-Secrets:",
+    "tursoStepDbCommand1": "turso db show <db-name> --url\nturso db tokens create <db-name>\nwrangler secret put TURSO_DATABASE_URL\nwrangler secret put TURSO_AUTH_TOKEN",
+    "tursoStepDbDesc2": "Stellen Sie sicher, dass DATABASE_SERVICE in wrangler.toml (unter [vars]) auf \"Turso\" gesetzt ist, und führen Sie bei Bedarf Migrationen aus:",
+    "tursoStepDbCommand2": "[vars]\nDATABASE_SERVICE = \"Turso\"\n\n# Turso-Schema-Migrationen anwenden:\nnpx tsx scripts/migrate-prod.ts",
+    "tursoStepDbDashDesc": "1. Öffnen Sie das Turso Dashboard, kopieren Sie Ihre Datenbank-URL (libsql://... oder https://...) und erstellen Sie ein gültiges Auth-Token.\n2. Gehen Sie im Cloudflare Dashboard zu Workers & Pages -> Ihr Worker -> Einstellungen -> Variablen und Secrets.\n3. Setzen Sie DATABASE_SERVICE = \"Turso\" und fügen Sie TURSO_DATABASE_URL sowie TURSO_AUTH_TOKEN als Secret-Variablen hinzu.\n4. Speichern Sie und stellen Sie Ihren Worker neu bereit.",
+    "tursoDashboardLink": "Turso Dashboard",
+    "tursoServerfullStepTitle": "1. Turso-Zugangsdaten in .env konfigurieren",
+    "tursoServerfullStepDesc": "Überprüfen Sie DATABASE_SERVICE, TURSO_DATABASE_URL und TURSO_AUTH_TOKEN in /etc/dns-worker/.env:",
+    "tursoServerfullStepCmd": "sudo nano /etc/dns-worker/.env\n# DATABASE_SERVICE=Turso\n# TURSO_DATABASE_URL=libsql://<your-db>.turso.io\n# TURSO_AUTH_TOKEN=<your-valid-token>"
   },
   "meta": {
     "defaultDesc": "Sichere, schnelle und anpassbare DNS-Auflösung für alle Ihre Geräte. Basiert auf Cloudflare Workers, quelloffen und datenschutzorientiert.",

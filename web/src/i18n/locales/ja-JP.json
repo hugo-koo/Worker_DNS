@@ -1102,7 +1102,19 @@
     "serverfullStepEnvCmd": "sudo nano /etc/dns-worker/.env\n# JWT_SECRET=<以下で生成されたキー> を設定",
     "serverfullStepServiceTitle": "3. サービスの再起動と確認",
     "serverfullStepServiceDesc": "設定保存後、バックグラウンドサービスを再起動して状態を確認します：",
-    "serverfullStepServiceCmd": "sudo dns-worker service restart\nsudo dns-worker status"
+    "serverfullStepServiceCmd": "sudo dns-worker service restart\nsudo dns-worker status",
+    "tursoDbStatus": "Turso / libSQL データベース",
+    "tursoDbMissing": "接続または認証に失敗しました",
+    "tursoStepDbTitle": "1. Turso / libSQL データベースを設定",
+    "tursoStepDbDesc": "Turso データベースの URL を取得し、認証トークンを発行して Worker のシークレットに設定します：",
+    "tursoStepDbCommand1": "turso db show <db-name> --url\nturso db tokens create <db-name>\nwrangler secret put TURSO_DATABASE_URL\nwrangler secret put TURSO_AUTH_TOKEN",
+    "tursoStepDbDesc2": "wrangler.toml の [vars] で DATABASE_SERVICE が \"Turso\" に設定されていることを確認し、必要に応じてマイグレーションを実行してください：",
+    "tursoStepDbCommand2": "[vars]\nDATABASE_SERVICE = \"Turso\"\n\n# Turso スキーママイグレーションの適用：\nnpx tsx scripts/migrate-prod.ts",
+    "tursoStepDbDashDesc": "1. Turso ダッシュボードを開き、データベース URL（libsql://... または https://...）をコピーして有効な Auth Token を作成します。\n2. Cloudflare ダッシュボード -> Workers & Pages -> 対象の Worker -> 設定 -> 変数とシークレット に移動します。\n3. DATABASE_SERVICE に \"Turso\" を設定し、TURSO_DATABASE_URL と TURSO_AUTH_TOKEN をシークレット変数として追加します。\n4. 保存して Worker を再デプロイします。",
+    "tursoDashboardLink": "Turso ダッシュボード",
+    "tursoServerfullStepTitle": "1. .env に Turso 接続情報を設定",
+    "tursoServerfullStepDesc": "/etc/dns-worker/.env の DATABASE_SERVICE、TURSO_DATABASE_URL、TURSO_AUTH_TOKEN を確認・更新します：",
+    "tursoServerfullStepCmd": "sudo nano /etc/dns-worker/.env\n# DATABASE_SERVICE=Turso\n# TURSO_DATABASE_URL=libsql://<your-db>.turso.io\n# TURSO_AUTH_TOKEN=<your-valid-token>"
   },
   "meta": {
     "defaultDesc": "すべてのデバイスに安全で高速、カスタマイズ可能なDNS解決を提供します。Cloudflare Workersベース、オープンソース、プライバシー重視。",

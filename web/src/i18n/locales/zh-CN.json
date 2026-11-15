@@ -1102,7 +1102,19 @@
     "serverfullStepEnvCmd": "sudo nano /etc/dns-worker/.env\n# 设置 JWT_SECRET=<下方生成的密钥>",
     "serverfullStepServiceTitle": "3. 重启并验证系统服务",
     "serverfullStepServiceDesc": "修改配置后重启后台服务，并检查运行状态：",
-    "serverfullStepServiceCmd": "sudo dns-worker service restart\nsudo dns-worker status"
+    "serverfullStepServiceCmd": "sudo dns-worker service restart\nsudo dns-worker status",
+    "tursoDbStatus": "Turso / libSQL 数据库",
+    "tursoDbMissing": "连接或鉴权失败",
+    "tursoStepDbTitle": "1. 配置 Turso / libSQL 数据库",
+    "tursoStepDbDesc": "获取 Turso 数据库 URL 并签发访问令牌（Token），然后写入 Cloudflare Worker Secrets：",
+    "tursoStepDbCommand1": "turso db show <db-name> --url\nturso db tokens create <db-name>\nwrangler secret put TURSO_DATABASE_URL\nwrangler secret put TURSO_AUTH_TOKEN",
+    "tursoStepDbDesc2": "确保 wrangler.toml 的 [vars] 中已启用 Turso，并按需执行 Turso 数据库结构迁移：",
+    "tursoStepDbCommand2": "[vars]\nDATABASE_SERVICE = \"Turso\"\n\n# 如尚未初始化表结构，请执行 Turso 迁移：\nnpx tsx scripts/migrate-prod.ts",
+    "tursoStepDbDashDesc": "1. 登录 Turso 控制台，复制数据库 URL（libsql://... 或 https://...）并生成有效的 Auth Token。\n2. 进入 Cloudflare 网页控制台 -> Workers & Pages -> 您的 Worker -> 设置 -> 变量和机密。\n3. 确认 DATABASE_SERVICE 为 'Turso'，并添加/更新机密变量 TURSO_DATABASE_URL 与 TURSO_AUTH_TOKEN。\n4. 保存并重新部署 Worker。",
+    "tursoDashboardLink": "Turso 控制台",
+    "tursoServerfullStepTitle": "1. 在 .env 中配置 Turso 连接凭证",
+    "tursoServerfullStepDesc": "检查并更新 /etc/dns-worker/.env 中的 DATABASE_SERVICE、TURSO_DATABASE_URL 与 TURSO_AUTH_TOKEN：",
+    "tursoServerfullStepCmd": "sudo nano /etc/dns-worker/.env\n# DATABASE_SERVICE=Turso\n# TURSO_DATABASE_URL=libsql://<your-db>.turso.io\n# TURSO_AUTH_TOKEN=<your-valid-token>"
   },
   "meta": {
     "defaultDesc": "为您的所有设备提供安全、快速且可定制的 DNS 解析。基于 Cloudflare Workers 构建，开源且注重隐私。",
