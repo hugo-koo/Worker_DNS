@@ -3,7 +3,7 @@ import { hashPassword, generateSessionHash } from "../../../utils/crypto";
 import { UserModel } from "../../../models/user";
 import { SessionModel } from "../../../models/session";
 import { ActivityLogModel } from "../../../models/activityLog";
-import { PASSWORD_REGEX } from "../../../utils/validator";
+import { PASSWORD_REGEX, hasLeakedCredentialHeader } from "../../../utils/validator";
 import { verifyUserReauth, ReauthPayload } from "./reauth";
 import { invalidateAuthUserCache } from "../../../lib/middleware";
 
@@ -35,6 +35,9 @@ export async function handlePasswordRequest(
 
   // POST /api/account/password (password change supporting Old Password, Passkey, or TOTP)
   if (action === "password" && request.method === "POST") {
+    if (hasLeakedCredentialHeader(request)) {
+      return new Response("password_leaked", { status: 400 });
+    }
     const body = (await request.json()) as { newPassword?: string } & ReauthPayload;
     const { newPassword } = body;
     if (!newPassword || !PASSWORD_REGEX.test(newPassword)) {
@@ -68,6 +71,9 @@ export async function handlePasswordRequest(
 
   // POST /api/account/migrate-password (password migration to v2)
   if (action === "migrate-password" && request.method === "POST") {
+    if (hasLeakedCredentialHeader(request)) {
+      return new Response("password_leaked", { status: 400 });
+    }
     const body = (await request.json()) as { clientHash?: string } & ReauthPayload;
     const { clientHash } = body;
     if (!clientHash) {

@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import {
   validateUsername,
   validatePassword,
+  checkPasswordBreached,
   isPasswordLeaked,
   hashTotpToken,
   hashPasswordClient,
@@ -239,6 +240,12 @@ export const useSignupWizard = ({
     setLoading(true);
     setError("");
     try {
+      const breachCheck = await checkPasswordBreached(password, username);
+      if (breachCheck.breached) {
+        setError(t("auth.passwordLeaked", "This password has been exposed in a data breach or is too predictable. Please choose a different password."));
+        setLoading(false);
+        return;
+      }
       const clientHash = await hashPasswordClient(password, username);
       const data = await signup({
         username,

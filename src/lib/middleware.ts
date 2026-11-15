@@ -2,6 +2,7 @@ import { Env, ExecutionContext, User } from '../types';
 import { getOrCreateJwtSecret, readCsrfCookie } from './auth';
 import { importJwtSecret, verifyJWT } from './jwt';
 import { SessionModel } from '../models/session';
+import { getAbsoluteSessionExpiry } from './session';
 import { cacheUtils } from '../utils/cache';
 
 /**
@@ -151,6 +152,20 @@ export async function getCurrentUser(request: Request, env: Env, ctx?: Execution
 
       const sessionId = session.id || session.session_id || payload.sessionId;
       const now = Math.floor(Date.now() / 1000);
+      const absoluteExpiresAt = getAbsoluteSessionExpiry(
+        { id: sessionId, created_at: session.created_at },
+        env
+      );
+      if (now >= session.expires_at || now >= absoluteExpiresAt) {
+        try {
+          await sessionModel.deleteSession(sessionId);
+        } catch (e) {
+          console.error("[Auth] Failed to delete expired session in D1:", e);
+        }
+        authUserMemoryCache.delete(payload.sessionId);
+        sessionActivityMemory.delete(payload.sessionId);
+        return null;
+      }
       const lastActive = session.last_active_at || session.created_at;
       const activityRecord = sessionActivityMemory.get(payload.sessionId);
       const effectiveLastActive = Math.max(lastActive, activityRecord?.lastObserved ?? 0);

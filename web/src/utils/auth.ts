@@ -13,10 +13,11 @@ declare global {
  */
 export const USERNAME_REGEX = /^[a-z_][a-z0-9_-]{4,31}$/;
 /**
- * Password validation regular expression.
- * Requirements: 12-100 characters containing letters, numbers, and special characters.
+ * Password validation regular expression (NIST SP 800-63B-4 § 3.1.1.2).
+ * Allows 12-128 characters including spaces and Unicode characters,
+ * while disallowing ASCII control characters (0x00-0x1F, 0x7F) and whitespace-only passwords.
  */
-export const PASSWORD_REGEX = /^[a-zA-Z\d~`!@#$%^&*()_\-+={[}\]|\\:;"'<,>.?\/]{12,100}$/;
+export const PASSWORD_REGEX = /^(?!\s+$)[^\p{Cc}]{12,128}$/u;
 /**
  * Access key validation regular expression.
  * Requirements: 5-12 alphanumeric characters only (supporting 5-char z-base-32 tokens).
@@ -76,6 +77,70 @@ export function validateUsername(username: string): boolean {
  */
 export function validatePassword(password: string): boolean {
   return PASSWORD_REGEX.test(password);
+}
+
+/**
+ * Checks a plaintext password against context-specific/repetitive patterns and
+ * the Have I Been Pwned k-Anonymity range API (NIST SP 800-63B-4 § 3.1.1.2).
+ * Fails open if the HIBP API is unreachable so air-gapped or offline environments are not blocked.
+ *
+ * @param password - Raw plaintext password before client-side PBKDF2 hashing.
+ * @param username - Optional username to detect context-specific reuse.
+ * @returns Check result indicating whether the password was flagged and why.
+ */
+export async function checkPasswordBreached(
+  password: string,
+  username?: string
+): Promise<{ breached: boolean; reason?: "breached" | "context_specific" | "repetitive" }> {
+  const normalized = password.normalize("NFC");
+
+  // Reject single-character repetition (e.g. "aaaaaaaaaaaa")
+  if (/^(.)\1+$/u.test(normalized)) {
+    return { breached: true, reason: "repetitive" };
+  }
+
+  // Reject passwords containing the username (>= 4 chars)
+  if (username && username.trim().length >= 4) {
+    if (normalized.toLowerCase().includes(username.trim().toLowerCase())) {
+      return { breached: true, reason: "context_specific" };
+    }
+  }
+
+  try {
+    const hashBuffer = await crypto.subtle.digest(
+      "SHA-1",
+      new TextEncoder().encode(normalized)
+    );
+    const sha1Hex = Array.from(new Uint8Array(hashBuffer))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("")
+      .toUpperCase();
+
+    const prefix = sha1Hex.slice(0, 5);
+    const suffix = sha1Hex.slice(5);
+
+    const res = await fetch(`https://api.pwnedpasswords.com/range/${prefix}`, {
+      headers: { "Add-Padding": "true" },
+      signal: AbortSignal.timeout(3000)
+    });
+
+    if (!res.ok) {
+      return { breached: false };
+    }
+
+    const body = await res.text();
+    const lines = body.split(/\r?\n/);
+    for (const line of lines) {
+      const [lineSuffix, countStr] = line.split(":");
+      if (lineSuffix === suffix && Number(countStr) > 0) {
+        return { breached: true, reason: "breached" };
+      }
+    }
+  } catch {
+    // Fail-open on network/timeout errors to preserve availability
+  }
+
+  return { breached: false };
 }
 
 /**
@@ -342,7 +407,8 @@ export async function hashTotpToken(token: string, salt: string): Promise<string
  */
 export async function hashPasswordClient(password: string, salt: string, iterations: number = 600000): Promise<string> {
   const encoder = new TextEncoder();
-  const passwordBuffer = encoder.encode(password);
+  // Normalize Unicode passphrases with NFC per NIST SP 800-63B-4 § 3.1.1.2 (no-op for ASCII)
+  const passwordBuffer = encoder.encode(password.normalize("NFC"));
   const saltBuffer = encoder.encode(salt.toLowerCase());
 
   const baseKey = await crypto.subtle.importKey(

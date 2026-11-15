@@ -17,11 +17,21 @@ import { parseDnsStamp } from "./dnsStamp";
 export { isIPv4, isIPv6 } from "./cidr";
 
 /**
- * Password validation regular expression.
- * Requirements: 12-100 characters containing letters, numbers, and special characters.
- * Allowed special characters: ~`!@#$%^&*()_-+={[}]|\:;"'<,>.?/
+ * Password validation regular expression (NIST SP 800-63B-4 § 3.1.1.2).
+ * Allows 12-128 characters including spaces and Unicode characters,
+ * while disallowing ASCII control characters (0x00-0x1F, 0x7F) and whitespace-only passwords.
  */
-export const PASSWORD_REGEX = /^[a-zA-Z\d~`!@#$%^&*()_\-+={[}\]|\\:;"'<,>.?\/]{12,100}$/;
+export const PASSWORD_REGEX = /^(?!\s+$)[^\p{Cc}]{12,128}$/u;
+
+/**
+ * Checks whether an upstream edge/WAF proxy flagged the submitted credential as leaked.
+ */
+export function hasLeakedCredentialHeader(request: Request): boolean {
+  return (
+    request.headers.get("X-Password-Leaked") === "true" ||
+    request.headers.get("Exposed-Credential-Check") === "true"
+  );
+}
 
 /**
  * Username validation regular expression.

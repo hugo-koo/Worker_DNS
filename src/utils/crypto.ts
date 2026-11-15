@@ -73,7 +73,7 @@ export async function hashPassword(
   const salt = crypto.getRandomValues(new Uint8Array(16));
   const iterations = version === 2 ? 100000 : 100000;
   
-  const derived = await pbkdf2(password, salt, iterations, 256);
+  const derived = await pbkdf2(password.normalize("NFC"), salt, iterations, 256);
   
   const combinedBytes = new Uint8Array(salt.length + derived.length);
   combinedBytes.set(salt);
@@ -94,7 +94,7 @@ export async function verifyPassword(password: string, storedHash: string, versi
   
   const iterations = version === 2 ? 100000 : 100000;
   
-  const testHashArray = await pbkdf2(password, salt, iterations, 256);
+  const testHashArray = await pbkdf2(password.normalize("NFC"), salt, iterations, 256);
   
   if (testHashArray.length !== originalHash.length) return false;
   

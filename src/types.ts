@@ -9,6 +9,8 @@ export interface Env {
   MAX_USERS?: string | number;
   DEFAULT_SESSION_EXPIRATION_MINUTES?: string | number;
   OPTIONAL_SESSION_EXPIRATION_DAYS?: string | number;
+  SESSION_ABSOLUTE_MAX_MINUTES?: string | number;
+  OPTIONAL_SESSION_ABSOLUTE_MAX_DAYS?: string | number;
   ACCESS_TOKEN_EXPIRATION_MINUTES?: string | number;
   SESSION_GEO_DISTANCE_KM?: string | number;
   PREAUTH_TTL_SECONDS?: string | number;

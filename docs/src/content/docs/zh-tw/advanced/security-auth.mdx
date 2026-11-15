@@ -99,3 +99,14 @@ flowchart TD
 ### `ADMIN_PASSWORD`
 - **型別**：`string`
 - **職責**：初次部署時系統預設的管理員密碼。初始化建立後憑據將安全加密儲存於資料庫中。
+
+---
+
+## 4. NIST SP 800-63B-4 (AAL2) 合規聲明
+
+Web 控制台的認證與會話管理架構符合 **NIST SP 800-63B-4 Authenticator Assurance Level 2 (AAL2)** 安全規範（自助註冊流程對應 **NIST SP 800-63A IAL1** 偽名化身分登記）：
+
+- **抗釣魚多因素認證（MFA）**：支援 FIDO2/WebAuthn Passkey（ES256/RS256，嚴格校驗 RP ID、Origin、UP/UV 標誌位與單調遞增 `signCount`），以及具 90 秒防重放視窗的 RFC 6238 TOTP 與一次性 Mod-11 恢復金鑰。
+- **記憶秘密（密碼）策略**：支援 12–128 位密碼與長短語，允許空格與 Unicode 字元（NFC 規範化），不設強制字元配額或定期強制改密；在註冊、改密與重設密碼流程中結合用戶端 HIBP k-Anonymity 匿名範圍查詢與邊緣洩漏憑據請求頭進行弱/洩漏密碼攔截。
+- **速率限制與敏感操作重認證**：對登入、找回密碼、PIN 解鎖與安全設定變更實施嚴格的 IP 與使用者級失敗限流；已啟用 MFA 的帳號在執行敏感操作時強制要求 MFA 二次重認證。
+- **會話生命週期與絕對超時上限**：採用 `HttpOnly; SameSite=Lax; Secure` Cookie、Double-Submit CSRF 校驗、具重用檢測的 Refresh Token 輪換（RTR）、閒置自動鎖定，以及基於會話建立時間的**不可逾越絕對會話上限**（`SESSION_ABSOLUTE_MAX_MINUTES` / `OPTIONAL_SESSION_ABSOLUTE_MAX_DAYS`），即便持續活躍也需定期重新認證。

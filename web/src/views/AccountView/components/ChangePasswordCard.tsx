@@ -16,7 +16,7 @@ import { Key, Lock, ShieldCheck } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { DigitInput } from "../../../components/DigitInput";
 import type { UserInfo } from "../types";
-import { PASSWORD_REGEX, hashPasswordClient, formatApiErrorMessage } from "../../../utils/auth";
+import { PASSWORD_REGEX, checkPasswordBreached, hashPasswordClient, formatApiErrorMessage } from "../../../utils/auth";
 import { updatePassword, getPasskeyAuthOptions } from "../../../services/account";
 import { startPasskeyAuthentication } from "../../../utils/webauthn";
 
@@ -73,6 +73,15 @@ export const ChangePasswordCard: React.FC<ChangePasswordCardProps> = ({ me, onRe
     setMessage(null);
 
     try {
+      const breachCheck = await checkPasswordBreached(newPassword, me.username);
+      if (breachCheck.breached) {
+        setMessage({
+          text: t("auth.passwordLeaked", "This password has been exposed in a data breach or is too predictable. Please choose a different password."),
+          intent: Intent.DANGER
+        });
+        setLoading(false);
+        return;
+      }
       const newPasswordPayload = await hashPasswordClient(newPassword, me.username);
 
       if (authMethod === "passkey") {

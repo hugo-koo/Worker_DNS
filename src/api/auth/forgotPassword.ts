@@ -6,7 +6,7 @@ import { SessionModel } from "../../models/session";
 import { SystemSettingsModel } from "../../models/systemSettings";
 import { cacheUtils } from "../../utils/cache";
 import { generateId, hashPassword } from "../../utils/crypto";
-import { PASSWORD_REGEX } from "../../utils/validator";
+import { PASSWORD_REGEX, hasLeakedCredentialHeader } from "../../utils/validator";
 import { verifyTurnstile } from "./utils";
 import { withTokenLock } from "../../lib/preauth";
 import { invalidateAuthUserCacheByUserId } from "../../lib/middleware";
@@ -272,6 +272,9 @@ export async function handleForgotPasswordRequest(request: Request, env: Env): P
 
   // Step 3: Reset password
   if (path === '/api/auth/forgot-password/reset' && request.method === 'POST') {
+    if (hasLeakedCredentialHeader(request)) {
+      return new Response("password_leaked", { status: 400 });
+    }
     const { resetToken, newPassword } = await request.json() as any;
     if (!resetToken || !newPassword) {
       return new Response("Reset token and new password are required", { status: 400 });

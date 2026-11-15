@@ -50,6 +50,26 @@ export function parseRefreshTokenString(token: string): { sid: string; v: number
 }
 
 /**
+ * Computes the immutable absolute expiration timestamp (Unix seconds) for a session
+ * based on its creation time, preventing indefinite sliding-window extension (NIST SP 800-63B-4 § 7.2).
+ */
+export function getAbsoluteSessionExpiry(
+  session: { id: string; created_at: number },
+  env: Env
+): number {
+  const isKeepLoggedIn = session.id.startsWith("k_");
+  if (isKeepLoggedIn) {
+    const maxDays =
+      Number(env.OPTIONAL_SESSION_ABSOLUTE_MAX_DAYS) ||
+      (Number(env.OPTIONAL_SESSION_EXPIRATION_DAYS) || 7);
+    return session.created_at + maxDays * 24 * 60 * 60;
+  }
+  const defaultMinutes = Number(env.DEFAULT_SESSION_EXPIRATION_MINUTES) || 1440;
+  const maxMinutes = Number(env.SESSION_ABSOLUTE_MAX_MINUTES) || defaultMinutes;
+  return session.created_at + maxMinutes * 60;
+}
+
+/**
  * Creates a new session in the database and returns it along with the initial refresh token.
  */
 export async function createSession(
@@ -148,11 +168,17 @@ export async function rotateSession(
   };
 
   const now = Math.floor(Date.now() / 1000);
+  const absoluteExpiresAt = getAbsoluteSessionExpiry(session, env);
 
-  // Expiration check
-  if (now >= session.expires_at) {
+  // Expiration & immutable absolute lifetime ceiling check
+  if (now >= session.expires_at || now >= absoluteExpiresAt) {
     await invalidateSession(env, session.id);
-    return { session: null, user, newRefreshToken: null, reason: "expired" };
+    return {
+      session: null,
+      user,
+      newRefreshToken: null,
+      reason: now >= absoluteExpiresAt ? "absolute_timeout" : "expired"
+    };
   }
 
   // Anti-reuse mechanism with Concurrency Grace Window (RFC 6819 Section 5.2.2.3)
@@ -217,16 +243,20 @@ export async function rotateSession(
     }
   }
 
-  // Session extension (if close to expiration)
-  const timeRemaining = session.expires_at - Math.floor(Date.now() / 1000);
+  // Session extension (if close to expiration), clamped to absolute maximum session lifetime
+  const currentSec = Math.floor(Date.now() / 1000);
+  const timeRemaining = session.expires_at - currentSec;
   const isKeepLoggedIn = session.id.startsWith("k_");
   const totalDurationInSeconds = isKeepLoggedIn
     ? (Number(env.OPTIONAL_SESSION_EXPIRATION_DAYS) || 7) * 24 * 60 * 60
     : (Number(env.DEFAULT_SESSION_EXPIRATION_MINUTES) || 1440) * 60;
   const extensionThreshold = Math.floor(totalDurationInSeconds / 2);
   if (timeRemaining < extensionThreshold) {
-    session.expires_at = Math.floor(Date.now() / 1000) + totalDurationInSeconds;
-    await sessionModel.extendSession(session.id, session.expires_at);
+    const clampedExpiry = Math.min(currentSec + totalDurationInSeconds, absoluteExpiresAt);
+    if (clampedExpiry > session.expires_at) {
+      session.expires_at = clampedExpiry;
+      await sessionModel.extendSession(session.id, session.expires_at);
+    }
   }
 
   // Rotate the token

@@ -12,6 +12,7 @@ import type {
 import {
   validateUsername,
   validatePassword,
+  checkPasswordBreached,
   hashTotpToken,
   hashPasswordClient,
   formatApiErrorMessage
@@ -304,6 +305,12 @@ export const useForgotPasswordForm = ({
     setError("");
 
     try {
+      const breachCheck = await checkPasswordBreached(newPassword, username);
+      if (breachCheck.breached) {
+        setError(t("auth.passwordLeaked", "This password has been exposed in a data breach or is too predictable. Please choose a different password."));
+        setLoading(false);
+        return;
+      }
       const clientHash = await hashPasswordClient(newPassword, username);
       await resetPasswordWithToken(resetToken, clientHash);
       setStep(4);

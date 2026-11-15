@@ -17,7 +17,7 @@ import {
 import { ShieldCheck, UserPlus, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { formatDateTime } from "../../../utils/date";
-import { PASSWORD_REGEX, USERNAME_REGEX, hashPasswordClient, formatApiErrorMessage } from "../../../utils/auth";
+import { PASSWORD_REGEX, USERNAME_REGEX, checkPasswordBreached, hashPasswordClient, formatApiErrorMessage } from "../../../utils/auth";
 import type { UserInfo } from "../../../services";
 import { createUser, deleteUser, updateSystemSettings } from "../../../services";
 import { executeWithTimeout } from "../../../utils/async";
@@ -96,6 +96,12 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({
     if (!PASSWORD_REGEX.test(newUserPassword)) { alert(t("account.formatTipPassword")); return; }
     setCreateLoading(true);
     try {
+      const breachCheck = await checkPasswordBreached(newUserPassword, newUsername);
+      if (breachCheck.breached) {
+        alert(t("auth.passwordLeaked", "This password has been exposed in a data breach or is too predictable. Please choose a different password."));
+        setCreateLoading(false);
+        return;
+      }
       const clientHash = await hashPasswordClient(newUserPassword, newUsername);
       await createUser({ username: newUsername, password: clientHash, role: newUserRole });
       setIsDialogOpen(false);
