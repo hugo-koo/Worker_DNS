@@ -82,7 +82,8 @@ export interface WorkerMessageRequest {
     | 'QUERY_ISPS'
     | 'CLEANUP'
     | 'GET_STORAGE_INFO'
-    | 'CLEAR_PROFILE';
+    | 'CLEAR_PROFILE'
+    | 'CLEAR_ALL';
   payload?: unknown;
 }
 

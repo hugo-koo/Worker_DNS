@@ -36,7 +36,8 @@ export async function handleLogDetailFetch(event: FetchEvent): Promise<Response>
 
   try {
     const networkResponse = await fetch(event.request);
-    if (networkResponse.ok) {
+    const cacheControl = (networkResponse.headers.get("Cache-Control") || "").toLowerCase();
+    if (networkResponse.ok && !cacheControl.includes("no-store") && !cacheControl.includes("private")) {
       await putInCache(cache, event.request, networkResponse.clone());
     }
     return networkResponse;
@@ -66,7 +67,7 @@ export async function cleanExpiredLogCache(): Promise<void> {
         const cachedTimeText = await tsRes.text();
         const cachedTime = parseInt(cachedTimeText, 10);
         if (!isNaN(cachedTime) && now - cachedTime > ONE_DAY) {
-          const resourceUrl = tsReq.url.split("?")[0];
+          const resourceUrl = tsReq.url.replace(/\?sw-cached-at$/, "");
           await cache.delete(new Request(resourceUrl));
           await cache.delete(tsReq);
         }
@@ -74,5 +75,16 @@ export async function cleanExpiredLogCache(): Promise<void> {
     }
   } catch (err) {
     console.error("Failed to execute service worker log cache cleanup:", err);
+  }
+}
+
+/**
+ * Purges the entire log detail cache (called on logout, lock, or log deletion).
+ */
+export async function purgeLogsCache(): Promise<void> {
+  try {
+    await caches.delete(LOGS_CACHE_NAME);
+  } catch {
+    // Ignore cache deletion failure
   }
 }

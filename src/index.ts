@@ -173,6 +173,9 @@ export default {
         if (!key || !ACCESS_KEY_REGEX.test(key)) {
           return new Response('Missing or invalid key parameter', { status: 400 });
         }
+        if (!/^https?:\/\/[a-zA-Z0-9.-]+(:\d{1,5})?$/.test(url.origin)) {
+          return new Response('Invalid Host header', { status: 400 });
+        }
         const script = generateLinuxSetupScript(url.origin, key);
         return new Response(script, {
           headers: {
@@ -276,7 +279,7 @@ export default {
       if (isApi) {
         return new Response(JSON.stringify({
           error: "internal_server_error",
-          message: fatalErr?.message || "An unexpected worker error occurred."
+          message: "An unexpected worker error occurred."
         }), {
           status: 500,
           headers: {

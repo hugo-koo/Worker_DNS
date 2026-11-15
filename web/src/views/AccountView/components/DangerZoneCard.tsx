@@ -15,7 +15,7 @@ import {
 import { Trash2, ChevronDown } from "lucide-react";
 import { clsx } from "clsx";
 import { useTranslation } from "react-i18next";
-import { clearLogs, deleteMe } from "../../../services";
+import { clearLogs, deleteMe, e2ee, localDb } from "../../../services";
 import type { UserInfo } from "../types";
 import { hashPasswordClient } from "../../../utils/auth";
 
@@ -39,6 +39,10 @@ export const DangerZoneCard: React.FC<DangerZoneCardProps> = ({ isAdmin, onLogsC
     setClearingLogs(true);
     try {
       await clearLogs();
+      await localDb.clearAll();
+      if (typeof window !== "undefined" && "caches" in window) {
+        await caches.delete("dns-worker-logs-v1").catch(() => {});
+      }
       alert(t("account.clearLogsSuccess"));
       onLogsCleared?.();
     } catch (e) {
@@ -59,6 +63,11 @@ export const DangerZoneCard: React.FC<DangerZoneCardProps> = ({ isAdmin, onLogsC
         passwordPayload = await hashPasswordClient(deletePassword, user.username);
       }
       await deleteMe({ password: passwordPayload });
+      e2ee.clearStorage();
+      await localDb.clearAll();
+      if (typeof window !== "undefined" && "caches" in window) {
+        await caches.delete("dns-worker-logs-v1").catch(() => {});
+      }
       window.location.href = "/";
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e);

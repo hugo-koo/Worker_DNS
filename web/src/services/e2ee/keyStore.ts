@@ -90,7 +90,7 @@ export class KeyStore {
       return this.unlockedKeys.get(profileId)!;
     }
 
-    // 2. Check sessionStorage account key
+    // 2. Check sessionStorage account key (do not persist/read private keys from localStorage)
     const sessionAccount = sessionStorage.getItem("obex_e2ee_sk_account");
     if (sessionAccount) {
       try {
@@ -103,20 +103,14 @@ export class KeyStore {
       }
     }
 
-    // 3. Check localStorage account key
-    const localAccount = localStorage.getItem("obex_e2ee_sk_account");
-    if (localAccount) {
-      try {
-        const key = JSON.parse(localAccount) as UnlockedPrivateKey;
-        this.unlockedKeys.set("account", key);
-        if (profileId) this.unlockedKeys.set(profileId, key);
-        return key;
-      } catch {
-        localStorage.removeItem("obex_e2ee_sk_account");
-      }
+    // Remove any legacy localStorage private keys so secrets never survive browser restarts
+    try {
+      localStorage.removeItem("obex_e2ee_sk_account");
+    } catch {
+      // Ignore storage access errors
     }
 
-    // 4. Legacy profile key migration (if obex_e2ee_sk_account is missing but profile key exists)
+    // 3. Legacy profile key migration from sessionStorage only
     if (profileId) {
       const legacySession = sessionStorage.getItem(`obex_e2ee_sk_${profileId}`);
       if (legacySession) {
@@ -128,15 +122,10 @@ export class KeyStore {
           sessionStorage.removeItem(`obex_e2ee_sk_${profileId}`);
         }
       }
-      const legacyLocal = localStorage.getItem(`obex_e2ee_sk_${profileId}`);
-      if (legacyLocal) {
-        try {
-          const key = JSON.parse(legacyLocal) as UnlockedPrivateKey;
-          this.setPrivateKey("account", key);
-          return key;
-        } catch {
-          localStorage.removeItem(`obex_e2ee_sk_${profileId}`);
-        }
+      try {
+        localStorage.removeItem(`obex_e2ee_sk_${profileId}`);
+      } catch {
+        // Ignore storage access errors
       }
     }
 
@@ -144,7 +133,7 @@ export class KeyStore {
   }
 
   /**
-   * Stores the unlocked private key in memory, session storage, and local storage.
+   * Stores the unlocked private key in memory and sessionStorage only (never localStorage).
    */
   setPrivateKey(profileOrAccountKey: string, sk: UnlockedPrivateKey): void {
     this.unlockedKeys.clear();
@@ -156,7 +145,7 @@ export class KeyStore {
       this.purgeProfileStorageKeys();
       const serialized = JSON.stringify(sk);
       sessionStorage.setItem("obex_e2ee_sk_account", serialized);
-      localStorage.setItem("obex_e2ee_sk_account", serialized);
+      localStorage.removeItem("obex_e2ee_sk_account");
     } catch (e) {
       console.warn("[E2EE KeyStore] Could not persist key to storage:", e);
     }

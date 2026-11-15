@@ -81,8 +81,14 @@ export async function handlePasskeysRequest(
     const challenge = generateWebAuthnChallenge();
     const requestUrl = new URL(request.url);
     const rpId = requestUrl.hostname;
+    const purpose = targetPasskeyId ? "test" : "reauth";
     const cache = (caches as any).default;
-    await cacheUtils.set(cache, `webauthn_auth_challenge:${user.id}`, { challenge, rpId }, 300);
+    await cacheUtils.set(cache, `webauthn_auth_challenge:${user.id}`, {
+      challenge,
+      rpId,
+      sessionId: user.sessionId,
+      purpose
+    }, 300);
 
     const options = {
       challenge,
@@ -105,12 +111,18 @@ export async function handlePasskeysRequest(
   // POST /api/account/passkeys/test — 验证通行密钥测试
   if (subAction === "test" && request.method === "POST") {
     const cache = (caches as any).default;
-    const cachedState = await cacheUtils.get<{ challenge: string; rpId: string }>(
-      cache,
-      `webauthn_auth_challenge:${user.id}`
-    );
+    const challengeKey = `webauthn_auth_challenge:${user.id}`;
+    const cachedState = await cacheUtils.get<{
+      challenge: string;
+      rpId: string;
+      sessionId?: string;
+      purpose?: string;
+    }>(cache, challengeKey);
     if (!cachedState) {
       return new Response("Test session expired, please try again", { status: 400 });
+    }
+    if (cachedState.purpose === "reauth" || (cachedState.sessionId && user.sessionId && cachedState.sessionId !== user.sessionId)) {
+      return new Response("Test session mismatch, please try again", { status: 400 });
     }
 
     const body = (await request.json()) as {
@@ -127,6 +139,7 @@ export async function handlePasskeysRequest(
     const userPasskeys = await passkeyModel.listByUser(user.id);
     const passkey = userPasskeys.find((p) => p.credential_id === assertion.id);
     if (!passkey) {
+      await cacheUtils.delete(cache, challengeKey);
       return new Response("Passkey not recognized for this account", { status: 404 });
     }
 
@@ -145,7 +158,7 @@ export async function handlePasskeysRequest(
       });
 
       await passkeyModel.updateUsage(passkey.id, signCount);
-      await cacheUtils.delete(cache, `webauthn_auth_challenge:${user.id}`);
+      await cacheUtils.delete(cache, challengeKey);
       await activityLog.record(
         user.id,
         "passkey_verify_success",
@@ -168,6 +181,7 @@ export async function handlePasskeysRequest(
         }
       );
     } catch (err: any) {
+      await cacheUtils.delete(cache, challengeKey);
       await activityLog.record(
         user.id,
         "passkey_verify_fail",
@@ -177,7 +191,7 @@ export async function handlePasskeysRequest(
         sessionHash
       );
       console.warn("[Passkey Test] Verification failed:", err.message || err);
-      return new Response(err.message || "Passkey verification failed", { status: 400 });
+      return new Response("Passkey verification failed", { status: 400 });
     }
   }
 
@@ -235,10 +249,21 @@ export async function handlePasskeysRequest(
     }
     await cacheUtils.delete(cache, `webauthn_reg_challenge:${user.id}`);
 
-    const body = (await request.json()) as any;
+    const body = (await request.json()) as ReauthPayload & { name?: string; credential?: any };
     const { name, credential } = body;
     if (!credential || !credential.response) {
       return new Response("Invalid credential data", { status: 400 });
+    }
+
+    const dbUserBefore = await userModel.getById(user.id);
+    if (!dbUserBefore) return new Response("User not found", { status: 404 });
+    const existingPasskeysBefore = await passkeyModel.listByUser(user.id);
+    // Require step-up reauth when adding a passkey to an account that already has MFA enabled
+    if (dbUserBefore.totp_enabled || existingPasskeysBefore.length > 0) {
+      const authResult = await verifyUserReauth(dbUserBefore, body, env, request, { sessionId: user.sessionId });
+      if (!authResult.success) {
+        return new Response(authResult.error || "Re-authentication required", { status: 403 });
+      }
     }
 
     const requestUrl = new URL(request.url);
@@ -275,8 +300,9 @@ export async function handlePasskeysRequest(
         aaguid: parsed.aaguid
       });
 
-      // Default to passwordless login upon enabling MFA
-      await userModel.updateTOTPSettings(user.id, true);
+      // Only keep existing passwordless setting; do not silently downgrade password requirement
+      // without explicit user opt-in via /api/account/mfa/settings (which enforces reauth).
+      await userModel.updateTOTPSettings(user.id, !!dbUserBefore.totp_skip_password);
 
       const dbUser = await userModel.getById(user.id);
       let recoveryKeys: string[] = [];
@@ -326,7 +352,7 @@ export async function handlePasskeysRequest(
       );
     } catch (err: any) {
       console.warn("[Passkey Registration] Verification failed:", err.message || err);
-      return new Response(err.message || "Passkey registration failed", { status: 400 });
+      return new Response("Passkey registration failed", { status: 400 });
     }
   }
 
@@ -364,7 +390,7 @@ export async function handlePasskeysRequest(
       }
     } catch {}
 
-    const authResult = await verifyUserReauth(dbUser, body, env, request);
+    const authResult = await verifyUserReauth(dbUser, body, env, request, { sessionId: user.sessionId });
     if (!authResult.success) {
       await activityLog.record(user.id, "passkey_verify_fail", clientIp, userAgent, { reason: authResult.reason }, sessionHash);
       return new Response(authResult.error || "Authentication failed", { status: 400 });
@@ -373,9 +399,10 @@ export async function handlePasskeysRequest(
     await passkeyModel.delete(passkeyId, user.id);
     await activityLog.record(user.id, "passkey_deleted", clientIp, userAgent, { name: passkey.name, method: authResult.method }, sessionHash);
 
-    // 若用户不再拥有任何 Passkey 且停用 TOTP，则自动关闭无密码登录
+    // Re-read fresh user record after deletion to prevent stale totp_enabled race
+    const freshUser = await userModel.getById(user.id);
     const remainingPasskeys = await passkeyModel.countByUser(user.id);
-    if (remainingPasskeys === 0 && !dbUser?.totp_enabled) {
+    if (remainingPasskeys === 0 && !freshUser?.totp_enabled) {
       await userModel.updateTOTPSettings(user.id, false);
     }
 

@@ -84,8 +84,9 @@ export function recordSuccessAndCache(
           context.ctx
         );
 
-        if (answer.length > 0) {
-          dnsCache.set(`${context.profileId}:${query.name}:${query.type}`, {
+        const rcode = answer.length >= 12 ? answer[3] & 0x0f : -1;
+        if (answer.length >= 12 && minTTL > 0 && (rcode === 0 || rcode === 3)) {
+          dnsCache.set(`${context.profileId}:${query.name.toLowerCase()}:${query.type}`, {
             answer,
             ttl: minTTL,
             action,

@@ -56,4 +56,6 @@ export interface VerifyAuthenticationOptions {
   expectedRpId: string;
   /** Previously recorded sign count to prevent replay/cloned authenticators. */
   previousSignCount?: number;
+  /** Whether User Verification (UV flag 0x04) is required (e.g., passwordless / step-up). */
+  requireUserVerification?: boolean;
 }

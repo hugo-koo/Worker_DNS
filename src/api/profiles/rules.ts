@@ -21,19 +21,24 @@ export async function handleProfileRulesRequest(
   }
 
   if (request.method === 'POST') {
+    const MAX_PROFILE_RULES = 5000;
+    const MAX_BULK_RULES = 2000;
     const body = await request.json() as any;
 
     // Support bulk insertion when body is an array or contains rules array
     const isBulk = Array.isArray(body) || (body && Array.isArray(body.rules));
     if (isBulk) {
       const rawList: any[] = Array.isArray(body) ? body : body.rules;
+      if (rawList.length > MAX_BULK_RULES) {
+        return new Response(`Bulk request exceeds maximum of ${MAX_BULK_RULES} rules`, { status: 400 });
+      }
       const seen = new Set<string>();
       const validRules: Partial<Rule>[] = [];
 
       for (const r of rawList) {
         if (!r || typeof r.pattern !== 'string') continue;
         const pattern = r.pattern.trim().toLowerCase();
-        if (!pattern || seen.has(pattern)) continue;
+        if (!pattern || pattern.length > 253 || seen.has(pattern)) continue;
         seen.add(pattern);
 
         const type = String(r.type || 'BLOCK').toUpperCase();
@@ -62,6 +67,10 @@ export async function handleProfileRulesRequest(
       const existingPatterns = new Set(existingRules.map(r => r.pattern.trim().toLowerCase()));
       const rulesToInsert = validRules.filter(r => !existingPatterns.has(r.pattern!));
 
+      if (existingRules.length + rulesToInsert.length > MAX_PROFILE_RULES) {
+        return new Response(`Profile rule limit (${MAX_PROFILE_RULES}) exceeded`, { status: 400 });
+      }
+
       let insertedCount = 0;
       if (rulesToInsert.length > 0) {
         insertedCount = await ruleModel.addRulesBulk(profileId, rulesToInsert);
@@ -75,9 +84,13 @@ export async function handleProfileRulesRequest(
     }
 
     const rule = body;
-    const pattern = rule.pattern ? rule.pattern.trim() : "";
-    if (!pattern) {
-      return new Response("Domain pattern cannot be empty", { status: 400 });
+    const pattern = rule.pattern ? String(rule.pattern).trim() : "";
+    if (!pattern || pattern.length > 253) {
+      return new Response("Domain pattern is invalid or empty", { status: 400 });
+    }
+    const existingRules = await ruleModel.getRules(profileId);
+    if (existingRules.length >= MAX_PROFILE_RULES) {
+      return new Response(`Profile rule limit (${MAX_PROFILE_RULES}) exceeded`, { status: 400 });
     }
     const existing = await ruleModel.getRuleByPattern(profileId, pattern);
     if (existing) {

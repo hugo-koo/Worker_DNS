@@ -52,6 +52,35 @@ export class LocalDbMaintenanceService {
   async clearProfile(profileId: string): Promise<void> {
     await this.bridge.init();
     await this.bridge.sendRequest('CLEAR_PROFILE', { profileId });
+    try {
+      localStorage.removeItem(`obex_sync_checkpoint_${profileId}`);
+    } catch {
+      // Ignore storage access errors
+    }
+  }
+
+  /**
+   * Clears all local logs, sync watermarks, and resumable checkpoints across all profiles.
+   */
+  async clearAll(): Promise<void> {
+    try {
+      await this.bridge.init();
+      await this.bridge.sendRequest('CLEAR_ALL');
+    } catch {
+      // Best-effort worker purge even if OPFS is unavailable
+    }
+    try {
+      const toRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k?.startsWith('obex_sync_checkpoint_')) {
+          toRemove.push(k);
+        }
+      }
+      toRemove.forEach((k) => localStorage.removeItem(k));
+    } catch {
+      // Ignore storage access errors
+    }
   }
 
   /**

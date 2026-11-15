@@ -9,6 +9,7 @@ import { Env, User, ExecutionContext } from "../../types";
 import { PasskeyModel } from "../../models/passkey";
 import { ProfileModel } from "../../models/profile";
 import { invalidateProfileLogKeyCache } from "../../pipeline/logBatcher";
+import { isValidE2eePublicKey } from "../../lib/crypto/e2ee";
 
 /**
  * Routes /api/account/e2ee/* endpoints.
@@ -154,6 +155,9 @@ export async function handleAccountE2eeRequest(
       return new Response("Missing required fields (publicKey and either passkey or recovery)", {
         status: 400,
       });
+    }
+    if (!isValidE2eePublicKey(publicKey)) {
+      return new Response("Invalid E2EE public key format", { status: 400 });
     }
 
     let passkey: any = null;

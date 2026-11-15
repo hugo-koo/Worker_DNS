@@ -165,16 +165,22 @@ export async function handleMeRequest(
       }
     } catch {}
 
-    const authResult = await verifyUserReauth(dbUser, body, env, request);
+    const authResult = await verifyUserReauth(dbUser, body, env, request, { sessionId: user.sessionId });
     if (!authResult.success) {
       return new Response(authResult.error || "Authentication failed", { status: 400 });
     }
 
     const { invalidateSession } = await import("../../lib/auth");
+    const { invalidateAuthUserCacheByUserId } = await import("../../lib/middleware");
+    const { ProfileModel } = await import("../../models/profile");
+    const profileModel = new ProfileModel(env.DB);
     const cookieHeader = request.headers.get("Cookie") || "";
     const refreshToken = readRefreshTokenCookie(cookieHeader);
     const sessionId = refreshToken ? parseRefreshTokenString(refreshToken)?.sid || null : null;
     if (sessionId) await invalidateSession(env, sessionId);
+    invalidateAuthUserCacheByUserId(user.id);
+    // Explicitly delete profiles/logs/hourly_rollups before deleting user to satisfy FK constraints and prevent orphaned data
+    await profileModel.deleteByOwner(user.id);
     await userModel.delete(user.id);
     return new Response(JSON.stringify({ success: true }), {
       headers: { "Set-Cookie": createBlankRefreshTokenCookie(), "Content-Type": "application/json" }

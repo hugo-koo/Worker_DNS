@@ -42,6 +42,24 @@ export async function invalidatePreauthSession(env: Env, token: string): Promise
   await sessionModel.deletePendingTotpSession(token);
 }
 
+const preauthLocks = new Map<string, Promise<unknown>>();
+
+/**
+ * Serializes concurrent verification attempts sharing the same pre-auth or recovery token
+ * within a single isolate/process to prevent parallel brute-force attempt-counter races.
+ */
+export async function withTokenLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const prev = preauthLocks.get(key) || Promise.resolve();
+  const next = prev.then(fn, fn);
+  const cleanup = next.finally(() => {
+    if (preauthLocks.get(key) === cleanup) {
+      preauthLocks.delete(key);
+    }
+  });
+  preauthLocks.set(key, cleanup);
+  return next;
+}
+
 /**
  * Increments failed attempts for a pre-auth session. If it reaches 3 attempts, deletes it.
  * Returns the number of attempts remaining (from 3 down to 0).

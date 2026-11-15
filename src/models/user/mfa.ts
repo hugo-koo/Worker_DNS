@@ -21,8 +21,8 @@ export class UserMfaModel {
    */
   async updateTOTP(id: string, secret: string, recoveryKeys: StoredRecoveryKey[]): Promise<boolean> {
     const recoveryKeysStr = JSON.stringify(recoveryKeys);
-    const encryptedSecret = await encryptEnvelope(secret, this.env);
-    const encryptedKeys = await encryptEnvelope(recoveryKeysStr, this.env);
+    const encryptedSecret = await encryptEnvelope(secret, this.env, `${id}:totp_secret`);
+    const encryptedKeys = await encryptEnvelope(recoveryKeysStr, this.env, `${id}:totp_recovery_keys`);
 
     if (encryptedSecret && encryptedKeys) {
       const result = await this.db
@@ -82,7 +82,7 @@ export class UserMfaModel {
    */
   async updateRecoveryKeys(id: string, recoveryKeys: StoredRecoveryKey[]): Promise<boolean> {
     const recoveryKeysStr = JSON.stringify(recoveryKeys);
-    const encryptedKeys = await encryptEnvelope(recoveryKeysStr, this.env);
+    const encryptedKeys = await encryptEnvelope(recoveryKeysStr, this.env, `${id}:totp_recovery_keys`);
 
     if (encryptedKeys) {
       const result = await this.db
@@ -134,7 +134,7 @@ export class UserMfaModel {
     const updated = currentHashes.filter((_, i) => i !== usedIndex);
     const updatedStr = JSON.stringify(updated);
 
-    const encryptedKeys = await encryptEnvelope(updatedStr, this.env);
+    const encryptedKeys = await encryptEnvelope(updatedStr, this.env, `${id}:totp_recovery_keys`);
     if (encryptedKeys) {
       const result = await this.db
         .prepare('UPDATE users SET totp_recovery_keys = NULL, totp_recovery_keys_encrypted = ?, totp_recovery_keys_dek = ? WHERE id = ?')

@@ -7,6 +7,7 @@ import { ActivityLogModel } from "../../models/activityLog";
 import { SessionModel } from "../../models/session";
 import { cacheUtils } from "../../utils/cache";
 import { invalidateAuthUserCache } from "../../lib/middleware";
+import { withTokenLock } from "../../lib/preauth";
 
 /**
  * Verifies client PIN hash against stored legacy base64 PIN hash using pre-challenge methods.
@@ -127,6 +128,7 @@ export async function handleSessionLockRequest(request: Request, env: Env): Prom
       if (!pinHash) return new Response("Missing pinHash", { status: 400 });
       if (!nonce) return new Response("Missing nonce", { status: 400 });
 
+      return withTokenLock(`unlock:${payload.sessionId}`, async () => {
       // 验证 Session 存在
       const sessionModel = new SessionModel(env.DB);
       const session = await sessionModel.getSession(payload.sessionId);
@@ -184,8 +186,9 @@ export async function handleSessionLockRequest(request: Request, env: Env): Prom
       if (!isPinValid) {
         const nextFailedCount = failedAttempts + 1;
         if (nextFailedCount >= 3) {
-          // 超过 3 次失败，销毁 Session 强制登出
+          // 超过 3 次失败，销毁 Session 强制登出并清除进程内认证缓存
           await sessionModel.deleteSession(session.id);
+          invalidateAuthUserCache(session.id);
           await cacheUtils.delete(cache, cacheKey);
           await activityLog.record(payload.userId, 'pin_verify_fail', clientIp, userAgent, { reason: 'too_many_attempts' }, sessionHash);
           return new Response(JSON.stringify({ success: false, error: "too_many_attempts" }), {
@@ -214,6 +217,7 @@ export async function handleSessionLockRequest(request: Request, env: Env): Prom
 
       return new Response(JSON.stringify({ success: true }), {
         headers: { "Content-Type": "application/json" }
+      });
       });
     } catch (e: any) {
       console.error("Unlock session error:", e);

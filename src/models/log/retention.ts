@@ -129,6 +129,12 @@ export class LogRetentionModel {
         }
       }
 
+      // Clean up any orphaned hourly_rollups whose profile no longer exists
+      await this.db
+        .prepare("DELETE FROM hourly_rollups WHERE profile_id NOT IN (SELECT id FROM profiles)")
+        .run()
+        .catch(() => {});
+
       // Execute log deletions in chunks and track affected rows
       let newlyDeletedLogs = 0;
       if (logDeleteStatements.length > 0) {

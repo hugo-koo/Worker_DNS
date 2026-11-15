@@ -126,7 +126,7 @@ export async function rotateDek(
   // 3. Generate unique kem_key_id
   const kemKeyId = `kem_${generateLogId()}`;
 
-  // 4. Persist KEM ciphertext to kem_keys table in D1
+  // 4. Persist KEM ciphertext to kem_keys table in D1 (fail closed so logs never reference unpersisted keys)
   try {
     await db
       .prepare(
@@ -136,6 +136,7 @@ export async function rotateDek(
       .run();
   } catch (err) {
     console.error(`[DekManager] Failed to persist kem_key ${kemKeyId} to D1:`, err);
+    throw err;
   }
 
   // 5. Publish to in-memory active pool

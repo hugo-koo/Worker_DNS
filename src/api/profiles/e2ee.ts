@@ -7,6 +7,7 @@
 import { Env, User, Profile, ExecutionContext } from "../../types";
 import { PasskeyModel } from "../../models/passkey";
 import { invalidateProfileLogKeyCache } from "../../pipeline/logBatcher";
+import { isValidE2eePublicKey } from "../../lib/crypto/e2ee";
 
 /**
  * Routes /api/profiles/:id/e2ee/* endpoints.
@@ -108,6 +109,9 @@ export async function handleProfileE2eeRequest(
       return new Response("Missing required fields (publicKey, passkeyId, encryptedSk, iv)", {
         status: 400,
       });
+    }
+    if (!isValidE2eePublicKey(publicKey)) {
+      return new Response("Invalid E2EE public key format", { status: 400 });
     }
 
     // Verify the passkey belongs to this user

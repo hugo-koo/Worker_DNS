@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { lockSession } from "../services";
+import { lockSession, e2ee } from "../services";
 import type { UserInfo } from "../services";
 import { AuthView } from "./AuthView";
 
@@ -60,6 +60,7 @@ export const IdleSessionLock: React.FC<IdleSessionLockProps> = ({
       const inactiveMs = Date.now() - lastActivityRef.current;
       const timeoutMs = timeoutMinutes * 60 * 1000;
       if (inactiveMs >= timeoutMs) {
+        e2ee.clearStorage();
         setIsLocked(true);
         sessionStorage.setItem("obex_session_locked", "true");
         try {
@@ -81,6 +82,7 @@ export const IdleSessionLock: React.FC<IdleSessionLockProps> = ({
   // Listen to the session_paused custom event from interceptor
   useEffect(() => {
     const handlePaused = (): void => {
+      e2ee.clearStorage();
       setIsLocked(true);
       sessionStorage.setItem("obex_session_locked", "true");
     };

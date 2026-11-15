@@ -51,7 +51,22 @@ export function extractApexDomain(pattern: string): string | undefined {
 /**
  * Converts a wildcard domain pattern (e.g. "||*-ads.example.com^") into a safe RegExp source string.
  */
+function isSafeRegexPattern(pattern: string): boolean {
+  // Reject nested quantifiers and repeated-group quantifiers prone to catastrophic backtracking (ReDoS)
+  if (/(?:\+|\*|\{\d+,?\d*\})\s*(?:\+|\*|\?|\{\d)/.test(pattern)) {
+    return false;
+  }
+  if (/\([^)]*(?:\+|\*|\{\d)[^)]*\)\s*(?:\+|\*|\{\d)/.test(pattern)) {
+    return false;
+  }
+  return true;
+}
+
 export function wildcardToRegex(pattern: string, includeSubdomains: boolean): string {
+  const wildcardCount = (pattern.match(/\*/g) || []).length;
+  if (wildcardCount > 6) {
+    return "(?!)";
+  }
   let cleaned = pattern;
   if (cleaned.startsWith("||")) cleaned = cleaned.substring(2);
   if (cleaned.startsWith("|")) cleaned = cleaned.substring(1);
@@ -79,7 +94,7 @@ export function wildcardToRegex(pattern: string, includeSubdomains: boolean): st
  */
 export function parseAdGuardLine(line: string): ParsedAdGuardRule | null {
   const trimmed = line.trim();
-  if (!trimmed) return null;
+  if (!trimmed || trimmed.length > 2048) return null;
 
   // Fast Path: High-frequency standard AdGuard domain rule (e.g. ||ad.example.com^)
   // Bypasses cosmetic, comment, regex, and modifier checks for >80% of blocklist rules.
@@ -117,7 +132,7 @@ export function parseAdGuardLine(line: string): ParsedAdGuardRule | null {
     if (endSlash > 0) {
       const regexBody = trimmed.substring(1, endSlash);
       // Validate length to prevent ReDoS / excessive resource consumption
-      if (regexBody.length > 256) {
+      if (regexBody.length > 256 || !isSafeRegexPattern(regexBody)) {
         return { kind: AdGuardRuleKind.UNSUPPORTED, raw: trimmed };
       }
       try {

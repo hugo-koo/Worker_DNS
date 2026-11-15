@@ -58,6 +58,10 @@ export function generateCSV(logsData: any[]): string {
         }
       }
       
+      // Guard against CSV/spreadsheet formula injection (DDE / =, +, -, @, tab, CR)
+      if (/^[\t\r\n ]*[=+\-@]/.test(val) || val.startsWith("\t") || val.startsWith("\r")) {
+        val = `'${val}`;
+      }
       const escaped = val.replace(/"/g, '""');
       if (escaped.includes(",") || escaped.includes("\n") || escaped.includes("\r") || escaped.includes('"')) {
         return `"${escaped}"`;

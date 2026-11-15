@@ -19,6 +19,21 @@ export async function handleProfileLogsAndAnalyticsRequest(
 
   // Handle Logs endpoint: /api/profiles/:id/logs
   if (pathParts[3] === 'logs') {
+    // Issue a short-lived, single-use WebSocket ticket so Bearer JWTs never appear in URLs
+    if (pathParts[4] === 'ws-ticket' && request.method === 'POST') {
+      const ticket = crypto.randomUUID();
+      const cache = (caches as any).default;
+      await cacheUtils.set(cache, `ws_ticket:${ticket}`, {
+        userId: user.id,
+        sessionId: user.sessionId,
+        profileId,
+        createdAt: Math.floor(Date.now() / 1000),
+      }, 30);
+      return new Response(JSON.stringify({ ticket }), {
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
+      });
+    }
+
     // Handle WebSocket real-time streaming endpoint: /api/profiles/:id/logs/ws or Upgrade: websocket
     if (pathParts[4] === 'ws' || request.headers.get('Upgrade')?.toLowerCase() === 'websocket') {
       return handleProfileLogsWs(request, env, user, profile, ctx);
@@ -106,7 +121,9 @@ export async function handleProfileLogsAndAnalyticsRequest(
           reason,
           export: true
         });
-        return new Response(JSON.stringify(results), { headers: { 'Content-Type': 'application/json' } });
+        return new Response(JSON.stringify(results), {
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store', 'Vary': 'Authorization' }
+    });
       }
 
       const logId = parseInt(pathParts[4], 10);
@@ -121,7 +138,9 @@ export async function handleProfileLogsAndAnalyticsRequest(
       if (!logDetail) {
         return new Response("Log Not Found", { status: 404 });
       }
-      return new Response(JSON.stringify(logDetail), { headers: { 'Content-Type': 'application/json' } });
+      return new Response(JSON.stringify(logDetail), {
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store', 'Vary': 'Authorization' }
+      });
     }
 
     let limit = parseInt(urlParams.get('limit') || '50', 10);
@@ -146,7 +165,9 @@ export async function handleProfileLogsAndAnalyticsRequest(
       geo_country: geoCountry,
       reason
     });
-    return new Response(JSON.stringify(results), { headers: { 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify(results), {
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'private, no-store', 'Vary': 'Authorization' }
+    });
   }
 
   // Handle Analytics endpoint: /api/profiles/:id/analytics

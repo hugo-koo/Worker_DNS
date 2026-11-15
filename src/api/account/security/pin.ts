@@ -28,7 +28,7 @@ export async function handlePinRequest(
   const body = (await request.json()) as { pinHash?: string } & ReauthPayload;
 
   // 验证用户身份 (密码、Passkey 或 TOTP)
-  const authResult = await verifyUserReauth(dbUser, body, env, request);
+  const authResult = await verifyUserReauth(dbUser, body, env, request, { sessionId: user.sessionId });
   if (!authResult.success) {
     return new Response(authResult.error || "Authentication failed", { status: 400 });
   }

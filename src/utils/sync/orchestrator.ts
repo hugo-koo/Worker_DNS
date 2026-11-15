@@ -72,8 +72,11 @@ export async function syncNextGlobalList(
 
       const maxDomains = Number(env.MAX_SYNC_DOMAINS) || 1000000;
       const falsePositiveRate = Number(env.BLOOM_FALSE_POSITIVE_RATE) || 0.0001;
+      const maxRecombine = Number(env.MAX_RECOMBINE_PER_CRON) || 50;
+      const batchProfiles = affectedProfiles.slice(0, maxRecombine);
 
-      for (const profileId of affectedProfiles) {
+      for (let i = 0; i < batchProfiles.length; i++) {
+        const profileId = batchProfiles[i];
         try {
           await combineAndPromote(
             profileId,
@@ -89,6 +92,9 @@ export async function syncNextGlobalList(
           );
         } catch (combErr) {
           console.error(`[Sync System] Failed to recombine profile ${profileId}:`, combErr);
+        }
+        if ((i + 1) % 10 === 0) {
+          await new Promise<void>((resolve) => setTimeout(resolve, 0));
         }
       }
     } else if (notModified) {

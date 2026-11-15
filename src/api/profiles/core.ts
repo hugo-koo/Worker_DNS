@@ -8,6 +8,8 @@ import { resolveClientGeoCountry } from "../../utils/geoip";
 import { pipeline } from "../../pipeline";
 import { PROFILE_NAME_REGEX } from "../../utils/validator";
 import { getDefaultUpstreamUrl } from "../../constants/presets";
+import { profileKeyMemoryMap } from "../../pipeline/cache";
+import { cacheUtils } from "../../utils/cache";
 
 /**
  * Handle requests to /api/profiles (without specific profile ID)
@@ -129,6 +131,14 @@ export async function handleProfilesCoreRequest(
   if (pathParts.length === 3) {
     if (request.method === 'DELETE') {
       await profileModel.delete(profileId);
+      if (profile.profile_key) {
+        profileKeyMemoryMap.delete(profile.profile_key);
+        const cache = typeof caches !== 'undefined' ? (caches as any).default : null;
+        if (cache) {
+          ctx.waitUntil(cacheUtils.delete(cache, `doh_key_v1:${profile.profile_key}`));
+        }
+      }
+      ctx.waitUntil(pipeline.clearCache(profileId, true, env));
       return new Response(null, { status: 204 });
     }
 
@@ -153,6 +163,13 @@ export async function handleProfilesCoreRequest(
   if (pathParts[3] === 'rotate_key' && request.method === 'POST') {
     const newKey = generateId(12);
     await profileModel.rotateKey(profileId, newKey);
+    if (profile.profile_key) {
+      profileKeyMemoryMap.delete(profile.profile_key);
+      const cache = typeof caches !== 'undefined' ? (caches as any).default : null;
+      if (cache) {
+        ctx.waitUntil(cacheUtils.delete(cache, `doh_key_v1:${profile.profile_key}`));
+      }
+    }
     ctx.waitUntil(pipeline.clearCache(profileId, false, env));
     return new Response(JSON.stringify({ profile_key: newKey }), { headers: { 'Content-Type': 'application/json' } });
   }

@@ -112,7 +112,12 @@ export class TursoD1Database implements D1Database {
     }
 
     const hranaArgs = params.map(toHranaValue);
-    const results = await this.executePipeline([
+    const needsFkOn = !isReadOnly && !/^\s*PRAGMA\s+foreign_keys/i.test(sql);
+    const pipelineReqs: HranaRequest[] = [];
+    if (needsFkOn) {
+      pipelineReqs.push({ type: 'execute', stmt: { sql: 'PRAGMA foreign_keys = ON' } });
+    }
+    pipelineReqs.push(
       {
         type: 'execute',
         stmt: {
@@ -121,9 +126,10 @@ export class TursoD1Database implements D1Database {
         }
       },
       { type: 'close' }
-    ]);
+    );
+    const results = await this.executePipeline(pipelineReqs);
 
-    const first = results[0];
+    const first = results[needsFkOn ? 1 : 0];
     if (!first) {
       throw new Error(`[Turso D1] Empty response from pipeline for SQL: ${sql}`);
     }
@@ -163,6 +169,7 @@ export class TursoD1Database implements D1Database {
     const start = Date.now();
 
     const requests: HranaRequest[] = [
+      { type: 'execute', stmt: { sql: 'PRAGMA foreign_keys = ON' } },
       { type: 'execute', stmt: { sql: 'BEGIN IMMEDIATE' } }
     ];
 
@@ -197,7 +204,7 @@ export class TursoD1Database implements D1Database {
         } catch {
           // Ignore rollback failure
         }
-        const sqlIndex = i - 1;
+        const sqlIndex = i - 2;
         const failedSql =
           sqlIndex >= 0 && sqlIndex < statements.length
             ? (statements[sqlIndex] as unknown as TursoD1PreparedStatement).sql
@@ -208,10 +215,10 @@ export class TursoD1Database implements D1Database {
       }
     }
 
-    // Extract statement execution results (indices 1 to statements.length)
+    // Extract statement execution results (indices 2 to statements.length + 1)
     const results: D1Result<T>[] = [];
     for (let i = 0; i < statements.length; i++) {
-      const step = stepResults[i + 1];
+      const step = stepResults[i + 2];
       const execResult = step.response?.result ?? {
         cols: [],
         rows: [],

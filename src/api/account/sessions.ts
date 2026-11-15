@@ -20,7 +20,8 @@ export async function handleSessionsRequest(
   // GET /api/account/activity (user activity log)
   if (action === 'activity' && request.method === 'GET') {
     const params = new URL(request.url).searchParams;
-    const limit = Math.min(parseInt(params.get('limit') || '20', 10), 50);
+    const parsedLimit = parseInt(params.get('limit') || '20', 10);
+    const limit = Math.min(Math.max(Number.isFinite(parsedLimit) ? parsedLimit : 20, 1), 50);
     const before = params.get('before') ? parseInt(params.get('before')!, 10) : undefined;
     const entries = await activityLog.listByUser(user.id, limit, before);
     return new Response(JSON.stringify(entries), { headers: { 'Content-Type': 'application/json' } });
@@ -97,7 +98,9 @@ export async function handleSessionsRequest(
       }
       
       const { invalidateSession } = await import("../../lib/auth");
+      const { invalidateAuthUserCache } = await import("../../lib/middleware");
       await invalidateSession(env, targetSessionId);
+      invalidateAuthUserCache(targetSessionId);
       
       const refreshToken = readRefreshTokenCookie(request.headers.get("Cookie") || "");
       const currentSessionId = refreshToken ? parseRefreshTokenString(refreshToken)?.sid || null : null;

@@ -188,11 +188,7 @@ export async function handleDoHRequest(
   let queryRaw: Uint8Array | null = null;
 
   try {
-    let profile = await resolveProfileByKey(profileKey, env, ctx);
-    if (!profile) {
-      console.warn(`[DoH] Profile not found for key ${profileKey}. Falling back to default profile.`);
-      profile = await resolveDefaultProfile(env, ctx);
-    }
+    const profile = await resolveProfileByKey(profileKey, env, ctx);
     if (!profile) {
       return new Response('Invalid Profile Key', { status: 404 });
     }

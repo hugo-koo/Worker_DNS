@@ -37,7 +37,7 @@ export async function handleRecoveryKeysRequest(
     const dbUser = await userModel.getById(user.id);
     if (!dbUser) return new Response("User not found", { status: 404 });
 
-    const authResult = await verifyUserReauth(dbUser, body, env, request);
+    const authResult = await verifyUserReauth(dbUser, body, env, request, { sessionId: user.sessionId });
     if (!authResult.success) {
       return new Response(authResult.error || "Authentication failed", { status: 400 });
     }

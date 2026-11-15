@@ -8,6 +8,8 @@ import { cacheUtils } from "../../utils/cache";
 import { generateId, hashPassword } from "../../utils/crypto";
 import { PASSWORD_REGEX } from "../../utils/validator";
 import { verifyTurnstile } from "./utils";
+import { withTokenLock } from "../../lib/preauth";
+import { invalidateAuthUserCacheByUserId } from "../../lib/middleware";
 import { generateWebAuthnChallenge, verifyAuthenticationResponse } from "../../lib/webauthn";
 import { verifyTOTPWithStep, findMatchingRecoveryKey } from "../../lib/totp";
 import { StoredRecoveryKey } from "../../models/user";
@@ -57,8 +59,12 @@ export async function handleForgotPasswordRequest(request: Request, env: Env): P
       settingsModel.get('turnstile_secret_key'),
       settingsModel.get('turnstile_enabled_login')
     ]);
-    if (enabled === 'true' && secretKey) {
-      if (!await verifyTurnstile(turnstileToken, secretKey, clientIp)) {
+    const effectiveSecret = secretKey || env.TURNSTILE_SECRET_KEY || '';
+    if (enabled === 'true') {
+      if (!effectiveSecret) {
+        return new Response("Turnstile verification is enabled but secret key is not configured", { status: 503 });
+      }
+      if (!await verifyTurnstile(turnstileToken, effectiveSecret, clientIp)) {
         return new Response("Verification failed", { status: 400 });
       }
     }
@@ -143,11 +149,15 @@ export async function handleForgotPasswordRequest(request: Request, env: Env): P
 
   // Step 2: Verify MFA identity
   if (path === '/api/auth/forgot-password/verify' && request.method === 'POST') {
+    if (await cacheUtils.isRateLimited(cache, `forgot_pw_verify_ip:${clientIp}`, 15, 600)) {
+      return new Response("Too many attempts", { status: 429 });
+    }
     const { recoveryToken, passkeyAssertion, totpTokenHash, totpSalt, recoveryKey } = await request.json() as any;
     if (!recoveryToken) {
       return new Response("Recovery token is required", { status: 400 });
     }
 
+    return withTokenLock(`forgot_pw:${recoveryToken}`, async () => {
     const cacheKey = `forgot_pw_state:${recoveryToken}`;
     const state = await cacheUtils.get<RecoveryState>(cache, cacheKey);
     if (!state) {
@@ -226,16 +236,16 @@ export async function handleForgotPasswordRequest(request: Request, env: Env): P
         return new Response("Invalid TOTP code", { status: 400 });
       }
 
-      // Anti-replay protection: prevent reusing the same TOTP time-step
+      // Unified anti-replay protection across login, reauth, and password recovery
       if (totpResult.timeStep !== undefined) {
-        const stepKey = `totp_step:${user.id}:${totpResult.timeStep}`;
+        const stepKey = `totp_used:${user.id}:${totpResult.timeStep}`;
         const replayed = await cacheUtils.get(cache, stepKey);
         if (replayed) {
           state.failedAttempts++;
           await cacheUtils.set(cache, cacheKey, state, 300);
           return new Response("TOTP code already used, please wait for next code", { status: 400 });
         }
-        await cacheUtils.set(cache, stepKey, true, 180);
+        await cacheUtils.set(cache, stepKey, 1, 90);
       }
 
       await activityLog.record(user.id, 'totp_verify_success', clientIp, userAgent, { flow: 'forgot_password' });
@@ -256,6 +266,7 @@ export async function handleForgotPasswordRequest(request: Request, env: Env): P
 
     return new Response(JSON.stringify({ success: true, resetToken }), {
       headers: { "Content-Type": "application/json" }
+    });
     });
   }
 
@@ -288,9 +299,10 @@ export async function handleForgotPasswordRequest(request: Request, env: Env): P
     const hashedPassword = await hashPassword(newPassword, 2);
     await userModel.updatePassword(user.id, hashedPassword, 2);
 
-    // Revoke all existing sessions for security
+    // Revoke all existing sessions for security and evict in-memory auth cache
     const sessionModel = new SessionModel(env.DB);
     await sessionModel.deleteAllByUserId(user.id);
+    invalidateAuthUserCacheByUserId(user.id);
 
     await activityLog.record(user.id, 'password_change_success', clientIp, userAgent, { method: 'forgot_password_reset' });
 

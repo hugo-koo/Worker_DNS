@@ -75,13 +75,16 @@ export async function handleAdminRequest(
         await userModel.create({ id: userId, username, passwordHash: hashedPassword, role: role || 'user', passwordVersion: 2 });
         return new Response(JSON.stringify({ id: userId }), { status: 201 });
       } catch (e: any) {
-        return new Response(e.message, { status: 400 });
+        console.error("[Admin API] Create user failed:", e?.message || e);
+        return new Response("Failed to create user", { status: 400 });
       }
     }
 
     if (request.method === 'DELETE' && pathParts[3]) {
       const targetId = pathParts[3];
       if (targetId === user.id) return new Response("Cannot delete yourself", { status: 400 });
+      const { invalidateAuthUserCacheByUserId } = await import("../../lib/middleware");
+      invalidateAuthUserCacheByUserId(targetId);
       await profileModel.deleteByOwner(targetId);
       await userModel.delete(targetId);
       return new Response(null, { status: 204 });

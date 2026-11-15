@@ -79,7 +79,10 @@ export async function combineAndPromote(
       patterns: []
     };
     const maxRegexRules = Number(env?.MAX_REGEX_RULES) || 1000;
+    const maxExceptions = Number(env?.MAX_ADGUARD_EXCEPTIONS) || 50000;
+    const maxRewrites = Number(env?.MAX_ADGUARD_REWRITES) || 50000;
     const seenExceptions = new Set<string>();
+    let mergedRewriteCount = 0;
 
     for (const list of uniqueActiveLists) {
       try {
@@ -97,6 +100,7 @@ export async function combineAndPromote(
           if (listRules) {
             if (Array.isArray(listRules.exceptions)) {
               for (const exc of listRules.exceptions) {
+                if (mergedAdguard.exceptions.length >= maxExceptions) break;
                 const key = `${exc.domain}:${exc.includeSubdomains ? 1 : 0}`;
                 if (!seenExceptions.has(key)) {
                   seenExceptions.add(key);
@@ -105,7 +109,13 @@ export async function combineAndPromote(
               }
             }
             if (listRules.rewrites && typeof listRules.rewrites === "object") {
-              Object.assign(mergedAdguard.rewrites, listRules.rewrites);
+              for (const [domain, action] of Object.entries(listRules.rewrites)) {
+                if (mergedRewriteCount >= maxRewrites) break;
+                if (!Object.prototype.hasOwnProperty.call(mergedAdguard.rewrites, domain)) {
+                  mergedRewriteCount++;
+                }
+                mergedAdguard.rewrites[domain] = action;
+              }
             }
             if (Array.isArray(listRules.patterns)) {
               for (const pat of listRules.patterns) {

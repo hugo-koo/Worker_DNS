@@ -1,9 +1,11 @@
 import { Env, User, ExecutionContext } from "../../../types";
 import { hashPassword, generateSessionHash } from "../../../utils/crypto";
 import { UserModel } from "../../../models/user";
+import { SessionModel } from "../../../models/session";
 import { ActivityLogModel } from "../../../models/activityLog";
 import { PASSWORD_REGEX } from "../../../utils/validator";
 import { verifyUserReauth, ReauthPayload } from "./reauth";
+import { invalidateAuthUserCache } from "../../../lib/middleware";
 
 /**
  * Handles password management endpoints:
@@ -41,7 +43,7 @@ export async function handlePasswordRequest(
     const dbUser = await userModel.getById(user.id);
     if (!dbUser) return new Response("User not found", { status: 404 });
 
-    const authResult = await verifyUserReauth(dbUser, body, env, request);
+    const authResult = await verifyUserReauth(dbUser, body, env, request, { sessionId: user.sessionId });
     if (!authResult.success) {
       await activityLog.record(user.id, "password_change_fail", clientIp, userAgent, { reason: authResult.reason }, sessionHash);
       return new Response(authResult.error || "Authentication failed", { status: 400 });
@@ -49,6 +51,15 @@ export async function handlePasswordRequest(
 
     const hashedPassword = await hashPassword(newPassword, 2);
     await userModel.updatePassword(user.id, hashedPassword, 2);
+    // Revoke all other sessions on password change so stolen tokens cannot persist
+    const sessionModel = new SessionModel(env.DB);
+    const sessions = await sessionModel.getSessionsByUser(user.id);
+    for (const s of sessions) {
+      if (s.id !== user.sessionId) {
+        await sessionModel.deleteSession(s.id);
+        invalidateAuthUserCache(s.id);
+      }
+    }
     await activityLog.record(user.id, "password_change_success", clientIp, userAgent, { method: authResult.method }, sessionHash);
     return new Response(JSON.stringify({ success: true }), {
       headers: { "Content-Type": "application/json" }
@@ -66,7 +77,7 @@ export async function handlePasswordRequest(
     if (!dbUser) return new Response("User not found", { status: 404 });
 
     // Enforce re-authentication verification: must provide valid credentials (e.g. oldPassword)
-    const authResult = await verifyUserReauth(dbUser, body, env, request);
+    const authResult = await verifyUserReauth(dbUser, body, env, request, { sessionId: user.sessionId });
     if (!authResult.success) {
       await activityLog.record(user.id, "password_change_fail", clientIp, userAgent, { reason: authResult.reason, flow: "migration" }, sessionHash);
       return new Response(authResult.error || "Authentication failed", { status: 400 });

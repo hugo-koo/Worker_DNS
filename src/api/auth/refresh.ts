@@ -7,11 +7,18 @@ import {
 import { importJwtSecret, signJWT } from "../../lib/jwt";
 import { ActivityLogModel } from "../../models/activityLog";
 import { cacheUtils } from "../../utils/cache";
+import { validateCsrf } from "../../lib/middleware";
 
 /**
  * Handle session token refresh requests
  */
 export async function handleRefreshRequest(request: Request, env: Env): Promise<Response> {
+  if (request.method !== "POST") {
+    return new Response("Method Not Allowed", { status: 405 });
+  }
+  if (!validateCsrf(request)) {
+    return new Response("CSRF validation failed", { status: 403 });
+  }
   const cache = (caches as any).default;
   const clientIp = request.headers.get("CF-Connecting-IP") || "127.0.0.1";
   const userAgent = request.headers.get("User-Agent");

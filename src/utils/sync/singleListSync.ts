@@ -38,6 +38,9 @@ export async function syncGlobalList(
   const maxListBytes = Number(env.MAX_LIST_BYTES) || DEFAULT_MAX_LIST_BYTES;
   const falsePositiveRate = Number(env.BLOOM_FALSE_POSITIVE_RATE) || 0.0001;
   const maxRegexRules = Number(env.MAX_REGEX_RULES) || 1000;
+  const maxExceptions = Number(env.MAX_ADGUARD_EXCEPTIONS) || 50000;
+  const maxRewrites = Number(env.MAX_ADGUARD_REWRITES) || 50000;
+  let rewriteCount = 0;
 
   // Cooperative scheduling parameters
   const yieldBatchSize = Number(env.SYNC_YIELD_BATCH_SIZE) || 5000;
@@ -68,19 +71,26 @@ export async function syncGlobalList(
           }
           count++;
         } else if (rule.kind === AdGuardRuleKind.EXCEPTION && rule.domain) {
-          adguardPayload.exceptions.push({
-            domain: rule.domain,
-            includeSubdomains: Boolean(rule.includeSubdomains),
-            raw: rule.raw
-          });
-          count++;
+          if (adguardPayload.exceptions.length < maxExceptions) {
+            adguardPayload.exceptions.push({
+              domain: rule.domain,
+              includeSubdomains: Boolean(rule.includeSubdomains),
+              raw: rule.raw
+            });
+            count++;
+          }
         } else if (rule.kind === AdGuardRuleKind.DNS_REWRITE && rule.domain && rule.rewrite) {
-          adguardPayload.rewrites[rule.domain] = {
-            ...rule.rewrite,
-            includeSubdomains: Boolean(rule.includeSubdomains),
-            raw: rule.raw
-          };
-          count++;
+          if (rewriteCount < maxRewrites) {
+            if (!Object.prototype.hasOwnProperty.call(adguardPayload.rewrites, rule.domain)) {
+              rewriteCount++;
+            }
+            adguardPayload.rewrites[rule.domain] = {
+              ...rule.rewrite,
+              includeSubdomains: Boolean(rule.includeSubdomains),
+              raw: rule.raw
+            };
+            count++;
+          }
         } else if (rule.kind === AdGuardRuleKind.COMPLEX_PATTERN && rule.patternRegex) {
           if (adguardPayload.patterns.length < maxRegexRules) {
             adguardPayload.patterns.push({

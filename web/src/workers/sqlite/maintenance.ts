@@ -114,3 +114,15 @@ export function handleClearProfile(payload: ClearProfilePayload): { success: boo
 
   return { success: true };
 }
+
+/**
+ * Purges all cached query logs and synchronization watermarks across all profiles.
+ *
+ * @returns Object indicating successful deletion.
+ */
+export function handleClearAll(): { success: boolean } {
+  const db = getDatabase();
+  db.exec({ sql: 'DELETE FROM local_logs;' });
+  db.exec({ sql: 'DELETE FROM sync_watermarks;' });
+  return { success: true };
+}

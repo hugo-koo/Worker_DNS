@@ -178,15 +178,8 @@ export async function handleSystemRequest(request: Request, env: Env): Promise<R
     const connectingIp = request.headers.get("CF-Connecting-IP");
     const targetIp = (rawIp || connectingIp || "").trim();
 
-    // Check if explicitly requesting local/private IP
-    if (
-      targetIp === '127.0.0.1' ||
-      targetIp === 'localhost' ||
-      targetIp === '::1' ||
-      targetIp.startsWith('192.168.') ||
-      targetIp.startsWith('10.') ||
-      /^172\.(1[6-9]|2\d|3[01])\./.test(targetIp)
-    ) {
+    // Reject non-public / private / malformed IP targets before calling external GeoIP API
+    if (targetIp && !isPublicInternetIP(targetIp)) {
       return new Response(JSON.stringify({
         success: true,
         ip: targetIp,
@@ -265,31 +258,15 @@ export async function handleSystemRequest(request: Request, env: Env): Promise<R
     };
 
     try {
-      let [ipv4, ipv6] = await Promise.all([
+      const [ipv4, ipv6] = await Promise.all([
         resolveDoH('A'),
         resolveDoH('AAAA')
       ]);
 
-      // In Node.js / Serverfull runtime, fallback to native DNS resolution if DoH returned empty
-      if (ipv4.length === 0 && ipv6.length === 0 && typeof process !== 'undefined' && process.versions?.node) {
-        try {
-          const dnsPromises = await import('node:dns/promises');
-          const [res4, res6] = await Promise.allSettled([
-            dnsPromises.resolve4(domain),
-            dnsPromises.resolve6(domain)
-          ]);
-          if (res4.status === 'fulfilled' && Array.isArray(res4.value)) {
-            ipv4 = res4.value;
-          }
-          if (res6.status === 'fulfilled' && Array.isArray(res6.value)) {
-            ipv6 = res6.value;
-          }
-        } catch {
-          // Ignore native DNS lookup errors
-        }
-      }
-
-      return new Response(JSON.stringify({ ipv4, ipv6 }), {
+      return new Response(JSON.stringify({
+        ipv4: ipv4.filter((ip) => isPublicInternetIP(ip)),
+        ipv6: ipv6.filter((ip) => isPublicInternetIP(ip)),
+      }), {
         headers: { 'Content-Type': 'application/json' }
       });
     } catch (e) {

@@ -83,7 +83,8 @@ export class ActivityLogModel {
     limit: number = 20,
     before?: number
   ): Promise<UserActivityEntry[]> {
-    const clampedLimit = Math.min(limit, 50);
+    const safeLimit = Number.isFinite(limit) ? Math.floor(limit) : 20;
+    const clampedLimit = Math.min(Math.max(safeLimit, 1), 50);
 
     if (before) {
       const { results } = await this.db

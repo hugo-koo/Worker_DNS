@@ -70,6 +70,61 @@ export class UserCoreModel {
   }
 
   /**
+   * Atomically creates the first admin user (only if users table is empty) or a standard user
+   * within an optional maxUsers quota, preventing concurrent bootstrap/quota TOCTOU races.
+   *
+   * @param user - Options containing ID, username, password hash, role, timezone, etc.
+   * @param maxUsers - Optional maximum user count (0 = unlimited).
+   * @returns Outcome status: 'created', 'admin_exists', or 'max_users_reached'.
+   */
+  async createAtomic(
+    user: CreateUserOptions,
+    maxUsers: number = 0
+  ): Promise<"created" | "admin_exists" | "max_users_reached"> {
+    const now = Math.floor(Date.now() / 1000);
+    if (user.role === "admin") {
+      const result = await this.db.prepare(
+        "INSERT INTO users (id, username, hashed_password, role, created_at, timezone, locale, password_version) " +
+        "SELECT ?, ?, ?, ?, ?, ?, ?, ? WHERE NOT EXISTS (SELECT 1 FROM users)"
+      ).bind(
+        user.id,
+        user.username,
+        user.passwordHash,
+        user.role,
+        now,
+        user.timezone || null,
+        user.locale || 'en-US',
+        user.passwordVersion ?? 2
+      ).run();
+      if (!result.success) throw new Error("Failed to create admin user");
+      return (result.meta?.changes ?? 0) > 0 ? "created" : "admin_exists";
+    }
+
+    if (maxUsers > 0) {
+      const result = await this.db.prepare(
+        "INSERT INTO users (id, username, hashed_password, role, created_at, timezone, locale, password_version) " +
+        "SELECT ?, ?, ?, ?, ?, ?, ?, ? WHERE (SELECT COUNT(*) FROM users) < ?"
+      ).bind(
+        user.id,
+        user.username,
+        user.passwordHash,
+        user.role,
+        now,
+        user.timezone || null,
+        user.locale || 'en-US',
+        user.passwordVersion ?? 2,
+        maxUsers
+      ).run();
+      if (!result.success) throw new Error("Failed to create user");
+      return (result.meta?.changes ?? 0) > 0 ? "created" : "max_users_reached";
+    }
+
+    const ok = await this.create(user);
+    if (!ok) throw new Error("Failed to create user");
+    return "created";
+  }
+
+  /**
    * Registers a new user in the database.
    *
    * @param user Options containing ID, username, password hash, role, timezone, etc.
@@ -145,13 +200,8 @@ export class UserCoreModel {
    * @returns The total number of users registered in the system.
    */
   async count(): Promise<number> {
-    try {
-      const count = await this.db.prepare("SELECT COUNT(*) as count FROM users").first<number>('count');
-      return count ?? 0;
-    } catch (err) {
-      console.error("[UserModel] count: query failed:", err);
-      return 0;
-    }
+    const count = await this.db.prepare("SELECT COUNT(*) as count FROM users").first<number>('count');
+    return count ?? 0;
   }
 
   /**

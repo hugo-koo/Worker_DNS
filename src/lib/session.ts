@@ -183,12 +183,14 @@ export async function rotateSession(
     env.SERVERFULL_HTTPS_PORT !== undefined
   );
 
-  const hasFallbackCoords = (session.latitude === 0 && session.longitude === 0) ||
-                            (currentLat === 0 && currentLon === 0);
+  // In edge mode, never bypass geolocation validation using (0, 0) fallback coordinates
+  // unless running in self-hosted Serverfull mode.
+  const hasServerfullFallbackCoords = isServerfull && (
+    (session.latitude === 0 && session.longitude === 0) ||
+    (currentLat === 0 && currentLon === 0)
+  );
 
-  // In Serverfull self-hosted mode or when fallback mock coordinates are present, skip distance check.
-  // In edge mode, enforce distance check if coordinates are present and valid.
-  if (!isServerfull && !hasFallbackCoords) {
+  if (!isServerfull && !hasServerfullFallbackCoords) {
     if (
       session.latitude === null || session.latitude === undefined ||
       session.longitude === null || session.longitude === undefined ||
@@ -238,10 +240,13 @@ export async function rotateSession(
   return { session, user, newRefreshToken };
 }
 
+import { invalidateAuthUserCache } from './middleware';
+
 /**
- * Deletes a session from the database.
+ * Deletes a session from the database and evicts it from authUserMemoryCache.
  */
 export async function invalidateSession(env: Env, sessionId: string): Promise<void> {
   const sessionModel = new SessionModel(env.DB);
   await sessionModel.deleteSession(sessionId);
+  invalidateAuthUserCache(sessionId);
 }

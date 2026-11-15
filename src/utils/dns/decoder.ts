@@ -89,14 +89,22 @@ export function parseDNSQueryFromRaw(raw: Uint8Array): DNSQuery | null {
     // Minimum header length: Header(12) + QTYPE(2) + QCLASS(2) = 16
     if (raw.length < 16) return null;
 
+    // Validate DNS query header: QR=0 (query), OPCODE=0 (standard query), QDCOUNT=1
+    const isResponse = (raw[2] & 0x80) !== 0;
+    const opcode = (raw[2] >> 3) & 0x0f;
+    const qdCount = (raw[4] << 8) | raw[5];
+    if (isResponse || opcode !== 0 || qdCount !== 1) return null;
+
     const { name, read } = decodeName(raw, 12);
-    if (read === 0) return null;
+    if (read === 0 || name.length > 253) return null;
     const qtypeOffset = 12 + read;
 
     // Boundary check for query type and class
     if (qtypeOffset + 4 > raw.length) return null;
 
     const qtypeCode = (raw[qtypeOffset] << 8) | raw[qtypeOffset + 1];
+    const qclassCode = (raw[qtypeOffset + 2] << 8) | raw[qtypeOffset + 3];
+    if (qtypeCode === 0 || qclassCode !== 1) return null;
 
     return {
       name,

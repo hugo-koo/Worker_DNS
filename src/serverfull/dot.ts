@@ -162,9 +162,13 @@ export class DotDnsServer {
     }
 
     if (!candidateKey && serverName) {
-      const firstPart = serverName.split('.')[0];
-      if (ACCESS_KEY_REGEX.test(firstPart)) {
-        candidateKey = firstPart;
+      const normalizedSni = serverName.toLowerCase().replace(/\.$/, '');
+      const configuredDomain = this.options.dotDomain?.toLowerCase().replace(/^\*\./, '').replace(/\.$/, '');
+      if (!configuredDomain || normalizedSni.endsWith(`.${configuredDomain}`)) {
+        const firstPart = normalizedSni.split('.')[0];
+        if (ACCESS_KEY_REGEX.test(firstPart)) {
+          candidateKey = firstPart;
+        }
       }
     }
 
@@ -180,24 +184,37 @@ export class DotDnsServer {
     });
 
     const MAX_DOT_BUFFER = 65537; // 2-byte length prefix + 65535 max DNS packet (RFC 7858)
-    socket.on('data', async (chunk: Buffer) => {
+    let processingChain: Promise<void> = Promise.resolve();
+    socket.on('data', (chunk: Buffer) => {
       if (buffer.length + chunk.length > MAX_DOT_BUFFER) {
         socket.destroy();
         return;
       }
       buffer = Buffer.concat([buffer, chunk]);
 
+      const frames: Buffer[] = [];
       while (buffer.length >= 2) {
         const msgLen = buffer.readUInt16BE(0);
+        if (msgLen === 0) {
+          socket.destroy();
+          return;
+        }
         if (buffer.length < 2 + msgLen) {
           // Incomplete message frame, wait for more data
           break;
         }
 
-        const msgPayload = buffer.subarray(2, 2 + msgLen);
+        frames.push(Buffer.from(buffer.subarray(2, 2 + msgLen)));
         buffer = buffer.subarray(2 + msgLen);
+      }
 
-        await this.processQuery(socket, msgPayload, remoteIp, candidateKey);
+      if (frames.length > 0) {
+        processingChain = processingChain.then(async () => {
+          for (const frame of frames) {
+            if (socket.destroyed) break;
+            await this.processQuery(socket, frame, remoteIp, candidateKey);
+          }
+        });
       }
     });
   }
@@ -228,13 +245,9 @@ export class DotDnsServer {
         return;
       }
 
-      let profile = await resolveProfileByKey(sniKey, env, ctx);
+      const profile = await resolveProfileByKey(sniKey, env, ctx);
       if (!profile) {
-        // Fallback to fail-open default profile if database is unavailable or key not found
-        profile = await resolveDefaultProfile(env, ctx);
-      }
-      if (!profile) {
-        // Drop connection if fallback is impossible
+        // Never fall back to default profile when an explicit SNI profile key is invalid
         socket.destroy();
         return;
       }

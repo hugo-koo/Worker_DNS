@@ -67,10 +67,27 @@ class LogsWsService {
       return;
     }
 
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/api/profiles/${encodeURIComponent(profileId)}/logs/ws?token=${encodeURIComponent(token)}`;
+    void this.openWithTicket(profileId, token);
+  }
 
+  private async openWithTicket(profileId: string, token: string): Promise<void> {
     try {
+      const res = await fetch(`/api/profiles/${encodeURIComponent(profileId)}/logs/ws-ticket`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        credentials: 'include',
+      });
+      if (!res.ok) {
+        this.scheduleReconnect();
+        return;
+      }
+      const { ticket } = (await res.json()) as { ticket?: string };
+      if (!ticket || this.activeProfileId !== profileId) {
+        this.scheduleReconnect();
+        return;
+      }
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const wsUrl = `${protocol}//${window.location.host}/api/profiles/${encodeURIComponent(profileId)}/logs/ws?ticket=${encodeURIComponent(ticket)}`;
       this.ws = new WebSocket(wsUrl);
       this.setupHandlers(this.ws, profileId);
     } catch (err: unknown) {

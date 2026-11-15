@@ -2,6 +2,7 @@ import { Env, ExecutionContext, User } from '../types';
 import { getOrCreateJwtSecret, readCsrfCookie } from './auth';
 import { importJwtSecret, verifyJWT } from './jwt';
 import { SessionModel } from '../models/session';
+import { cacheUtils } from '../utils/cache';
 
 /**
  * Applies standard security headers and Content-Security-Policy (CSP) with a nonce.
@@ -57,9 +58,25 @@ export function invalidateAuthUserCache(sessionId: string): void {
   sessionActivityMemory.delete(sessionId);
 }
 
+/**
+ * Invalidates all cached auth entries belonging to a specific user ID.
+ * Used on password change/reset, account deletion, and admin user deletion.
+ *
+ * @param userId - Target user ID whose cached sessions should be evicted.
+ */
+export function invalidateAuthUserCacheByUserId(userId: string): void {
+  for (const [sessionId, entry] of authUserMemoryCache.entries()) {
+    if (entry.user.id === userId) {
+      authUserMemoryCache.delete(sessionId);
+      sessionActivityMemory.delete(sessionId);
+    }
+  }
+}
+
 export async function getCurrentUser(request: Request, env: Env, ctx?: ExecutionContext): Promise<User | null> {
   const authHeader = request.headers.get("Authorization") || "";
   let accessToken = "";
+  let wsTicket = "";
   if (authHeader.startsWith("Bearer ")) {
     accessToken = authHeader.slice(7);
   } else if (
@@ -67,7 +84,38 @@ export async function getCurrentUser(request: Request, env: Env, ctx?: Execution
     new URL(request.url).pathname.endsWith("/ws")
   ) {
     const url = new URL(request.url);
-    accessToken = url.searchParams.get("token") || url.searchParams.get("access_token") || "";
+    wsTicket = url.searchParams.get("ticket") || "";
+  }
+
+  if (wsTicket) {
+    try {
+      const cache = (caches as any).default;
+      const ticketKey = `ws_ticket:${wsTicket}`;
+      const ticketData = await cacheUtils.get<{ userId: string; sessionId: string; profileId: string }>(cache, ticketKey);
+      if (!ticketData?.sessionId || !ticketData?.userId) {
+        return null;
+      }
+      // Single-use ticket: consume immediately
+      await cacheUtils.delete(cache, ticketKey);
+
+      const sessionModel = new SessionModel(env.DB);
+      const session = await sessionModel.getSessionWithUser(ticketData.sessionId);
+      if (!session || session.user_id !== ticketData.userId) {
+        return null;
+      }
+      const now = Math.floor(Date.now() / 1000);
+      if (session.expires_at < now || session.is_paused === 1) {
+        return null;
+      }
+      return {
+        id: session.user_id,
+        username: session.username,
+        role: session.role as "admin" | "user",
+        sessionId: session.id || session.session_id || ticketData.sessionId,
+      };
+    } catch {
+      return null;
+    }
   }
 
   if (!accessToken) {

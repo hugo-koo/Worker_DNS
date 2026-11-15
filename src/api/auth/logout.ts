@@ -5,17 +5,22 @@ import {
 } from "../../lib/auth";
 import { SessionModel } from "../../models/session";
 import { ActivityLogModel } from "../../models/activityLog";
-import { invalidateAuthUserCache } from "../../lib/middleware";
+import { invalidateAuthUserCache, validateCsrf } from "../../lib/middleware";
 
 /**
  * Handle session logout requests
  */
 export async function handleLogoutRequest(request: Request, env: Env): Promise<Response> {
+  if (request.method !== "POST") {
+    return new Response("Method Not Allowed", { status: 405 });
+  }
+  const refreshToken = readRefreshTokenCookie(request.headers.get("Cookie"));
+  if (refreshToken && !validateCsrf(request)) {
+    return new Response("CSRF validation failed", { status: 403 });
+  }
   const clientIp = request.headers.get("CF-Connecting-IP") || "127.0.0.1";
   const userAgent = request.headers.get("User-Agent");
   const activityLog = new ActivityLogModel(env.DB);
-
-  const refreshToken = readRefreshTokenCookie(request.headers.get("Cookie"));
   if (refreshToken) {
     const parsed = parseRefreshTokenString(refreshToken);
     if (parsed) {

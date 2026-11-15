@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { Button, Spinner } from "@blueprintjs/core";
 import { Lock } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { lockSession } from "../services";
+import { lockSession, e2ee } from "../services";
 import type { UserInfo } from "../types/auth";
 
 export interface SessionLockButtonProps {
@@ -39,6 +39,7 @@ export const SessionLockButton: React.FC<SessionLockButtonProps> = ({
     } catch (err) {
       console.warn("Failed to lock session on server", err);
     } finally {
+      e2ee.clearStorage();
       sessionStorage.setItem("obex_session_locked", "true");
       window.dispatchEvent(new Event("session_paused"));
       setLocking(false);

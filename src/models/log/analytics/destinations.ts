@@ -110,7 +110,7 @@ export class LogDestinationAnalytics {
       let queryStr = `
         SELECT key as country_code, MAX(sub_key) as country, SUM(count) as count
         FROM hourly_rollups
-        WHERE profile_id = ? AND metric_type = 'dest' AND hour_timestamp >= ? AND hour_timestamp <= ?
+        WHERE profile_id = ? AND metric_type = 'dest' AND key NOT LIKE 'enc:%' AND hour_timestamp >= ? AND hour_timestamp <= ?
       `;
       const params: (string | number)[] = [profileId, sinceHour, until];
       if (accessPointId) {
@@ -127,7 +127,7 @@ export class LogDestinationAnalytics {
 
     // Case 3: Spans historical rollups and unaggregated logs -> Hybrid UNION ALL query
     const sinceHour = Math.floor(since / 3600) * 3600;
-    let rollupWhere = "profile_id = ? AND metric_type = 'dest' AND hour_timestamp >= ? AND hour_timestamp < ?";
+    let rollupWhere = "profile_id = ? AND metric_type = 'dest' AND key NOT LIKE 'enc:%' AND hour_timestamp >= ? AND hour_timestamp < ?";
     const rollupParams: (string | number)[] = [profileId, sinceHour, cutoff];
     if (accessPointId) {
       rollupWhere += " AND access_point_id = ?";
@@ -267,7 +267,7 @@ export class LogDestinationAnalytics {
       let queryStr = `
         SELECT sub_key as name, SUM(count) as count
         FROM hourly_rollups
-        WHERE profile_id = ? AND metric_type = 'isp' AND hour_timestamp >= ? AND hour_timestamp <= ?
+        WHERE profile_id = ? AND metric_type = 'isp' AND key NOT LIKE 'enc:%' AND hour_timestamp >= ? AND hour_timestamp <= ?
       `;
       const params: (string | number)[] = [profileId, sinceHour, until];
       if (countryCode) {
@@ -292,7 +292,7 @@ export class LogDestinationAnalytics {
 
     // Case 3: Spans historical rollups and unaggregated logs -> Hybrid UNION ALL query
     const sinceHour = Math.floor(since / 3600) * 3600;
-    let rollupWhere = "profile_id = ? AND metric_type = 'isp' AND hour_timestamp >= ? AND hour_timestamp < ?";
+    let rollupWhere = "profile_id = ? AND metric_type = 'isp' AND key NOT LIKE 'enc:%' AND hour_timestamp >= ? AND hour_timestamp < ?";
     const rollupParams: (string | number)[] = [profileId, sinceHour, cutoff];
     if (countryCode) {
       rollupWhere += " AND key = ?";

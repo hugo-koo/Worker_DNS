@@ -18,6 +18,7 @@ jobs:
   publish:
     name: Build and Publish to npm
     runs-on: ubuntu-latest
+    environment: release
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -36,18 +37,22 @@ jobs:
           npm run ui:install
 
       - name: Determine and sync package version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+          GITHUB_REF_FULL: ${{ github.ref }}
+          GITHUB_REF_NAME_VAL: ${{ github.ref_name }}
         run: |
           VERSION=""
 
           # 1. If manually provided via workflow_dispatch input
-          if [ -n "${{ inputs.version }}" ]; then
-            INPUT_VER="${{ inputs.version }}"
+          if [ -n "$INPUT_VERSION" ]; then
+            INPUT_VER="$INPUT_VERSION"
             VERSION="${INPUT_VER#v}"
             echo "Using version from workflow input: $VERSION"
 
           # 2. If triggered by a Git tag push (e.g. refs/tags/v1.0.24)
-          elif [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            TAG_NAME="${{ github.ref_name }}"
+          elif [[ "$GITHUB_REF_FULL" == refs/tags/v* ]]; then
+            TAG_NAME="$GITHUB_REF_NAME_VAL"
             VERSION="${TAG_NAME#v}"
             echo "Using version from tag push: $VERSION"
 
@@ -63,6 +68,10 @@ jobs:
 
           # Apply version if detected
           if [ -n "$VERSION" ]; then
+            if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+              echo "::error::Invalid semver version: $VERSION"
+              exit 1
+            fi
             echo "Syncing package.json version to: $VERSION"
             npm version "$VERSION" --no-git-tag-version --allow-same-version
           else

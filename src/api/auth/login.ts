@@ -21,6 +21,7 @@ import { ActivityLogModel } from "../../models/activityLog";
 import { SystemSettingsModel } from "../../models/systemSettings";
 import { cacheUtils } from "../../utils/cache";
 import { verifyTurnstile } from "./utils";
+import { withTokenLock } from "../../lib/preauth";
 import { generateWebAuthnChallenge, verifyAuthenticationResponse } from "../../lib/webauthn";
 
 /**
@@ -46,8 +47,12 @@ export async function handleLoginRequest(request: Request, env: Env): Promise<Re
       settingsModel.get('turnstile_secret_key'),
       settingsModel.get('turnstile_enabled_login')
     ]);
-    if (enabled === 'true' && secretKey) {
-      if (!await verifyTurnstile(turnstileToken, secretKey, clientIp)) {
+    const effectiveSecret = secretKey || env.TURNSTILE_SECRET_KEY || '';
+    if (enabled === 'true') {
+      if (!effectiveSecret) {
+        return new Response("Turnstile verification is enabled but secret key is not configured", { status: 503 });
+      }
+      if (!await verifyTurnstile(turnstileToken, effectiveSecret, clientIp)) {
         return new Response("Verification failed", { status: 400 });
       }
     }
@@ -135,6 +140,7 @@ export async function handleLoginRequest(request: Request, env: Env): Promise<Re
     const preauthToken = readPreauthCookie(request.headers.get("Cookie"));
     if (!preauthToken) return new Response("Pre-auth session missing or expired", { status: 401 });
 
+    return withTokenLock(`login:${preauthToken}`, async () => {
     const userId = await validatePreauthSession(env, preauthToken);
     if (!userId) return new Response("Session expired, please start over", { status: 401 });
 
@@ -144,8 +150,9 @@ export async function handleLoginRequest(request: Request, env: Env): Promise<Re
       passkeyChallenge?: string | null;
       rpId?: string;
     }>(cache, `preauth_state:${preauthToken}`);
-    if (!preauthState) {
+    if (!preauthState || (preauthState.failedAttempts ?? 0) >= 3) {
       await invalidatePreauthSession(env, preauthToken);
+      await cacheUtils.delete(cache, `preauth_state:${preauthToken}`);
       return new Response("Session expired, please start over", { status: 401 });
     }
     const { nonce } = preauthState;
@@ -169,7 +176,8 @@ export async function handleLoginRequest(request: Request, env: Env): Promise<Re
     // In contrast, TOTP codes and emergency recovery keys are strictly second factors and must never bypass
     // password verification unless the user explicitly configured passwordless mode (user.totp_skip_password === 1).
     const isPasswordlessPasskey = hasPasskeys && !!passkeyAssertion;
-    const skipPasswordAllowed = !!user.totp_skip_password || isPasswordlessPasskey;
+    // Never allow skipping password verification unless MFA is actually configured and active
+    const skipPasswordAllowed = requiresMfa && (!!user.totp_skip_password || isPasswordlessPasskey);
 
     // 验证密码 (若用户未启用免密且未提供有效 Passkey 凭据，强制校验主密码)
     if (!skipPasswordAllowed) {
@@ -237,7 +245,8 @@ export async function handleLoginRequest(request: Request, env: Env): Promise<Re
             expectedChallenge: preauthState.passkeyChallenge,
             expectedOrigin: `${url.protocol}//${url.host}`,
             expectedRpId: preauthState.rpId || url.hostname,
-            previousSignCount: passkey.sign_count
+            previousSignCount: passkey.sign_count,
+            requireUserVerification: skipPasswordAllowed && !password
           });
 
           await passkeyModel.updateUsage(passkey.id, signCount);
@@ -349,6 +358,7 @@ export async function handleLoginRequest(request: Request, env: Env): Promise<Re
     headers.append("Set-Cookie", clearPreauthCookie());
     
     return new Response(JSON.stringify({ success: true, accessToken, needsMigration, rotatedRecoveryKey }), { headers });
+    });
   }
 
   return new Response("Not Found", { status: 404 });

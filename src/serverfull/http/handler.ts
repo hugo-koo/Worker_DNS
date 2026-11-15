@@ -26,17 +26,42 @@ export function createHttpRequestHandler(
   port: number,
   httpsRedirect?: { enabled: boolean; httpsPort: number }
 ): (req: http.IncomingMessage, res: http.ServerResponse) => Promise<void> {
+  const isValidHostHeader = (raw: string): boolean => {
+    const trimmed = raw.trim();
+    if (!trimmed || trimmed.length > 255) return false;
+    return /^(?:[a-zA-Z0-9.-]+|\[[0-9a-fA-F:]+\])(?::\d{1,5})?$/.test(trimmed);
+  };
+
+  const isTrustedProxySocket = (remoteAddr: string | undefined): boolean => {
+    if (!remoteAddr) return false;
+    const ip = remoteAddr.startsWith('::ffff:') ? remoteAddr.slice(7) : remoteAddr;
+    if (ip === '127.0.0.1' || ip === '::1') return true;
+    const trustedRaw = env.TRUSTED_PROXIES;
+    if (!trustedRaw) return false;
+    return trustedRaw.split(',').map((s: string) => s.trim()).filter(Boolean).includes(ip);
+  };
+
+  const MAX_DOH_BODY_BYTES = 64 * 1024;
+  const MAX_API_BODY_BYTES = 2 * 1024 * 1024;
+
   return async (req: http.IncomingMessage, res: http.ServerResponse): Promise<void> => {
     try {
-      const forwardedProto = (req.headers['x-forwarded-proto'] as string | undefined)?.toLowerCase();
-      const proto = forwardedProto || defaultProto;
+      const fromTrustedProxy = isTrustedProxySocket(req.socket.remoteAddress);
+      const forwardedProto = fromTrustedProxy
+        ? (req.headers['x-forwarded-proto'] as string | undefined)?.split(',')[0]?.trim().toLowerCase()
+        : undefined;
+      const proto = (forwardedProto === 'http' || forwardedProto === 'https') ? forwardedProto : defaultProto;
+
+      const fallbackHost = `${host.includes(':') ? `[${host}]` : host}:${port}`;
+      const rawHostHeader = (req.headers[':authority'] as string) || req.headers.host || '';
+      const safeHostHeader = isValidHostHeader(rawHostHeader) ? rawHostHeader.trim() : fallbackHost;
 
       // When TLS certificates are configured and HTTPS is active, automatically redirect plain HTTP requests to HTTPS
       if (defaultProto === 'http' && httpsRedirect?.enabled && forwardedProto !== 'https') {
-        const hostHeader = (req.headers.host || `${host}:${port}`).trim();
-        const hostname = hostHeader.replace(/:\d+$/, '');
+        const hostname = safeHostHeader.replace(/:\d+$/, '');
         const targetPort = (httpsRedirect.httpsPort === 443 || httpsRedirect.httpsPort === 0) ? '' : `:${httpsRedirect.httpsPort}`;
-        const targetUrl = `https://${hostname}${targetPort}${req.url || '/'}`;
+        const safePath = (req.url || '/').startsWith('/') ? (req.url || '/') : '/';
+        const targetUrl = `https://${hostname}${targetPort}${safePath}`;
 
         res.statusCode = (req.method === 'GET' || req.method === 'HEAD') ? 301 : 307;
         res.setHeader('Location', targetUrl);
@@ -46,8 +71,7 @@ export function createHttpRequestHandler(
         return;
       }
 
-      const hostHeader = (req.headers[':authority'] as string) || req.headers.host || `${host}:${port}`;
-      const fullUrl = new URL(req.url || '/', `${proto}://${hostHeader}`);
+      const fullUrl = new URL(req.url || '/', `${proto}://${safeHostHeader}`);
 
       const headers = new Headers();
       for (const [k, v] of Object.entries(req.headers)) {
@@ -77,9 +101,29 @@ export function createHttpRequestHandler(
 
       let body: any = null;
       if (req.method !== 'GET' && req.method !== 'HEAD') {
+        const isDnsQuery = fullUrl.pathname === '/dns-query' || fullUrl.pathname.endsWith('/dns-query');
+        const maxBodyBytes = isDnsQuery ? MAX_DOH_BODY_BYTES : MAX_API_BODY_BYTES;
+        const declaredLength = Number(req.headers['content-length']);
+        if (Number.isFinite(declaredLength) && declaredLength > maxBodyBytes) {
+          res.statusCode = 413;
+          res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+          res.end('Payload Too Large');
+          req.destroy();
+          return;
+        }
         const chunks: Buffer[] = [];
+        let totalBytes = 0;
         for await (const chunk of req) {
-          chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
+          const buf = typeof chunk === 'string' ? Buffer.from(chunk) : chunk;
+          totalBytes += buf.length;
+          if (totalBytes > maxBodyBytes) {
+            res.statusCode = 413;
+            res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+            res.end('Payload Too Large');
+            req.destroy();
+            return;
+          }
+          chunks.push(buf);
         }
         body = Buffer.concat(chunks);
       }

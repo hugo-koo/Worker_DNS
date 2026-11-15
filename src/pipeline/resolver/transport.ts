@@ -2,6 +2,7 @@ import { connectUniversal } from "../../utils/sockets";
 import { parseDnsStamp } from "../../utils/dnsStamp";
 import { http2SessionPool, isHttp2Supported } from "../../utils/http2Client";
 import { getAppUserAgent } from "../../constants/version";
+import { isSafeUrlWithDnsCheck } from "../../utils/validator";
 import { UpstreamHttpError, UpstreamTransportResult } from "./types";
 
 /**
@@ -275,6 +276,9 @@ export async function fetchFromUpstream(
   queryRaw: Uint8Array
 ): Promise<UpstreamTransportResult> {
   const { effectiveUrl, diagMethod, diagTarget } = endpoint;
+  if (!(await isSafeUrlWithDnsCheck(effectiveUrl))) {
+    throw new Error("Blocked unsafe upstream URL");
+  }
   const startFetch = Date.now();
   let answer: Uint8Array;
 
@@ -309,16 +313,7 @@ export async function fetchFromUpstream(
           };
         }
 
-        let snippet = "";
-        try {
-          snippet = new TextDecoder()
-            .decode(h2Res.answer)
-            .replace(/<[^>]*>?/gm, " ")
-            .replace(/\s+/g, " ")
-            .trim()
-            .slice(0, 300);
-        } catch {}
-        throw new UpstreamHttpError(h2Res.status, "HTTP/2 Error", snippet);
+        throw new UpstreamHttpError(h2Res.status, "HTTP/2 Error", "");
       } catch (h2Err) {
         if (h2Err instanceof UpstreamHttpError) {
           throw h2Err;
@@ -332,6 +327,7 @@ export async function fetchFromUpstream(
     // 2. Standard fetch (Cloudflare Workers runtime with edge HTTP/2 negotiation)
     const response = await fetch(effectiveUrl, {
       method: "POST",
+      redirect: "manual",
       headers: {
         Accept: "application/dns-message",
         "Content-Type": "application/dns-message",
@@ -342,14 +338,8 @@ export async function fetchFromUpstream(
     });
 
     if (!response.ok) {
-      let snippet = "";
-      try {
-        const rawBody = await response.text();
-        // Extract plain text snippet (strip HTML tags and extra whitespace), retain max 300 chars
-        snippet = rawBody.replace(/<[^>]*>?/gm, " ").replace(/\s+/g, " ").trim().slice(0, 300);
-      } catch {}
       const cfRay = response.headers.get("cf-ray") || undefined;
-      throw new UpstreamHttpError(response.status, response.statusText, snippet, cfRay);
+      throw new UpstreamHttpError(response.status, response.statusText, "", cfRay);
     }
 
     const answerBuffer = await response.arrayBuffer();

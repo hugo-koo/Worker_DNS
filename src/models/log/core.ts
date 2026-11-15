@@ -231,11 +231,11 @@ export class LogCoreModel {
    * @returns Promise resolving to true if delete succeeded.
    */
   async deleteByOwner(ownerId: string): Promise<boolean> {
-    const result = await this.db
-      .prepare("DELETE FROM logs WHERE profile_id IN (SELECT id FROM profiles WHERE owner_id = ?)")
-      .bind(ownerId)
-      .run();
-    return result.success;
+    const batchResults = await this.db.batch([
+      this.db.prepare("DELETE FROM logs WHERE profile_id IN (SELECT id FROM profiles WHERE owner_id = ?)").bind(ownerId),
+      this.db.prepare("DELETE FROM hourly_rollups WHERE profile_id IN (SELECT id FROM profiles WHERE owner_id = ?)").bind(ownerId)
+    ]);
+    return batchResults.every(r => r.success);
   }
 
   /**
@@ -278,6 +278,17 @@ export class LogCoreModel {
         break;
       }
     }
+
+    // Also purge expired hourly_rollups matching the same retention threshold
+    const METRIC_TYPES = ["action", "client", "dest", "domain", "isp"] as const;
+    await this.db.batch(
+      METRIC_TYPES.map((metric) =>
+        this.db
+          .prepare("DELETE FROM hourly_rollups WHERE profile_id = ? AND metric_type = ? AND hour_timestamp < ?")
+          .bind(profileId, metric, olderThanTimestamp)
+      )
+    );
+
     return totalDeleted;
   }
 }

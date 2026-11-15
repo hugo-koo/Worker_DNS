@@ -163,19 +163,24 @@ export function ensurePersistentDirs(autoSeedConfig: boolean = true): { dataDir:
 
   try {
     if (!fs.existsSync(dataDir)) {
-      fs.mkdirSync(dataDir, { recursive: true, mode: 0o755 });
+      fs.mkdirSync(dataDir, { recursive: true, mode: 0o700 });
     }
+    fs.chmodSync(dataDir, 0o700);
   } catch {}
 
   try {
     if (!fs.existsSync(configDir)) {
-      fs.mkdirSync(configDir, { recursive: true, mode: 0o755 });
+      fs.mkdirSync(configDir, { recursive: true, mode: 0o700 });
     }
+    fs.chmodSync(configDir, 0o700);
   } catch {}
 
   if (autoSeedConfig) {
     try {
       writeDefaultConfigFile(configFile, false);
+      if (fs.existsSync(configFile)) {
+        fs.chmodSync(configFile, 0o600);
+      }
     } catch {}
   }
 

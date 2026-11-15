@@ -300,6 +300,11 @@ export function runMigrations(db: DatabaseSync, migrationsDir: string): void {
     const sql = fs.readFileSync(filePath, 'utf-8');
 
     console.log(`[Migrations] Applying ${file}...`);
+    const needsFkOff = /PRAGMA\s+foreign_keys\s*=\s*OFF/i.test(sql);
+    if (needsFkOff) {
+      // SQLite ignores PRAGMA foreign_keys changes inside an active transaction
+      db.exec('PRAGMA foreign_keys = OFF;');
+    }
     db.exec('BEGIN IMMEDIATE');
     try {
       db.exec(sql);
@@ -311,6 +316,10 @@ export function runMigrations(db: DatabaseSync, migrationsDir: string): void {
       db.exec('ROLLBACK');
       console.error(`[Migrations] Failed to apply ${file}:`, err.message || err);
       throw err;
+    } finally {
+      if (needsFkOff) {
+        db.exec('PRAGMA foreign_keys = ON;');
+      }
     }
   }
 

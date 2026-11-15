@@ -121,14 +121,18 @@ export const pipelineConfig = {
       const adguardModel = new AdguardRulesModel(env.DB);
 
       // 并发从 D1 读取配置、规则、布隆过滤器及 AdGuard 扩展规则
+      let bloomLoadFailed = false;
+      let adguardLoadFailed = false;
       const [profile, rules, buffer, adguardPayload] = await Promise.all([
         profileModel.getById(profileId),
         ruleModel.getRules(profileId),
         bloomModel.getProfileBloom(profileId).catch((e) => {
+          bloomLoadFailed = true;
           console.error("[Config] D1 Bloom loading failed:", e);
           return null;
         }),
         adguardModel.getProfileRules(profileId).catch((e) => {
+          adguardLoadFailed = true;
           console.error("[Config] D1 AdGuard rules loading failed:", e);
           return null;
         })
@@ -174,19 +178,22 @@ export const pipelineConfig = {
 
       const config = { settings, rules, adguard: adguardPayload, hasBloom: Boolean(buffer) };
       if (bloom) bloomMemoryMap.set(profileId, { bloom, ts: Date.now() });
-      
-      configCache.set(profileId, { ...config, timestamp: Date.now() });
-      if (cache) {
-        ctx.waitUntil(cacheUtils.set(cache, profileCacheKey, config, 86400, [`profile-${profileId}`]));
-        if (buffer) {
-          const bloomRes = new Response(buffer, {
-            headers: {
-              "Content-Type": "application/octet-stream",
-              "Cache-Control": "public, max-age=86400",
-              "Cache-Tag": `bloom-${profileId}`
-            }
-          });
-          ctx.waitUntil(cache.put(bloomInternalUrl, bloomRes));
+
+      // Never poison L1/L2 caches with partial config if Bloom or AdGuard D1 reads failed
+      if (!bloomLoadFailed && !adguardLoadFailed) {
+        configCache.set(profileId, { ...config, timestamp: Date.now() });
+        if (cache) {
+          ctx.waitUntil(cacheUtils.set(cache, profileCacheKey, config, 86400, [`profile-${profileId}`]));
+          if (buffer) {
+            const bloomRes = new Response(buffer, {
+              headers: {
+                "Content-Type": "application/octet-stream",
+                "Cache-Control": "public, max-age=86400",
+                "Cache-Tag": `bloom-${profileId}`
+              }
+            });
+            ctx.waitUntil(cache.put(bloomInternalUrl, bloomRes));
+          }
         }
       }
       

@@ -91,9 +91,8 @@ export class SystemSettingsModel {
         await this.ensureTable();
         return null;
       }
-      console.warn(`[SystemSettingsModel] Failed to read key "${key}" from DB (using in-memory fallback):`, errorMsg);
-      // Cache null for 60s to prevent spamming blocked/failing DB on every DNS request
-      MEMORY_CACHE.set(key, { value: null, expiresAt: Date.now() + 60_000 });
+      console.warn(`[SystemSettingsModel] Failed to read key "${key}" from DB:`, errorMsg);
+      // Do NOT cache null on transient DB errors; fail closed for security-sensitive settings.
       return null;
     }
   }

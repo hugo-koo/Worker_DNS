@@ -27,7 +27,7 @@ export const pipeline = {
       return { answer, ttl: 60, action: "PASS", reason: "Internal Verification", latency: Date.now() - context.startTime, timings: { total: Date.now() - context.startTime } };
     }
 
-    const cached = dnsCache.get(`${context.profileId}:${query.name}:${query.type}`);
+    const cached = dnsCache.get(`${context.profileId}:${query.name.toLowerCase()}:${query.type}`);
     if (cached && Date.now() < cached.expiresAt && cached.answer instanceof Uint8Array) {
       // 这里的 cached.answer 已经是完整的 DNS 报文
       // 关键：DNS ID 必须匹配原始查询。ID 位于报文的前 2 字节。

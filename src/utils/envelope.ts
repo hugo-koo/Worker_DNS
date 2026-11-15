@@ -66,7 +66,7 @@ function fromBase64(base64: string): Uint8Array {
   return bytes;
 }
 
-async function importKek(secret: string): Promise<CryptoKey> {
+async function importKekLegacySha256(secret: string): Promise<CryptoKey> {
   const encoder = new TextEncoder();
   const secretData = encoder.encode(secret.trim());
   const hashBuffer = await crypto.subtle.digest("SHA-256", secretData);
@@ -77,6 +77,36 @@ async function importKek(secret: string): Promise<CryptoKey> {
     false,
     ["encrypt", "decrypt"]
   );
+}
+
+async function importKekHkdf(secret: string, version: string): Promise<CryptoKey> {
+  const encoder = new TextEncoder();
+  const ikm = await crypto.subtle.importKey(
+    "raw",
+    encoder.encode(secret.trim()),
+    { name: "HKDF" },
+    false,
+    ["deriveKey"]
+  );
+  return await crypto.subtle.deriveKey(
+    {
+      name: "HKDF",
+      hash: "SHA-256",
+      salt: encoder.encode("obex-envelope-kek-salt-v1"),
+      info: encoder.encode(`obex-envelope-kek:${version}`),
+    },
+    ikm,
+    { name: "AES-GCM", length: 256 },
+    false,
+    ["encrypt", "decrypt"]
+  );
+}
+
+async function importKekForRecord(secret: string, version: string, kdf?: string): Promise<CryptoKey> {
+  if (kdf === "hkdf-v1") {
+    return importKekHkdf(secret, version);
+  }
+  return importKekLegacySha256(secret);
 }
 
 async function importDek(dekBytes: Uint8Array): Promise<CryptoKey> {
@@ -98,6 +128,8 @@ export interface EnvelopeEncryptedDek {
   ciphertext: string;
   iv: string;
   kek_version: string;
+  kdf?: "hkdf-v1";
+  aad_bound?: boolean;
 }
 
 /**
@@ -106,7 +138,8 @@ export interface EnvelopeEncryptedDek {
  */
 export async function encryptEnvelope(
   plainText: string,
-  env: any
+  env: any,
+  aad?: string
 ): Promise<{ dataEncrypted: string; dekEncrypted: string } | null> {
   const activeVersion = getActiveKekVersion(env);
   if (!activeVersion) {
@@ -119,7 +152,9 @@ export async function encryptEnvelope(
     throw new Error(`KEK version ${activeVersion} is missing or invalid in environment variables`);
   }
 
-  const kekKey = await importKek(kekSecret);
+  const kekKey = await importKekHkdf(kekSecret, activeVersion);
+  const encoder = new TextEncoder();
+  const additionalData = aad ? encoder.encode(aad) : undefined;
 
   // 1. Generate plain Data Encryption Key (DEK) - 256 bits (32 bytes)
   const dekBytes = new Uint8Array(32);
@@ -129,10 +164,9 @@ export async function encryptEnvelope(
   // 2. Encrypt plaintext data using the DEK via AES-256-GCM
   const dataIv = new Uint8Array(12);
   crypto.getRandomValues(dataIv);
-  const encoder = new TextEncoder();
   const dataBuffer = encoder.encode(plainText);
   const encryptedDataBuffer = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv: dataIv },
+    additionalData ? { name: "AES-GCM", iv: dataIv, additionalData } : { name: "AES-GCM", iv: dataIv },
     dekKey,
     dataBuffer
   );
@@ -146,7 +180,7 @@ export async function encryptEnvelope(
   const dekIv = new Uint8Array(12);
   crypto.getRandomValues(dekIv);
   const encryptedDekBuffer = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv: dekIv },
+    additionalData ? { name: "AES-GCM", iv: dekIv, additionalData } : { name: "AES-GCM", iv: dekIv },
     kekKey,
     dekBytes
   );
@@ -154,7 +188,9 @@ export async function encryptEnvelope(
   const dekEncrypted: EnvelopeEncryptedDek = {
     ciphertext: toBase64(new Uint8Array(encryptedDekBuffer)),
     iv: toBase64(dekIv),
-    kek_version: activeVersion
+    kek_version: activeVersion,
+    kdf: "hkdf-v1",
+    ...(aad ? { aad_bound: true } : {})
   };
 
   return {
@@ -165,13 +201,12 @@ export async function encryptEnvelope(
 
 /**
  * Decrypts envelope encrypted data using the stored DEK and KEK.
- * If decryption fails using the specified KEK version (e.g. missing KEK or rotated environment),
- * it falls back to trying KEK "v0" (derived from JWT_SECRET) to preserve backward compatibility for legacy deployments.
  */
 export async function decryptEnvelope(
   dataEncryptedStr: string,
   dekEncryptedStr: string,
-  env: any
+  env: any,
+  aad?: string
 ): Promise<string> {
   let dataEncrypted: EnvelopeEncryptedData;
   let dekEncrypted: EnvelopeEncryptedDek;
@@ -182,64 +217,52 @@ export async function decryptEnvelope(
     throw new Error(`Failed to parse envelope payload: ${parseErr instanceof Error ? parseErr.message : String(parseErr)}`);
   }
 
-  const attemptDecrypt = async (kekVersion: string): Promise<string> => {
-    const kekSecret = getKekSecret(kekVersion, env);
-    if (!kekSecret || typeof kekSecret !== "string" || kekSecret.trim() === "") {
-      throw new Error(`Required KEK version ${kekVersion} is missing or invalid in environment variables`);
-    }
-
-    const kekKey = await importKek(kekSecret);
-
-    // 1. Decrypt the DEK using the KEK
-    const encryptedDekBytes = fromBase64(dekEncrypted.ciphertext);
-    const dekIv = fromBase64(dekEncrypted.iv);
-    const decryptedDekBuffer = await crypto.subtle.decrypt(
-      { name: "AES-GCM", iv: dekIv },
-      kekKey,
-      encryptedDekBytes
-    );
-
-    const dekBytes = new Uint8Array(decryptedDekBuffer);
-    const dekKey = await importDek(dekBytes);
-
-    // 2. Decrypt the data using the decrypted DEK
-    const encryptedDataBytes = fromBase64(dataEncrypted.ciphertext);
-    const dataIv = fromBase64(dataEncrypted.iv);
-    const decryptedDataBuffer = await crypto.subtle.decrypt(
-      { name: "AES-GCM", iv: dataIv },
-      dekKey,
-      encryptedDataBytes
-    );
-
-    const decoder = new TextDecoder();
-    return decoder.decode(decryptedDataBuffer);
-  };
-
-  try {
-    return await attemptDecrypt(dekEncrypted.kek_version);
-  } catch (primaryErr) {
-    // If decryption failed or KEK was missing, and the failed version wasn't already "v0",
-    // fallback to "v0" (JWT_SECRET) for legacy compatibility.
-    if (dekEncrypted.kek_version !== "v0" && env?.JWT_SECRET && typeof env.JWT_SECRET === "string" && env.JWT_SECRET.trim() !== "") {
-      try {
-        return await attemptDecrypt("v0");
-      } catch (fallbackErr) {
-        // Both primary and fallback failed, throw primary error
-        throw primaryErr;
-      }
-    }
-    throw primaryErr;
+  if (dekEncrypted.aad_bound && !aad) {
+    throw new Error("Missing required AAD context for bound envelope payload");
   }
+  const additionalData = dekEncrypted.aad_bound && aad ? new TextEncoder().encode(aad) : undefined;
+
+  const kekSecret = getKekSecret(dekEncrypted.kek_version, env);
+  if (!kekSecret || typeof kekSecret !== "string" || kekSecret.trim() === "") {
+    throw new Error(`Required KEK version ${dekEncrypted.kek_version} is missing or invalid in environment variables`);
+  }
+
+  const kekKey = await importKekForRecord(kekSecret, dekEncrypted.kek_version, dekEncrypted.kdf);
+
+  // 1. Decrypt the DEK using the KEK
+  const encryptedDekBytes = fromBase64(dekEncrypted.ciphertext);
+  const dekIv = fromBase64(dekEncrypted.iv);
+  const decryptedDekBuffer = await crypto.subtle.decrypt(
+    additionalData ? { name: "AES-GCM", iv: dekIv, additionalData } : { name: "AES-GCM", iv: dekIv },
+    kekKey,
+    encryptedDekBytes
+  );
+
+  const dekBytes = new Uint8Array(decryptedDekBuffer);
+  const dekKey = await importDek(dekBytes);
+
+  // 2. Decrypt the data using the decrypted DEK
+  const encryptedDataBytes = fromBase64(dataEncrypted.ciphertext);
+  const dataIv = fromBase64(dataEncrypted.iv);
+  const decryptedDataBuffer = await crypto.subtle.decrypt(
+    additionalData ? { name: "AES-GCM", iv: dataIv, additionalData } : { name: "AES-GCM", iv: dataIv },
+    dekKey,
+    encryptedDataBytes
+  );
+
+  const decoder = new TextDecoder();
+  return decoder.decode(decryptedDataBuffer);
 }
 
 /**
- * Performs on-the-fly key rotation of the DEK if a newer version of KEK is available.
- * Rotation logic is strictly sequential: N -> N+1.
+ * Performs on-the-fly key rotation of the DEK to the highest active KEK version
+ * (or upgrades legacy SHA-256 KEK wrapping to HKDF-v1).
  * @returns The new encrypted DEK string (JSON serialized), or null if no rotation occurred.
  */
 export async function rotateEnvelopeDek(
   dekEncryptedStr: string,
-  env: any
+  env: any,
+  aad?: string
 ): Promise<string | null> {
   if (!env) return null;
 
@@ -250,18 +273,23 @@ export async function rotateEnvelopeDek(
     return null;
   }
 
-  const currentKekVersion = dekEncrypted.kek_version; // e.g. "v0" or "v1"
-  const currentVersionNumber = parseInt(currentKekVersion.replace(/^v/, ""), 10);
-  if (isNaN(currentVersionNumber)) {
+  const activeKekVersion = getActiveKekVersion(env);
+  if (!activeKekVersion) {
     return null;
   }
 
-  const nextVersionNumber = currentVersionNumber + 1;
-  const nextKekVersion = `v${nextVersionNumber}`;
-  const nextKekSecret = getKekSecret(nextKekVersion, env);
+  const currentKekVersion = dekEncrypted.kek_version;
+  if (currentKekVersion === activeKekVersion && dekEncrypted.kdf === "hkdf-v1") {
+    return null;
+  }
 
+  if (dekEncrypted.aad_bound && !aad) {
+    return null;
+  }
+  const additionalData = dekEncrypted.aad_bound && aad ? new TextEncoder().encode(aad) : undefined;
+
+  const nextKekSecret = getKekSecret(activeKekVersion, env);
   if (!nextKekSecret || typeof nextKekSecret !== "string" || nextKekSecret.trim() === "") {
-    // Next version not configured/available yet
     return null;
   }
 
@@ -271,23 +299,23 @@ export async function rotateEnvelopeDek(
     throw new Error(`Current KEK version ${currentKekVersion} required for rotation is missing or invalid in environment`);
   }
 
-  const currentKekKey = await importKek(currentKekSecret);
+  const currentKekKey = await importKekForRecord(currentKekSecret, currentKekVersion, dekEncrypted.kdf);
   const encryptedDekBytes = fromBase64(dekEncrypted.ciphertext);
   const dekIv = fromBase64(dekEncrypted.iv);
   const decryptedDekBuffer = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv: dekIv },
+    additionalData ? { name: "AES-GCM", iv: dekIv, additionalData } : { name: "AES-GCM", iv: dekIv },
     currentKekKey,
     encryptedDekBytes
   );
 
   const dekBytes = new Uint8Array(decryptedDekBuffer);
 
-  // 2. Encrypt the DEK with the next KEK (KEK_v(N+1))
-  const nextKekKey = await importKek(nextKekSecret);
+  // 2. Encrypt the DEK with the active KEK using HKDF-v1
+  const nextKekKey = await importKekHkdf(nextKekSecret, activeKekVersion);
   const newDekIv = new Uint8Array(12);
   crypto.getRandomValues(newDekIv);
   const newEncryptedDekBuffer = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv: newDekIv },
+    additionalData ? { name: "AES-GCM", iv: newDekIv, additionalData } : { name: "AES-GCM", iv: newDekIv },
     nextKekKey,
     dekBytes
   );
@@ -295,7 +323,9 @@ export async function rotateEnvelopeDek(
   const updatedDekEncrypted: EnvelopeEncryptedDek = {
     ciphertext: toBase64(new Uint8Array(newEncryptedDekBuffer)),
     iv: toBase64(newDekIv),
-    kek_version: nextKekVersion
+    kek_version: activeKekVersion,
+    kdf: "hkdf-v1",
+    ...(dekEncrypted.aad_bound ? { aad_bound: true } : {})
   };
 
   return JSON.stringify(updatedDekEncrypted);

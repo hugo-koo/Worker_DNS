@@ -92,6 +92,7 @@ export function useLoginAuth({
       }
 
       const data = await login(body);
+      e2ee.clearStorage();
       if (data.accessToken) {
         setAccessToken(data.accessToken);
       }

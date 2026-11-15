@@ -25,7 +25,8 @@ export async function verifyAuthenticationResponse(
     expectedChallenge,
     expectedOrigin,
     expectedRpId,
-    previousSignCount = 0
+    previousSignCount = 0,
+    requireUserVerification = false
   } = options;
 
   // 1. Verify clientDataJSON
@@ -84,8 +85,13 @@ export async function verifyAuthenticationResponse(
     throw new Error("User Presence flag (UP) was not set by authenticator");
   }
 
-  // Monotonic sign count check (detect cloned authenticators)
-  if (signCount > 0 && previousSignCount > 0 && signCount <= previousSignCount) {
+  // User Verified flag when passwordless / UV-required authentication is enforced
+  if (requireUserVerification && !(flags & 0x04)) {
+    throw new Error("User Verification flag (UV) was not set by authenticator");
+  }
+
+  // Monotonic sign count check (detect cloned authenticators, including zeroed counters when previousSignCount > 0)
+  if (previousSignCount > 0 && signCount <= previousSignCount) {
     throw new Error(
       "Authenticator sign count is not strictly monotonic. Possible cloned authenticator detected."
     );

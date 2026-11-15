@@ -70,7 +70,7 @@ export class LogClientAnalytics {
       let queryStr = `
         SELECT key as client_ip, NULLIF(sub_key, '') as geo_country, SUM(count) as count
         FROM hourly_rollups
-        WHERE profile_id = ? AND metric_type = 'client' AND hour_timestamp >= ? AND hour_timestamp <= ?
+        WHERE profile_id = ? AND metric_type = 'client' AND key NOT LIKE 'enc:%' AND hour_timestamp >= ? AND hour_timestamp <= ?
       `;
       const params: (string | number)[] = [profileId, sinceHour, until];
       if (accessPointId) {
@@ -87,7 +87,7 @@ export class LogClientAnalytics {
 
     // Case 3: Spans historical rollups and unaggregated logs -> Hybrid UNION ALL query
     const sinceHour = Math.floor(since / 3600) * 3600;
-    let rollupWhere = "profile_id = ? AND metric_type = 'client' AND hour_timestamp >= ? AND hour_timestamp < ?";
+    let rollupWhere = "profile_id = ? AND metric_type = 'client' AND key NOT LIKE 'enc:%' AND hour_timestamp >= ? AND hour_timestamp < ?";
     const rollupParams: (string | number)[] = [profileId, sinceHour, cutoff];
     if (accessPointId) {
       rollupWhere += " AND access_point_id = ?";

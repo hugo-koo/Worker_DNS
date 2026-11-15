@@ -57,7 +57,7 @@ export async function getProfileLogPublicKey(
     return key;
   } catch (err) {
     console.error(`[E2EE] Failed to fetch log public key for profile ${profileId}:`, err);
-    return null;
+    throw err;
   }
 }
 
@@ -174,38 +174,96 @@ export async function flushLogBatch(env: Env, ctx?: ExecutionContext): Promise<v
   const logModel = new LogModel(env.DB);
   const statements: D1PreparedStatement[] = [];
 
-  // Generate atomic rollup UPSERT statements from unencrypted in-memory logs BEFORE sensitive data encryption
-  const rollupStatements = logModel.aggregation.createRollupUpsertStatements(logsToFlush);
-  if (rollupStatements.length > 0) {
-    statements.push(...rollupStatements);
-  }
-
-  // Group logs by profile to batch E2EE public key lookup
+  // Group logs by profile to batch E2EE public key lookup BEFORE rollup/log persistence
   const profileIds = Array.from(new Set(logsToFlush.map((l) => l.profile_id)));
   const keyMap = new Map<string, ProfileLogPublicKey | null>();
   const dekMap = new Map<string, ActiveDek | null>();
+  const encryptedProfiles = new Set<string>();
+  const failedKeyProfiles = new Set<string>();
 
   await Promise.all(
     profileIds.map(async (pid) => {
-      const pubKey = await getProfileLogPublicKey(env.DB, pid);
-      if (pubKey) {
+      try {
+        const pubKey = await getProfileLogPublicKey(env.DB, pid);
         keyMap.set(pid, pubKey);
-        if ("pqc_pk" in pubKey) {
-          // Directly ensure an active, unexpired DEK is provisioned.
-          // ensureActiveDek checks in-memory expiration (existing.expiresAt > now)
-          // and rotates only when the key has expired, incurring zero D1 I/O while valid.
-          const activeDek = await ensureActiveDek(env.DB, pid, pubKey.pqc_pk);
-          if (activeDek) {
-            dekMap.set(pid, activeDek);
+        if (pubKey) {
+          encryptedProfiles.add(pid);
+          if ("pqc_pk" in pubKey) {
+            // Directly ensure an active, unexpired DEK is provisioned.
+            // ensureActiveDek checks in-memory expiration (existing.expiresAt > now)
+            // and rotates only when the key has expired, incurring zero D1 I/O while valid.
+            const activeDek = await ensureActiveDek(env.DB, pid, pubKey.pqc_pk);
+            if (activeDek) {
+              dekMap.set(pid, activeDek);
+            } else {
+              failedKeyProfiles.add(pid);
+            }
           }
         }
+      } catch (keyErr) {
+        console.error(`[LogBatcher] E2EE key/DEK resolution failed for profile ${pid}; failing closed:`, keyErr);
+        failedKeyProfiles.add(pid);
       }
     })
   );
 
+  // Generate atomic rollup UPSERT statements, encrypting sensitive metrics for E2EE profiles
+  // and omitting them if key lookup/encryption fails (fail closed).
+  const rollupStatements = await logModel.aggregation.createRollupUpsertStatements(logsToFlush, {
+    encryptedProfiles,
+    redactedProfiles: failedKeyProfiles,
+    encryptRollup: async (pid, payload) => {
+      const pubKey = keyMap.get(pid);
+      if (!pubKey) return null;
+      const sensitiveRollup = {
+        domain: payload.key,
+        client_ip: payload.subKey,
+        reason: payload.metricType,
+      };
+      if ("pqc_pk" in pubKey) {
+        const activeDek = dekMap.get(pid);
+        if (!activeDek) return null;
+        const enc = await encryptSensitiveLogDataWithDek(activeDek.dek, sensitiveRollup);
+        const parsed = JSON.parse(enc) as { iv: string; ciphertext: string };
+        return `enc:v2:${JSON.stringify({ k: activeDek.kemKeyId, ...parsed })}`;
+      }
+      if ("kty" in pubKey) {
+        const enc = await encryptSensitiveLogData(pubKey, sensitiveRollup);
+        return `enc:v1:${enc}`;
+      }
+      return null;
+    },
+  });
+  if (rollupStatements.length > 0) {
+    statements.push(...rollupStatements);
+  }
+
+  const redactSensitiveLogFields = (target: ResolutionLog, redactedDomain: string): void => {
+    target.domain = redactedDomain;
+    target.client_ip = "";
+    target.geo_country = "";
+    target.answer = undefined;
+    target.dest_geoip = undefined;
+    target.dest_country_code = null;
+    target.dest_country = null;
+    target.dest_isp = null;
+    target.ecs = undefined;
+    target.upstream = undefined;
+    target.reason = undefined;
+  };
+
   for (const log of logsToFlush) {
+    if (failedKeyProfiles.has(log.profile_id)) {
+      log.encrypt_version = 0;
+      log.kem_key_id = null;
+      redactSensitiveLogFields(log, "[Encrypted]");
+      statements.push(logModel.createInsertStatement(log));
+      continue;
+    }
+
     const pubKey = keyMap.get(log.profile_id);
     if (pubKey) {
+      let encryptedOk = false;
       try {
         const sensitiveData = {
           domain: log.domain,
@@ -230,6 +288,7 @@ export async function flushLogBatch(env: Env, ctx?: ExecutionContext): Promise<v
             log.encrypt_version = 2;
             log.kem_key_id = activeDek.kemKeyId;
             log.encrypted_payload = encrypted;
+            encryptedOk = true;
           }
         } else if ("kty" in pubKey) {
           // Legacy P-256 E2EE (ECDH JWK)
@@ -237,23 +296,19 @@ export async function flushLogBatch(env: Env, ctx?: ExecutionContext): Promise<v
           log.encrypt_version = 1;
           log.kem_key_id = null;
           log.encrypted_payload = encrypted;
-        }
-
-        if (log.encrypt_version && log.encrypt_version > 0) {
-          log.domain = "";
-          log.client_ip = "";
-          log.geo_country = "";
-          log.answer = undefined;
-          log.dest_geoip = undefined;
-          log.dest_country_code = null;
-          log.dest_country = null;
-          log.dest_isp = null;
-          log.ecs = undefined;
-          log.upstream = undefined;
-          log.reason = undefined;
+          encryptedOk = true;
         }
       } catch (encErr) {
         console.error(`[LogBatcher] Encryption failed for profile ${log.profile_id}:`, encErr);
+      }
+
+      if (encryptedOk && log.encrypt_version && log.encrypt_version > 0) {
+        redactSensitiveLogFields(log, "");
+      } else {
+        // Fail closed: never persist plaintext when E2EE is enabled but encryption fails
+        log.encrypt_version = 0;
+        log.kem_key_id = null;
+        redactSensitiveLogFields(log, "[Encrypted]");
       }
     } else {
       log.encrypt_version = 0;

@@ -23,8 +23,33 @@ export interface UdpServerOptions {
 export class UdpDnsServer {
   private socket: dgram.Socket | null = null;
   private isRunning: boolean = false;
+  private rateBuckets = new Map<string, { tokens: number; lastRefillMs: number }>();
 
   constructor(private options: UdpServerOptions) {}
+
+  private allowUdpPacket(remoteIp: string): boolean {
+    const now = Date.now();
+    const maxTokens = 120;
+    const refillPerMs = 60 / 1000;
+    let bucket = this.rateBuckets.get(remoteIp);
+    if (!bucket) {
+      if (this.rateBuckets.size >= 10000) {
+        const firstKey = this.rateBuckets.keys().next().value;
+        if (firstKey !== undefined) this.rateBuckets.delete(firstKey);
+      }
+      bucket = { tokens: maxTokens - 1, lastRefillMs: now };
+      this.rateBuckets.set(remoteIp, bucket);
+      return true;
+    }
+    const elapsed = Math.max(0, now - bucket.lastRefillMs);
+    bucket.tokens = Math.min(maxTokens, bucket.tokens + elapsed * refillPerMs);
+    bucket.lastRefillMs = now;
+    if (bucket.tokens < 1) {
+      return false;
+    }
+    bucket.tokens -= 1;
+    return true;
+  }
 
   start(): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -85,6 +110,12 @@ export class UdpDnsServer {
 
   private async handleMessage(msg: Buffer, rinfo: dgram.RemoteInfo): Promise<void> {
     try {
+      if (msg.length < 12 || msg.length > 4096) {
+        return; // Drop oversized or truncated DNS UDP packets
+      }
+      if (!this.allowUdpPacket(rinfo.address)) {
+        return; // Drop excess UDP packets per source IP to prevent amplification / CPU DoS
+      }
       const rawBytes = new Uint8Array(msg.buffer, msg.byteOffset, msg.byteLength);
       const query = parseDNSQueryFromRaw(rawBytes);
       if (!query) {

@@ -163,6 +163,11 @@ export class LocalDbService {
     return this.maintenanceService.clearProfile(profileId);
   }
 
+  /** Clears all local logs, watermarks, and sync checkpoints across all profiles */
+  async clearAll(): Promise<void> {
+    return this.maintenanceService.clearAll();
+  }
+
   /** Re-decrypts any local logs that were previously stored encrypted */
   async reDecryptLocalLogs(profileId: string): Promise<number> {
     return this.e2eeService.reDecryptLocalLogs(profileId);

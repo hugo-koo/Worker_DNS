@@ -73,6 +73,15 @@ export async function handleUserListsRequest(
       });
     }
 
+    const MAX_USER_LISTS = 50;
+    const existingUserLists = await listModel.getUserLists(user.id);
+    if (existingUserLists.filter((l) => !l.is_system).length >= MAX_USER_LISTS) {
+      return new Response(JSON.stringify({ error: `User filter list limit (${MAX_USER_LISTS}) exceeded` }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
     const addResult = await listModel.addUserList(user.id, canonicalUrl, false);
     if (!addResult.success || !addResult.id) {
       return new Response("Failed to add user list", { status: 500 });

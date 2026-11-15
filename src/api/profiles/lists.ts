@@ -199,6 +199,7 @@ export async function handleProfileListsRequest(
       });
     }
 
+    const MAX_PROFILE_LISTS = 50;
     const body = await request.json() as any;
 
     // Support bulk list addition when body is an array or contains lists/urls/filters/blocklists array
@@ -209,6 +210,9 @@ export async function handleProfileListsRequest(
     const isBulk = Array.isArray(candidateList);
     if (isBulk) {
       const rawList: any[] = candidateList;
+      if (rawList.length > MAX_PROFILE_LISTS) {
+        return new Response(`Bulk request exceeds maximum of ${MAX_PROFILE_LISTS} lists`, { status: 400 });
+      }
       const seen = new Set<string>();
       const validItems: { url: string; enabled: number }[] = [];
 
@@ -249,6 +253,10 @@ export async function handleProfileListsRequest(
       const existingUrls = new Set(existingLists.map(l => l.url.trim().toLowerCase()));
       const itemsToInsert = validItems.filter(item => !existingUrls.has(item.url.toLowerCase()));
 
+      if (existingLists.length + itemsToInsert.length > MAX_PROFILE_LISTS) {
+        return new Response(`Profile filter list limit (${MAX_PROFILE_LISTS}) exceeded`, { status: 400 });
+      }
+
       let insertedCount = 0;
       if (itemsToInsert.length > 0) {
         insertedCount = await listModel.addListsBulk(profileId, itemsToInsert);
@@ -268,6 +276,10 @@ export async function handleProfileListsRequest(
     }
     if (!isSafeUrl(listUrl)) {
       return new Response("Invalid list URL. Private networks and localhosts are not allowed.", { status: 400 });
+    }
+    const existingLists = (await listModel.getLists(profileId)).filter((l) => l.scope === 'profile');
+    if (existingLists.length >= MAX_PROFILE_LISTS) {
+      return new Response(`Profile filter list limit (${MAX_PROFILE_LISTS}) exceeded`, { status: 400 });
     }
     
     const insertResult = await listModel.addList(profileId, listUrl);

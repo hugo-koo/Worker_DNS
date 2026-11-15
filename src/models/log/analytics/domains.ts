@@ -67,7 +67,7 @@ export class LogDomainAnalytics {
     if (cutoff > until) {
       const sinceHour = Math.floor(since / 3600) * 3600;
       let queryStr =
-        "SELECT key as domain, SUM(count) as count FROM hourly_rollups WHERE profile_id = ? AND metric_type = 'domain' AND sub_key = 'PASS' AND hour_timestamp >= ? AND hour_timestamp <= ?";
+        "SELECT key as domain, SUM(count) as count FROM hourly_rollups WHERE profile_id = ? AND metric_type = 'domain' AND sub_key = 'PASS' AND key NOT LIKE 'enc:%' AND hour_timestamp >= ? AND hour_timestamp <= ?";
       const params: (string | number)[] = [profileId, sinceHour, until];
       if (accessPointId) {
         queryStr += " AND access_point_id = ?";
@@ -83,7 +83,7 @@ export class LogDomainAnalytics {
 
     // Case 3: Spans historical rollups and unaggregated logs -> Hybrid UNION ALL query
     const sinceHour = Math.floor(since / 3600) * 3600;
-    let rollupWhere = "profile_id = ? AND metric_type = 'domain' AND sub_key = 'PASS' AND hour_timestamp >= ? AND hour_timestamp < ?";
+    let rollupWhere = "profile_id = ? AND metric_type = 'domain' AND sub_key = 'PASS' AND key NOT LIKE 'enc:%' AND hour_timestamp >= ? AND hour_timestamp < ?";
     const rollupParams: (string | number)[] = [profileId, sinceHour, cutoff];
     if (accessPointId) {
       rollupWhere += " AND access_point_id = ?";
@@ -173,7 +173,7 @@ export class LogDomainAnalytics {
     if (cutoff > until) {
       const sinceHour = Math.floor(since / 3600) * 3600;
       let queryStr =
-        "SELECT key as domain, SUM(count) as count FROM hourly_rollups WHERE profile_id = ? AND metric_type = 'domain' AND sub_key IN ('BLOCK', 'REDIRECT') AND hour_timestamp >= ? AND hour_timestamp <= ?";
+        "SELECT key as domain, SUM(count) as count FROM hourly_rollups WHERE profile_id = ? AND metric_type = 'domain' AND sub_key IN ('BLOCK', 'REDIRECT') AND key NOT LIKE 'enc:%' AND hour_timestamp >= ? AND hour_timestamp <= ?";
       const params: (string | number)[] = [profileId, sinceHour, until];
       if (accessPointId) {
         queryStr += " AND access_point_id = ?";
@@ -189,7 +189,7 @@ export class LogDomainAnalytics {
 
     // Case 3: Spans historical rollups and unaggregated logs -> Hybrid UNION ALL query
     const sinceHour = Math.floor(since / 3600) * 3600;
-    let rollupWhere = "profile_id = ? AND metric_type = 'domain' AND sub_key IN ('BLOCK', 'REDIRECT') AND hour_timestamp >= ? AND hour_timestamp < ?";
+    let rollupWhere = "profile_id = ? AND metric_type = 'domain' AND sub_key IN ('BLOCK', 'REDIRECT') AND key NOT LIKE 'enc:%' AND hour_timestamp >= ? AND hour_timestamp < ?";
     const rollupParams: (string | number)[] = [profileId, sinceHour, cutoff];
     if (accessPointId) {
       rollupWhere += " AND access_point_id = ?";

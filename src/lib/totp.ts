@@ -268,16 +268,21 @@ export interface StoredRecoveryKeyItem {
 export async function findMatchingRecoveryKey(key: string, storedItems: any[]): Promise<number> {
   const inputHash = await hashRecoveryKey(key);
   const normalizedInput = key.replace(/[-\s]/g, '').toUpperCase().trim();
+  const isSha256Hex = (val: string): boolean => /^[a-f0-9]{64}$/i.test(val.trim());
 
   return storedItems.findIndex(item => {
     if (!item) return false;
     if (typeof item === 'string') {
-      if (item === inputHash) return true;
+      // Never compare a stored SHA-256 digest directly against the caller's plaintext input;
+      // otherwise anyone who reads the DB hash could authenticate by submitting the hash string.
+      if (isSha256Hex(item)) {
+        return item.trim().toLowerCase() === inputHash;
+      }
       const normalizedItem = item.replace(/[-\s]/g, '').toUpperCase().trim();
       return normalizedItem === normalizedInput;
     } else if (typeof item === 'object') {
-      if (item.hash && item.hash === inputHash) return true;
-      if (item.key) {
+      if (item.hash && String(item.hash).trim().toLowerCase() === inputHash) return true;
+      if (item.key && !isSha256Hex(String(item.key))) {
         const normalizedItem = String(item.key).replace(/[-\s]/g, '').toUpperCase().trim();
         return normalizedItem === normalizedInput;
       }

@@ -199,18 +199,24 @@ export function isSafeUrl(urlString: string): boolean {
     }
 
     let parseableUrl: string;
-    if (urlString.startsWith('tcp://') || urlString.startsWith('udp://')) {
-      parseableUrl = urlString.replace(/^(tcp|udp):\/\//, 'http://');
-    } else if (urlString.startsWith('tls://') || urlString.startsWith('dot://')) {
-      parseableUrl = urlString.replace(/^(tls|dot):\/\//, 'http://');
-    } else if (urlString.startsWith('http://') || urlString.startsWith('https://')) {
-      parseableUrl = urlString;
+    if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(urlString)) {
+      if (urlString.startsWith('tcp://') || urlString.startsWith('udp://')) {
+        parseableUrl = urlString.replace(/^(tcp|udp):\/\//, 'http://');
+      } else if (urlString.startsWith('tls://') || urlString.startsWith('dot://')) {
+        parseableUrl = urlString.replace(/^(tls|dot):\/\//, 'http://');
+      } else if (urlString.startsWith('quic://') || urlString.startsWith('h3://')) {
+        parseableUrl = urlString.replace(/^(quic|h3):\/\//, 'https://');
+      } else if (urlString.startsWith('http://') || urlString.startsWith('https://')) {
+        parseableUrl = urlString;
+      } else {
+        return false;
+      }
     } else {
       parseableUrl = `http://${urlString}`;
     }
 
     const url = new URL(parseableUrl);
-    const rawHostname = url.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+    const rawHostname = url.hostname.replace(/^\[|\]$/g, '').replace(/\.+$/, '').toLowerCase();
 
     if (FORBIDDEN_HOSTNAMES.includes(rawHostname) || FORBIDDEN_HOSTNAMES.includes(url.hostname.toLowerCase())) {
       return false;
@@ -278,18 +284,24 @@ export async function isSafeUrlWithDnsCheck(urlString: string): Promise<boolean>
       }
 
       let parseableUrl: string;
-      if (targetUrl.startsWith('tcp://') || targetUrl.startsWith('udp://')) {
-        parseableUrl = targetUrl.replace(/^(tcp|udp):\/\//, 'http://');
-      } else if (targetUrl.startsWith('tls://') || targetUrl.startsWith('dot://')) {
-        parseableUrl = targetUrl.replace(/^(tls|dot):\/\//, 'http://');
-      } else if (targetUrl.startsWith('http://') || targetUrl.startsWith('https://')) {
-        parseableUrl = targetUrl;
+      if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(targetUrl)) {
+        if (targetUrl.startsWith('tcp://') || targetUrl.startsWith('udp://')) {
+          parseableUrl = targetUrl.replace(/^(tcp|udp):\/\//, 'http://');
+        } else if (targetUrl.startsWith('tls://') || targetUrl.startsWith('dot://')) {
+          parseableUrl = targetUrl.replace(/^(tls|dot):\/\//, 'http://');
+        } else if (targetUrl.startsWith('quic://') || targetUrl.startsWith('h3://')) {
+          parseableUrl = targetUrl.replace(/^(quic|h3):\/\//, 'https://');
+        } else if (targetUrl.startsWith('http://') || targetUrl.startsWith('https://')) {
+          parseableUrl = targetUrl;
+        } else {
+          return false;
+        }
       } else {
         parseableUrl = `http://${targetUrl}`;
       }
 
       const url = new URL(parseableUrl);
-      const rawHostname = url.hostname.replace(/^\[|\]$/g, '').toLowerCase();
+      const rawHostname = url.hostname.replace(/^\[|\]$/g, '').replace(/\.+$/, '').toLowerCase();
 
       // If already an IP address, isSafeUrl already ensured it is a public IP
       if (isIPv4(rawHostname) || isIPv6(rawHostname)) {

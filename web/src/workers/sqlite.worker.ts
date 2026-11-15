@@ -34,6 +34,7 @@ import {
   handleCleanup,
   handleGetStorageInfo,
   handleClearProfile,
+  handleClearAll,
 } from './sqlite/maintenance';
 
 // Re-export types for backward compatibility
@@ -86,6 +87,9 @@ self.onmessage = async (e: MessageEvent<WorkerMessageRequest>): Promise<void> =>
         break;
       case 'CLEAR_PROFILE':
         result = handleClearProfile(payload as ClearProfilePayload);
+        break;
+      case 'CLEAR_ALL':
+        result = handleClearAll();
         break;
       default:
         throw new Error(`Unknown worker message type: ${type}`);

@@ -5,9 +5,10 @@ import {
   getTOTPUri,
   generateRecoveryKeys,
   hashRecoveryKey,
-  verifyTOTP,
+  verifyTOTPWithStep,
   StoredRecoveryKeyItem
 } from "../../../lib/totp";
+import { cacheUtils } from "../../../utils/cache";
 import { UserModel } from "../../../models/user";
 import { ActivityLogModel } from "../../../models/activityLog";
 import { PasskeyModel } from "../../../models/passkey";
@@ -63,15 +64,34 @@ export async function handleTotpAndMfaRequest(
 
     // POST /api/account/totp/confirm — verify TOTP code and activate
     if (subAction === "confirm" && request.method === "POST") {
-      const { secret, totpTokenHash, salt } = (await request.json()) as {
+      const body = (await request.json()) as ReauthPayload & {
         secret: string;
         totpTokenHash: string;
         salt?: string;
       };
+      const { secret, totpTokenHash, salt } = body;
       if (!secret || !totpTokenHash) return new Response("Missing secret or token", { status: 400 });
 
-      const isValid = await verifyTOTP(secret, totpTokenHash, salt);
-      if (!isValid) return new Response("Invalid TOTP code", { status: 400 });
+      // Enforce Base32 secret with at least 160 bits (32 Base32 characters)
+      const normalizedSecret = String(secret).replace(/[\s=]+/g, "").toUpperCase();
+      if (!/^[A-Z2-7]{32,}$/.test(normalizedSecret)) {
+        return new Response("Invalid or weak TOTP secret", { status: 400 });
+      }
+
+      const dbUser = await userModel.getById(user.id);
+      if (!dbUser) return new Response("User not found", { status: 404 });
+
+      // Prevent silent TOTP overwrite or passwordless downgrade without step-up reauthentication
+      if (dbUser.totp_enabled) {
+        const authResult = await verifyUserReauth(dbUser, body, env, request, { sessionId: user.sessionId });
+        if (!authResult.success) {
+          await activityLog.record(user.id, "totp_verify_fail", clientIp, userAgent, { flow: "totp_reenroll", reason: authResult.reason }, sessionHash);
+          return new Response(authResult.error || "Re-authentication required to replace TOTP", { status: 403 });
+        }
+      }
+
+      const totpResult = await verifyTOTPWithStep(normalizedSecret, totpTokenHash, salt);
+      if (!totpResult.valid) return new Response("Invalid TOTP code", { status: 400 });
 
       // Generate recovery keys, store only hash under envelope encryption
       const plaintextKeys = generateRecoveryKeys();
@@ -81,9 +101,12 @@ export async function handleTotpAndMfaRequest(
         }))
       );
 
-      await userModel.updateTOTP(user.id, secret, storedItems as any);
-      // Default to passwordless login upon enabling MFA
-      await userModel.updateTOTPSettings(user.id, true);
+      await userModel.updateTOTP(user.id, normalizedSecret, storedItems as any);
+      // Only enable passwordless mode on initial enrollment if user has no passwordless restriction;
+      // keep existing totp_skip_password setting when re-enrolling.
+      if (!dbUser.totp_enabled) {
+        await userModel.updateTOTPSettings(user.id, true);
+      }
       await activityLog.record(user.id, "totp_setup", clientIp, userAgent, undefined, sessionHash);
 
       return new Response(JSON.stringify({ success: true, recovery_keys: plaintextKeys }), {
@@ -93,6 +116,15 @@ export async function handleTotpAndMfaRequest(
 
     // POST /api/account/totp/test — verify TOTP code without modifying account state
     if (subAction === "test" && request.method === "POST") {
+      const cache = (caches as any).default;
+      const rateLimitKey = `totp_test_fail:${user.id}`;
+      if (await cacheUtils.isRateLimited(cache, rateLimitKey, 10, 900)) {
+        return new Response(JSON.stringify({ success: false, message: "Too many failed attempts" }), {
+          status: 429,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
       const dbUser = await userModel.getById(user.id);
       if (!dbUser?.totp_enabled || !dbUser?.totp_secret) {
         return new Response(JSON.stringify({ success: false, message: "TOTP is not enabled" }), {
@@ -115,8 +147,8 @@ export async function handleTotpAndMfaRequest(
         });
       }
 
-      const isValid = await verifyTOTP(dbUser.totp_secret, codeToVerify, salt);
-      if (!isValid) {
+      const totpResult = await verifyTOTPWithStep(dbUser.totp_secret, codeToVerify, salt);
+      if (!totpResult.valid) {
         await activityLog.record(user.id, "totp_verify_fail", clientIp, userAgent, { flow: "mfa_test" }, sessionHash);
         return new Response(JSON.stringify({ success: false, message: "Invalid TOTP code" }), {
           status: 400,
@@ -124,6 +156,18 @@ export async function handleTotpAndMfaRequest(
         });
       }
 
+      if (totpResult.timeStep !== undefined) {
+        const replayKey = `totp_used:${user.id}:${totpResult.timeStep}`;
+        if (await cacheUtils.get(cache, replayKey)) {
+          return new Response(JSON.stringify({ success: false, message: "TOTP code has already been used" }), {
+            status: 400,
+            headers: { "Content-Type": "application/json" }
+          });
+        }
+        await cacheUtils.set(cache, replayKey, 1, 90);
+      }
+
+      await cacheUtils.delete(cache, `ratelimit:${rateLimitKey}`);
       await activityLog.record(user.id, "totp_verify_success", clientIp, userAgent, { flow: "mfa_test" }, sessionHash);
 
       return new Response(JSON.stringify({ success: true }), {
@@ -134,13 +178,20 @@ export async function handleTotpAndMfaRequest(
     // PATCH /api/account/totp/settings — update skip_password toggle
     if (subAction === "settings" && request.method === "PATCH") {
       const dbUser = await userModel.getById(user.id);
+      if (!dbUser) return new Response("User not found", { status: 404 });
       const passkeyModel = new PasskeyModel(env.DB);
       const passkeys = await passkeyModel.listByUser(user.id);
-      const hasMfa = !!dbUser?.totp_enabled || passkeys.length > 0;
+      const hasMfa = !!dbUser.totp_enabled || passkeys.length > 0;
       if (!hasMfa) return new Response("MFA is not enabled", { status: 400 });
 
-      const { skip_password } = (await request.json()) as { skip_password: boolean };
-      await userModel.updateTOTPSettings(user.id, !!skip_password);
+      const body = (await request.json()) as ReauthPayload & { skip_password: boolean };
+      if (body.skip_password) {
+        const authResult = await verifyUserReauth(dbUser, body, env, request, { sessionId: user.sessionId });
+        if (!authResult.success) {
+          return new Response(authResult.error || "Re-authentication required", { status: 403 });
+        }
+      }
+      await userModel.updateTOTPSettings(user.id, !!body.skip_password);
       return new Response(JSON.stringify({ success: true }), {
         headers: { "Content-Type": "application/json" }
       });
@@ -152,7 +203,7 @@ export async function handleTotpAndMfaRequest(
       const dbUser = await userModel.getById(user.id);
       if (!dbUser) return new Response("User not found", { status: 404 });
 
-      const authResult = await verifyUserReauth(dbUser, body, env, request);
+      const authResult = await verifyUserReauth(dbUser, body, env, request, { sessionId: user.sessionId });
       if (!authResult.success) {
         await activityLog.record(user.id, "totp_verify_fail", clientIp, userAgent, { reason: authResult.reason }, sessionHash);
         return new Response(authResult.error || "Authentication failed", { status: 400 });
@@ -173,13 +224,20 @@ export async function handleTotpAndMfaRequest(
   // ─── 统一 MFA 设置接口 (/api/account/mfa/settings) ───
   if (action === "mfa" && pathParts[3] === "settings" && request.method === "PATCH") {
     const dbUser = await userModel.getById(user.id);
+    if (!dbUser) return new Response("User not found", { status: 404 });
     const passkeyModel = new PasskeyModel(env.DB);
     const passkeys = await passkeyModel.listByUser(user.id);
-    const hasMfa = !!dbUser?.totp_enabled || passkeys.length > 0;
+    const hasMfa = !!dbUser.totp_enabled || passkeys.length > 0;
     if (!hasMfa) return new Response("MFA is not enabled", { status: 400 });
 
-    const { skip_password } = (await request.json()) as { skip_password: boolean };
-    await userModel.updateTOTPSettings(user.id, !!skip_password);
+    const body = (await request.json()) as ReauthPayload & { skip_password: boolean };
+    if (body.skip_password) {
+      const authResult = await verifyUserReauth(dbUser, body, env, request, { sessionId: user.sessionId });
+      if (!authResult.success) {
+        return new Response(authResult.error || "Re-authentication required", { status: 403 });
+      }
+    }
+    await userModel.updateTOTPSettings(user.id, !!body.skip_password);
     return new Response(JSON.stringify({ success: true }), {
       headers: { "Content-Type": "application/json" }
     });

@@ -5,6 +5,9 @@
  */
 
 import { Env, Profile, User, ExecutionContext, ResolutionLog } from '../../types';
+import { SessionModel } from '../../models/session';
+import { ProfileModel } from '../../models/profile';
+import { RBAC } from '../../lib/rbac';
 
 export type LogWsClientMessage =
   | {
@@ -69,6 +72,23 @@ export async function handleProfileLogsWs(
     return new Response('Expected Upgrade: websocket', { status: 426 });
   }
 
+  if (!user || !user.sessionId) {
+    return new Response('Unauthorized', { status: 401 });
+  }
+
+  // Validate WebSocket Origin header against request origin to block cross-site WS hijacking
+  const originHeader = request.headers.get('Origin');
+  if (originHeader) {
+    try {
+      const requestOrigin = new URL(request.url).origin;
+      if (new URL(originHeader).origin !== requestOrigin) {
+        return new Response('Forbidden Origin', { status: 403 });
+      }
+    } catch {
+      return new Response('Invalid Origin', { status: 403 });
+    }
+  }
+
   // Ensure WebSocketPair is supported in runtime
   const globalObj = globalThis as unknown as {
     WebSocketPair?: new () => { 0: WebSocket; 1: WebSocket };
@@ -85,6 +105,9 @@ export async function handleProfileLogsWs(
   (serverWs as unknown as { accept: () => void }).accept();
 
   const profileId = profile.id;
+  const sessionModel = new SessionModel(env.DB);
+  const profileModel = new ProfileModel(env.DB);
+  let lastSessionVerifiedAt = Date.now();
   let isClosed = false;
   let lastTimestamp = 0;
   let lastId = 0;
@@ -101,6 +124,37 @@ export async function handleProfileLogsWs(
     ctx.waitUntil(socketLifetimePromise);
   }
 
+  const verifyActiveAccess = async (force = false): Promise<boolean> => {
+    const nowMs = Date.now();
+    if (!force && nowMs - lastSessionVerifiedAt < 10_000) {
+      return true;
+    }
+    try {
+      if (!user.sessionId) {
+        return false;
+      }
+      const session = await sessionModel.getSessionWithUser(user.sessionId);
+      const nowSec = Math.floor(nowMs / 1000);
+      if (!session || session.user_id !== user.id || session.is_paused === 1 || session.expires_at < nowSec) {
+        return false;
+      }
+      const freshProfile = await profileModel.getById(profileId);
+      const freshUser: User = {
+        id: session.user_id,
+        username: session.username,
+        role: session.role as 'admin' | 'user',
+        sessionId: user.sessionId,
+      };
+      if (!freshProfile || !RBAC.canAccessProfile(freshUser, freshProfile)) {
+        return false;
+      }
+      lastSessionVerifiedAt = nowMs;
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   /**
    * Probes for new logs since (lastTimestamp, lastId).
    * Runs a lightweight LIMIT 1 index probe first before running the full query.
@@ -110,6 +164,14 @@ export async function handleProfileLogsWs(
     isChecking = true;
 
     try {
+      if (!(await verifyActiveAccess())) {
+        if (!isClosed) {
+          serverWs.send(JSON.stringify({ type: 'ERROR', message: 'Session expired or revoked' } satisfies LogWsServerMessage));
+          cleanup();
+        }
+        return;
+      }
+
       // Step 1: Low-overhead index probe
       const probe = await env.DB.prepare(`
         SELECT id, timestamp 
@@ -189,6 +251,13 @@ export async function handleProfileLogsWs(
           break;
         }
         case 'SYNC_GAP': {
+          if (!(await verifyActiveAccess(true))) {
+            if (!isClosed) {
+              serverWs.send(JSON.stringify({ type: 'ERROR', message: 'Session expired or revoked' } satisfies LogWsServerMessage));
+              cleanup();
+            }
+            break;
+          }
           const limit = Math.max(1, Math.min(Number(msg.limit) || 100, 100));
           const { results } = await env.DB.prepare(`
             SELECT l.id, l.timestamp, l.client_ip, l.domain, l.action, l.record_type, 

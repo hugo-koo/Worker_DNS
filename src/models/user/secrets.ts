@@ -29,12 +29,13 @@ export class UserSecretProcessor {
 
     // 1. Process totp_secret
     let totpSecret = user.totp_secret;
+    const totpAad = `${user.id}:totp_secret`;
     if (user.totp_secret_encrypted && user.totp_secret_dek) {
       try {
-        totpSecret = await decryptEnvelope(user.totp_secret_encrypted, user.totp_secret_dek, this.env);
+        totpSecret = await decryptEnvelope(user.totp_secret_encrypted, user.totp_secret_dek, this.env, totpAad);
 
-        // Check for DEK rotation (vN -> vN+1)
-        const rotatedDek = await rotateEnvelopeDek(user.totp_secret_dek, this.env);
+        // Check for DEK rotation
+        const rotatedDek = await rotateEnvelopeDek(user.totp_secret_dek, this.env, totpAad);
         if (rotatedDek) {
           updatedFields.totp_secret_dek = rotatedDek;
           shouldUpdateDb = true;
@@ -46,7 +47,7 @@ export class UserSecretProcessor {
     } else if (user.totp_secret) {
       // Legacy plain-text secret found. If KEK is active, migrate to envelope encryption!
       try {
-        const encrypted = await encryptEnvelope(user.totp_secret, this.env);
+        const encrypted = await encryptEnvelope(user.totp_secret, this.env, totpAad);
         if (encrypted) {
           updatedFields.totp_secret_encrypted = encrypted.dataEncrypted;
           updatedFields.totp_secret_dek = encrypted.dekEncrypted;
@@ -60,12 +61,13 @@ export class UserSecretProcessor {
 
     // 2. Process totp_recovery_keys
     let totpRecoveryKeys = user.totp_recovery_keys;
+    const recoveryAad = `${user.id}:totp_recovery_keys`;
     if (user.totp_recovery_keys_encrypted && user.totp_recovery_keys_dek) {
       try {
-        totpRecoveryKeys = await decryptEnvelope(user.totp_recovery_keys_encrypted, user.totp_recovery_keys_dek, this.env);
+        totpRecoveryKeys = await decryptEnvelope(user.totp_recovery_keys_encrypted, user.totp_recovery_keys_dek, this.env, recoveryAad);
 
-        // Check for DEK rotation (vN -> vN+1)
-        const rotatedDek = await rotateEnvelopeDek(user.totp_recovery_keys_dek, this.env);
+        // Check for DEK rotation
+        const rotatedDek = await rotateEnvelopeDek(user.totp_recovery_keys_dek, this.env, recoveryAad);
         if (rotatedDek) {
           updatedFields.totp_recovery_keys_dek = rotatedDek;
           shouldUpdateDb = true;
@@ -77,7 +79,7 @@ export class UserSecretProcessor {
     } else if (user.totp_recovery_keys) {
       // Legacy plain-text recovery keys found. If KEK is active, migrate to envelope encryption!
       try {
-        const encrypted = await encryptEnvelope(user.totp_recovery_keys, this.env);
+        const encrypted = await encryptEnvelope(user.totp_recovery_keys, this.env, recoveryAad);
         if (encrypted) {
           updatedFields.totp_recovery_keys_encrypted = encrypted.dataEncrypted;
           updatedFields.totp_recovery_keys_dek = encrypted.dekEncrypted;
