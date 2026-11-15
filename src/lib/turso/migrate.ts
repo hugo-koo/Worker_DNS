@@ -68,9 +68,52 @@ export async function ensureTursoMigrationsTable(db: D1Database | TursoD1Databas
   }
 }
 
+function isIdempotentSchemaError(msgLower: string, stmtUpper: string): boolean {
+  const isDuplicateColumn = msgLower.includes('duplicate column name') && stmtUpper.startsWith('ALTER TABLE');
+  const isAlreadyExists = msgLower.includes('already exists') && (stmtUpper.startsWith('CREATE') || stmtUpper.startsWith('ALTER'));
+  return isDuplicateColumn || isAlreadyExists;
+}
+
+function stripWithoutRowidClause(stmt: string): string | null {
+  if (!/\)\s*WITHOUT\s+ROWID\s*;?\s*$/i.test(stmt)) {
+    return null;
+  }
+  return stmt.replace(/\)\s*WITHOUT\s+ROWID\s*;?\s*$/i, ')');
+}
+
+async function runSingleMigrationStmt(
+  db: D1Database | TursoD1Database,
+  stmt: string,
+  stmtIndex: number
+): Promise<void> {
+  if ('executePipeline' in db && typeof (db as any).executePipeline === 'function') {
+    const results = await (db as any).executePipeline([
+      {
+        type: 'execute',
+        stmt: { sql: stmt }
+      },
+      { type: 'close' }
+    ], 60000);
+
+    const first = results[0];
+    if (first && (first.type === 'error' || first.error)) {
+      const errMsg = first.error?.message || 'Error';
+      if (isIdempotentSchemaError(errMsg.toLowerCase(), stmt.toUpperCase())) {
+        console.warn(`[Migrations] Tolerating idempotent schema state on statement ${stmtIndex + 1}: ${errMsg}`);
+        return;
+      }
+      throw new Error(`[Database D1] Exec error on statement ${stmtIndex + 1}: ${errMsg}\nSQL: ${stmt}`);
+    }
+    return;
+  }
+
+  await db.prepare(stmt).run();
+}
+
 /**
  * Executes a migration SQL script statement-by-statement, tolerating idempotent schema states
- * (such as duplicate column names or tables/indexes that already exist).
+ * (such as duplicate column names or tables/indexes that already exist) and falling back to
+ * standard rowid tables if the engine (e.g., TursoDB/Limbo) rejects `WITHOUT ROWID`.
  *
  * @param db - D1Database or TursoD1Database instance.
  * @param sql - Migration script containing one or more SQL statements.
@@ -84,42 +127,24 @@ export async function execMigrationSql(db: D1Database | TursoD1Database, sql: st
     if (!stmt) continue;
 
     try {
-      if ('executePipeline' in db && typeof (db as any).executePipeline === 'function') {
-        const results = await (db as any).executePipeline([
-          {
-            type: 'execute',
-            stmt: { sql: stmt }
-          },
-          { type: 'close' }
-        ], 60000);
-
-        const first = results[0];
-        if (first && (first.type === 'error' || first.error)) {
-          const msg = (first.error?.message || '').toLowerCase();
-          const stmtUpper = stmt.toUpperCase();
-          const isDuplicateColumn = msg.includes('duplicate column name') && stmtUpper.startsWith('ALTER TABLE');
-          const isAlreadyExists = msg.includes('already exists') && (stmtUpper.startsWith('CREATE') || stmtUpper.startsWith('ALTER'));
-
-          if (isDuplicateColumn || isAlreadyExists) {
-            console.warn(`[Migrations] Tolerating idempotent schema state on statement ${i + 1}: ${first.error?.message}`);
-            continue;
-          }
-
-          throw new Error(`[Database D1] Exec error on statement ${i + 1}: ${first.error?.message || 'Error'}\nSQL: ${stmt}`);
-        }
-      } else {
-        await db.prepare(stmt).run();
-      }
+      await runSingleMigrationStmt(db, stmt, i);
     } catch (err: any) {
       const msg = (err?.message || '').toLowerCase();
       const stmtUpper = stmt.toUpperCase();
-      const isDuplicateColumn = msg.includes('duplicate column name') && stmtUpper.startsWith('ALTER TABLE');
-      const isAlreadyExists = msg.includes('already exists') && (stmtUpper.startsWith('CREATE') || stmtUpper.startsWith('ALTER'));
 
-      if (isDuplicateColumn || isAlreadyExists) {
+      if (isIdempotentSchemaError(msg, stmtUpper)) {
         console.warn(`[Migrations] Tolerating idempotent schema state on statement ${i + 1}: ${err.message}`);
         continue;
       }
+
+      // TursoDB (Limbo) does not yet support `WITHOUT ROWID`; strip and retry cleanly
+      const fallbackStmt = stripWithoutRowidClause(stmt);
+      if (fallbackStmt && (msg.includes('without rowid') || msg.includes('parse error') || msg.includes('syntax error') || msg.includes('not supported'))) {
+        console.warn(`[Migrations] Engine rejected WITHOUT ROWID on statement ${i + 1}; retrying as standard rowid table.`);
+        await runSingleMigrationStmt(db, fallbackStmt, i);
+        continue;
+      }
+
       throw err;
     }
   }
