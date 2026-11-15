@@ -12,15 +12,18 @@ export type DatabaseServiceType = 'D1' | 'Turso' | 'File';
 
 /**
  * Normalizes a Turso / libSQL connection URL to standard HTTPS endpoint.
+ * Supports `libsql://`, `turso://`, `https://`, and `http://` schemes.
  *
- * @param rawUrl - Input database URL (e.g., libsql://db-org.turso.io).
+ * @param rawUrl - Input database URL (e.g., libsql://db-org.turso.io or turso://db-org.turso.io).
  * @returns Normalized HTTPS URL string.
  */
 export function normalizeTursoUrl(rawUrl: string): string {
   let url = rawUrl.trim();
-  if (url.startsWith('libsql://')) {
+  if (/^libsql:\/\//i.test(url)) {
     url = 'https://' + url.slice('libsql://'.length);
-  } else if (!url.startsWith('http://') && !url.startsWith('https://')) {
+  } else if (/^turso:\/\//i.test(url)) {
+    url = 'https://' + url.slice('turso://'.length);
+  } else if (!/^https?:\/\//i.test(url)) {
     url = 'https://' + url;
   }
   return url.replace(/\/+$/, '');
@@ -102,7 +105,7 @@ export async function verifyTursoConnection(
     return {
       ok: false,
       errorCode: 'invalid_url',
-      message: 'TURSO_DATABASE_URL is invalid. Expected a valid libsql:// or https:// URL.'
+      message: 'TURSO_DATABASE_URL is invalid. Expected a valid libsql://, turso://, or https:// URL.'
     };
   }
 

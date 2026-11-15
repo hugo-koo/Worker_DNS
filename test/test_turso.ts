@@ -51,6 +51,10 @@ async function runTestSuite(): Promise<void> {
     'normalizeTursoUrl handles libsql:// protocol'
   );
   assert(
+    normalizeTursoUrl('turso://my-db.turso.io') === 'https://my-db.turso.io',
+    'normalizeTursoUrl handles turso:// protocol'
+  );
+  assert(
     normalizeTursoUrl('https://my-db.turso.io/') === 'https://my-db.turso.io',
     'normalizeTursoUrl trims trailing slash'
   );
