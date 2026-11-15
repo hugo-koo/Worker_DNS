@@ -150,8 +150,8 @@ export const DeploymentGuideView: React.FC = () => {
                 </Callout>
               </div>
 
-              {/* JWT Secret Generator */}
-              <JwtGenerator />
+              {/* JWT Secret Generator (only shown when JWT_SECRET is not yet configured) */}
+              {isJwtSecretMissing && <JwtGenerator />}
 
               {/* Guides */}
               {isServerfull ? (
