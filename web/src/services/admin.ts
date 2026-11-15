@@ -129,7 +129,9 @@ export interface RevokeFilterResponse {
 }
 
 export async function getDistributedFilters(): Promise<DistributedFilterItem[]> {
-  const res = await fetch("/api/admin/distribute-filter");
+  const res = await fetch("/api/admin/distribute-filter", {
+    cache: "no-store"
+  });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
