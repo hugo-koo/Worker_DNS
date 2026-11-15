@@ -114,7 +114,7 @@ export async function verifyTursoConnection(
   }
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 3000);
+  const timeoutId = setTimeout(() => controller.abort(), 8000);
   let result: TursoHealthResult;
 
   try {
@@ -177,7 +177,7 @@ export async function verifyTursoConnection(
   }
   tursoHealthCache.set(cacheKey, {
     result,
-    expiresAt: now + (result.ok ? 60_000 : 10_000)
+    expiresAt: now + (result.ok ? 300_000 : 5_000)
   });
   return result;
 }

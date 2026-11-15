@@ -246,10 +246,35 @@ export function formatApiErrorMessage(err: any, t: TranslationFunction): string 
   ) {
     return t("auth.jwtSecretPreset", "检测到正在使用预设的 JWT_SECRET，请在环境变量中修改并替换为自定义安全密钥后重新部署。");
   }
+  if (bodyText.trimStart().startsWith("{")) {
+    try {
+      const parsed = JSON.parse(bodyText) as {
+        error?: string;
+        isDbMissing?: boolean;
+        isJwtSecretMissing?: boolean;
+        message?: string;
+      };
+      if (parsed.error === "configuration_error") {
+        if (parsed.isJwtSecretMissing) {
+          return t("auth.jwtSecretMissing", "缺少 JWT_SECRET，请在环境变量或 .dev.vars 中配置安全密钥。");
+        }
+        if (parsed.message) {
+          return parsed.message;
+        }
+      }
+      if (parsed.message && typeof parsed.message === "string") {
+        return parsed.message;
+      }
+    } catch {
+      // Fall through to plain-text error matching
+    }
+  }
+
   if (
     bodyText === "jwt_secret_missing" ||
     bodyText.includes("jwt_secret_missing") ||
-    bodyText.includes("isJwtSecretMissing") ||
+    bodyText.includes('"isJwtSecretMissing":true') ||
+    bodyText.includes('"isJwtSecretMissing": true') ||
     bodyText.includes("JWT_SECRET is missing") ||
     bodyText.includes("JWT_SECRET secret variable")
   ) {
