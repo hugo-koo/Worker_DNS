@@ -58,21 +58,27 @@ export const DohUrlCard: React.FC<DohUrlCardProps> = ({
     >
       <StepStampWatermark step={2} />
       <SectionCard>
-        <div
-          key={flashTrigger}
-          className={`w-full bg-gray-100 dark:bg-gray-800 p-3 rounded-lg border border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 ${
-            flashTrigger > 0 ? "animate-box-glow" : ""
-          }`}
-        >
-          <span className="font-mono text-blue-600 dark:text-blue-400 break-all text-xs sm:text-sm">{dohUrl}</span>
-          <Button
-            intent={Intent.PRIMARY}
-            icon="duplicate"
-            text={t("setup.copyUrl")}
-            fill={isMobile}
-            onClick={() => copyToClipboard(dohUrl)}
-            className="shrink-0 whitespace-nowrap min-w-fit w-auto"
-          />
+        <div className="flex flex-col items-center gap-4">
+          <div
+            key={flashTrigger}
+            className={`w-full bg-gray-100 dark:bg-gray-800 px-4 py-4 sm:px-6 sm:py-5 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center justify-center ${
+              flashTrigger > 0 ? "animate-box-glow" : ""
+            }`}
+          >
+            <span className="font-mono text-sm sm:text-base font-medium text-center text-blue-600 dark:text-blue-400 break-all select-all">
+              {dohUrl}
+            </span>
+          </div>
+          <div className="w-full flex justify-center">
+            <Button
+              intent={Intent.PRIMARY}
+              icon="duplicate"
+              text={t("setup.copyUrl")}
+              fill={isMobile}
+              onClick={() => copyToClipboard(dohUrl)}
+              className="shrink-0 whitespace-nowrap min-w-fit"
+            />
+          </div>
         </div>
       </SectionCard>
     </Section>
