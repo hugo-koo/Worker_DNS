@@ -10,6 +10,7 @@ import {
 import { Key, Plus, ShieldAlert, ShieldCheck } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { TOTPRecoveryKeys } from "./totp/TOTPRecoveryKeys";
+import { VerifyIdentityDialog } from "./VerifyIdentityDialog";
 import type { UserInfo } from "../types";
 import {
   usePasskeys,
@@ -55,6 +56,9 @@ export const PasskeyCard: React.FC<PasskeyCardProps> = ({ onRefresh, user }) => 
     setAddError,
     handleOpenAdd,
     handleRegister,
+    verifyDialogOpen,
+    setVerifyDialogOpen,
+    handleVerifyAndRegister,
     editingPasskey,
     setEditingPasskey,
     editName,
@@ -210,6 +214,15 @@ export const PasskeyCard: React.FC<PasskeyCardProps> = ({ onRefresh, user }) => 
         password={deletePassword}
         setPassword={setDeletePassword}
         error={deleteError}
+      />
+
+      <VerifyIdentityDialog
+        isOpen={verifyDialogOpen}
+        onClose={() => setVerifyDialogOpen(false)}
+        user={user ?? null}
+        allowedMethods={["passkey", "totp", "recovery_key"]}
+        title={t("account.passkey.verifyToAddTitle", "Verify Identity to Add Passkey")}
+        onVerify={handleVerifyAndRegister}
       />
     </div>
   );

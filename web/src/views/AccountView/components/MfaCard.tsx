@@ -3,10 +3,11 @@ import { Card, Elevation, H4, Tag, Intent, Switch, Callout, Divider } from "@blu
 import { ShieldCheck, KeyRound } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { UserInfo } from "../types";
-import { updateMfaSettings } from "../../../services";
+import { updateMfaSettings, type VerifyIdentityPayload } from "../../../services";
 import { PasskeyCard } from "./PasskeyCard";
 import { TOTPCard } from "./TOTPCard";
 import { RecoveryKeyCard } from "./RecoveryKeyCard";
+import { VerifyIdentityDialog } from "./VerifyIdentityDialog";
 
 /**
  * Properties for the MfaCard component.
@@ -29,6 +30,7 @@ export interface MfaCardProps {
 export const MfaCard: React.FC<MfaCardProps> = ({ user, onRefresh }) => {
   const { t } = useTranslation();
   const [settingsLoading, setSettingsLoading] = useState(false);
+  const [verifyOpen, setVerifyOpen] = useState(false);
 
   const isMfaEnabled = !!(
     user.mfa_enabled ??
@@ -36,15 +38,26 @@ export const MfaCard: React.FC<MfaCardProps> = ({ user, onRefresh }) => {
   );
 
   const handleToggleSkipPassword = async (val: boolean) => {
+    if (val) {
+      // Enabling passwordless login requires step-up MFA re-authentication on the backend
+      setVerifyOpen(true);
+      return;
+    }
     setSettingsLoading(true);
     try {
-      await updateMfaSettings(val);
+      await updateMfaSettings(false);
       onRefresh();
     } catch (e: any) {
       alert(e.message || t("common.errorNetwork", "Network error"));
     } finally {
       setSettingsLoading(false);
     }
+  };
+
+  const handleConfirmEnablePasswordless = async (payload: VerifyIdentityPayload) => {
+    await updateMfaSettings(true, payload);
+    onRefresh();
+    setVerifyOpen(false);
   };
 
   return (
@@ -126,6 +139,15 @@ export const MfaCard: React.FC<MfaCardProps> = ({ user, onRefresh }) => {
 
       {/* Section 3: Recovery Keys */}
       <RecoveryKeyCard user={user} onRefresh={onRefresh} />
+
+      <VerifyIdentityDialog
+        isOpen={verifyOpen}
+        onClose={() => setVerifyOpen(false)}
+        user={user}
+        title={t("account.mfa.passwordlessTitle", "Passwordless Login")}
+        allowedMethods={["passkey", "totp", "recovery_key"]}
+        onVerify={handleConfirmEnablePasswordless}
+      />
     </Card>
   );
 };

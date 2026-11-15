@@ -12,7 +12,7 @@ import {
   testPasskey,
   e2ee
 } from "../../../../services";
-import type { Passkey } from "../../../../services";
+import type { Passkey, VerifyIdentityPayload } from "../../../../services";
 import { isPasskeySupported, startPasskeyRegistration } from "../../../../utils/webauthn";
 
 /**
@@ -59,6 +59,11 @@ export interface UsePasskeysReturn {
   setAddError: (err: string) => void;
   handleOpenAdd: () => void;
   handleRegister: (e: React.FormEvent) => Promise<void>;
+
+  // Re-authentication Dialog State & Handler (required when MFA is already enabled)
+  verifyDialogOpen: boolean;
+  setVerifyDialogOpen: (open: boolean) => void;
+  handleVerifyAndRegister: (payload: VerifyIdentityPayload) => Promise<void>;
 
   // Rename Dialog State & Handlers
   editingPasskey: Passkey | null;
@@ -119,6 +124,8 @@ export const usePasskeys = ({ onRefresh, toasterRef, user }: UsePasskeysProps): 
   const [nameFocused, setNameFocused] = useState<boolean>(false);
   const [registering, setRegistering] = useState<boolean>(false);
   const [addError, setAddError] = useState<string>("");
+  const [verifyDialogOpen, setVerifyDialogOpen] = useState<boolean>(false);
+  const [pendingRegisterName, setPendingRegisterName] = useState<string>("");
 
   // Rename state
   const [editingPasskey, setEditingPasskey] = useState<Passkey | null>(null);
@@ -156,6 +163,43 @@ export const usePasskeys = ({ onRefresh, toasterRef, user }: UsePasskeysProps): 
     setIsAddOpen(true);
   };
 
+  /**
+   * Executes WebAuthn registration ceremony and persists the new passkey.
+   *
+   * @param trimmedName - Validated passkey display name.
+   * @param reauthPayload - Optional step-up re-authentication payload when MFA is already enabled.
+   */
+  const executePasskeyRegistration = async (
+    trimmedName: string,
+    reauthPayload?: VerifyIdentityPayload
+  ): Promise<void> => {
+    const options = await getPasskeyRegistrationOptions();
+    const credential = await startPasskeyRegistration(options);
+    const res = await verifyPasskeyRegistration({
+      name: trimmedName,
+      credential,
+      ...reauthPayload
+    });
+
+    const passkeyId = res?.passkey?.id;
+    if (passkeyId && e2ee.isUnlocked()) {
+      try {
+        await e2ee.wrapCurrentKeyForPasskey(passkeyId);
+      } catch (wrapErr) {
+        console.warn("[Passkeys] Failed to wrap existing E2EE key for new passkey:", wrapErr);
+      }
+    }
+
+    setIsAddOpen(false);
+    setPasskeyName("");
+    setPendingRegisterName("");
+    await fetchPasskeys();
+    onRefresh?.();
+    if (res?.recovery_keys && res.recovery_keys.length > 0) {
+      setRecoveryKeys(res.recovery_keys);
+    }
+  };
+
   const handleRegister = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
     const trimmed = passkeyName.trim();
@@ -169,33 +213,22 @@ export const usePasskeys = ({ onRefresh, toasterRef, user }: UsePasskeysProps): 
       return;
     }
 
+    // Backend requires step-up reauth when adding a passkey to an account with existing MFA
+    const requiresReauth = Boolean(
+      user?.totp_enabled || passkeys.length > 0 || (user?.passkeys_count && user.passkeys_count > 0)
+    );
+    if (requiresReauth) {
+      setPendingRegisterName(trimmed);
+      setIsAddOpen(false);
+      setVerifyDialogOpen(true);
+      return;
+    }
+
     setRegistering(true);
     setAddError("");
 
     try {
-      const options = await getPasskeyRegistrationOptions();
-      const credential = await startPasskeyRegistration(options);
-      const res = await verifyPasskeyRegistration({
-        name: trimmed,
-        credential
-      });
-
-      const passkeyId = (res as any)?.passkey?.id || (res as any)?.id;
-      if (passkeyId && e2ee.isUnlocked()) {
-        try {
-          await e2ee.wrapCurrentKeyForPasskey(passkeyId);
-        } catch (wrapErr) {
-          console.warn("[Passkeys] Failed to wrap existing E2EE key for new passkey:", wrapErr);
-        }
-      }
-
-      setIsAddOpen(false);
-      setPasskeyName("");
-      await fetchPasskeys();
-      onRefresh?.();
-      if (res?.recovery_keys && res.recovery_keys.length > 0) {
-        setRecoveryKeys(res.recovery_keys);
-      }
+      await executePasskeyRegistration(trimmed);
     } catch (err: unknown) {
       console.error("Passkey registration failed:", err);
       const msg =
@@ -206,6 +239,11 @@ export const usePasskeys = ({ onRefresh, toasterRef, user }: UsePasskeysProps): 
     } finally {
       setRegistering(false);
     }
+  };
+
+  const handleVerifyAndRegister = async (payload: VerifyIdentityPayload): Promise<void> => {
+    if (!pendingRegisterName) return;
+    await executePasskeyRegistration(pendingRegisterName, payload);
   };
 
   const handleCopyRecoveryKeys = (): void => {
@@ -347,6 +385,9 @@ export const usePasskeys = ({ onRefresh, toasterRef, user }: UsePasskeysProps): 
     setAddError,
     handleOpenAdd,
     handleRegister,
+    verifyDialogOpen,
+    setVerifyDialogOpen,
+    handleVerifyAndRegister,
     editingPasskey,
     setEditingPasskey,
     editName,
