@@ -31,6 +31,13 @@ export const SetupView: React.FC<SetupViewProps> = ({ profileId, profileKey, pro
   const [loadingAccessPoints, setLoadingAccessPoints] = useState(false);
   const [isAccessPointDrawerOpen, setIsAccessPointDrawerOpen] = useState(false);
   const [selectedApId, setSelectedApId] = useState<string | null>(null);
+  const [apSwitchCount, setApSwitchCount] = useState(0);
+
+  const handleSelectAp = (id: string) => {
+    if (id === selectedApId) return;
+    setSelectedApId(id);
+    setApSwitchCount((count) => count + 1);
+  };
 
   const fetchAccessPoints = async () => {
     setLoadingAccessPoints(true);
@@ -227,7 +234,7 @@ export const SetupView: React.FC<SetupViewProps> = ({ profileId, profileKey, pro
       <AccessPointCard
         accessPoints={accessPoints}
         selectedApId={activeAp?.id || null}
-        onSelectAp={setSelectedApId}
+        onSelectAp={handleSelectAp}
         accessPointName={activeName}
         onManageAccessPoints={() => setIsAccessPointDrawerOpen(true)}
         isMobile={isMobile}
@@ -236,7 +243,8 @@ export const SetupView: React.FC<SetupViewProps> = ({ profileId, profileKey, pro
       <DohUrlCard 
         dohUrl={dohUrl} 
         copyToClipboard={copyToClipboard} 
-        isMobile={isMobile} 
+        isMobile={isMobile}
+        flashTrigger={apSwitchCount}
       />
 
       <SetupTabs

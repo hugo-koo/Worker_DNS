@@ -75,6 +75,17 @@
   animation: rowGlow 2.5s ease-out;
 }
 
+@keyframes boxGlow {
+  0% {
+    background-color: rgba(59, 130, 246, 0.25);
+    border-color: rgba(59, 130, 246, 0.6);
+  }
+}
+
+.animate-box-glow {
+  animation: boxGlow 2.5s ease-out;
+}
+
 /* 修复 Blueprint Callout 在使用非内置图标（如 Lucide SVG）时图标与标题未对齐的问题 */
 .bp6-callout.bp6-callout-icon > svg:first-child,
 .bp6-callout.bp6-callout-icon > .lucide:first-child {

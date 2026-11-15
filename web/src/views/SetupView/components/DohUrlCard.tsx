@@ -8,12 +8,15 @@ export interface DohUrlCardProps {
   dohUrl: string;
   copyToClipboard: (text: string) => void;
   isMobile: boolean;
+  /** Incremented when the user switches Access Points to trigger a brief highlight flash. */
+  flashTrigger?: number;
 }
 
 export const DohUrlCard: React.FC<DohUrlCardProps> = ({
   dohUrl,
   copyToClipboard,
   isMobile,
+  flashTrigger = 0,
 }) => {
   const { t } = useTranslation();
 
@@ -55,7 +58,12 @@ export const DohUrlCard: React.FC<DohUrlCardProps> = ({
     >
       <StepStampWatermark step={2} />
       <SectionCard>
-        <div className="w-full bg-gray-100 dark:bg-gray-800 p-3 rounded-lg border border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+        <div
+          key={flashTrigger}
+          className={`w-full bg-gray-100 dark:bg-gray-800 p-3 rounded-lg border border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 ${
+            flashTrigger > 0 ? "animate-box-glow" : ""
+          }`}
+        >
           <span className="font-mono text-blue-600 dark:text-blue-400 break-all text-xs sm:text-sm">{dohUrl}</span>
           <Button
             intent={Intent.PRIMARY}
