@@ -20,6 +20,7 @@ export const DeploymentGuideView: React.FC = () => {
 
   // Read status injected from HTMLRewriter
   const isDbMissing = (window as any).DNS_WORKER_CONFIG?.isDbMissing ?? true;
+  const dbError: string | undefined = (window as any).DNS_WORKER_CONFIG?.dbError;
   const isJwtSecretMissing = (window as any).DNS_WORKER_CONFIG?.isJwtSecretMissing ?? true;
 
   const handleRefresh = () => {
@@ -116,10 +117,16 @@ export const DeploymentGuideView: React.FC = () => {
                       ? (isDbMissing ? t("deploymentGuide.serverfullDbMissing") : t("deploymentGuide.serverfullDbConfigured"))
                       : (isDbMissing ? t("deploymentGuide.missing") : t("deploymentGuide.configured"))}
                   </span>
-                  {isServerfull && isDbMissing && (
-                    <p className="text-xs mt-1.5 opacity-90 leading-normal">
-                      {t("deploymentGuide.serverfullDbMissingHint")}
+                  {isDbMissing && dbError ? (
+                    <p className="text-xs mt-1.5 opacity-90 leading-normal break-words">
+                      {dbError}
                     </p>
+                  ) : (
+                    isServerfull && isDbMissing && (
+                      <p className="text-xs mt-1.5 opacity-90 leading-normal">
+                        {t("deploymentGuide.serverfullDbMissingHint")}
+                      </p>
+                    )
                   )}
                 </Callout>
 

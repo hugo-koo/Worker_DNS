@@ -89,6 +89,7 @@ flowchart TD
 DNS-Worker/
 ├── src/                               # 核心后端逻辑（Serverless 与 Serverfull 共享）
 │   ├── index.ts                       # Cloudflare Workers 入口与计划任务调度
+│   ├── router/                        # HTTP 请求路由层（API 鉴权门控、静态资源/HTML 配置注入、运行时就绪检查）
 │   ├── api/                           # RESTful 与 WebSocket API 路由分层
 │   │   ├── auth/                      # 认证子模块（Turnstile 验证、锁定屏、密码找回）
 │   │   ├── account/                   # 账户管理（个人资料、安全凭据、WebAuthn、E2EE 设置）

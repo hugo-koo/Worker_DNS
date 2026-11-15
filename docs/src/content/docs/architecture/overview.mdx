@@ -89,6 +89,7 @@ The project code is organized into runtime core, frontend SPA, database migratio
 DNS-Worker/
 ├── src/                               # Shared backend runtime (Serverless & Serverfull)
 │   ├── index.ts                       # Cloudflare Workers entry and cron triggers
+│   ├── router/                        # HTTP routing layer (API auth/CSRF gating, static assets/HTML config injection, runtime readiness)
 │   ├── api/                           # RESTful & WebSocket API routing
 │   │   ├── auth/                      # Authentication submodules (Turnstile, lock screen, recovery)
 │   │   ├── account/                   # User profile, security credentials, WebAuthn, E2EE

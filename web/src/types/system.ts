@@ -7,6 +7,7 @@ export type DeploymentMode = 'serverfull' | 'cloudflare';
 export interface DnsWorkerConfig {
   nonce?: string;
   isDbMissing?: boolean;
+  dbError?: string;
   isJwtSecretMissing?: boolean;
   isServerfull?: boolean;
   mode?: DeploymentMode;

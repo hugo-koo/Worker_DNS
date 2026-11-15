@@ -55,6 +55,133 @@ export function isTursoConfigured(env?: Partial<Env> | NodeJS.ProcessEnv | null)
   return Boolean(url && token);
 }
 
+export interface TursoHealthResult {
+  ok: boolean;
+  errorCode?: 'missing' | 'invalid_url' | 'auth_failed' | 'unreachable';
+  message?: string;
+}
+
+const tursoHealthCache = new Map<string, { result: TursoHealthResult; expiresAt: number }>();
+
+/**
+ * Verifies that the configured Turso URL and Auth Token are valid and reachable.
+ * Caches healthy results for 60s and failures for 10s per credential pair to avoid
+ * adding latency to every request while promptly surfacing misconfigurations.
+ *
+ * @param env - Application environment bindings or process.env.
+ * @returns TursoHealthResult indicating connectivity and auth status.
+ */
+export async function verifyTursoConnection(
+  env?: Partial<Env> | NodeJS.ProcessEnv | null
+): Promise<TursoHealthResult> {
+  if (!env) {
+    return {
+      ok: false,
+      errorCode: 'missing',
+      message: 'TURSO_DATABASE_URL or TURSO_AUTH_TOKEN is not configured.'
+    };
+  }
+  const rawUrl = (env.TURSO_DATABASE_URL || (env as any).TURSO_URL)?.trim() || '';
+  const token = env.TURSO_AUTH_TOKEN?.trim() || '';
+  if (!rawUrl || !token) {
+    return {
+      ok: false,
+      errorCode: 'missing',
+      message: 'TURSO_DATABASE_URL or TURSO_AUTH_TOKEN is not configured.'
+    };
+  }
+
+  let normalizedUrl: string;
+  try {
+    normalizedUrl = normalizeTursoUrl(rawUrl);
+    const parsed = new URL(normalizedUrl);
+    if ((parsed.protocol !== 'http:' && parsed.protocol !== 'https:') || !parsed.hostname) {
+      throw new Error('Invalid Turso URL protocol or host');
+    }
+  } catch {
+    return {
+      ok: false,
+      errorCode: 'invalid_url',
+      message: 'TURSO_DATABASE_URL is invalid. Expected a valid libsql:// or https:// URL.'
+    };
+  }
+
+  const cacheKey = `${normalizedUrl}::${token.slice(0, 8)}:${token.length}`;
+  const now = Date.now();
+  const cached = tursoHealthCache.get(cacheKey);
+  if (cached && cached.expiresAt > now) {
+    return cached.result;
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 3000);
+  let result: TursoHealthResult;
+
+  try {
+    const res = await fetch(`${normalizedUrl}/v2/pipeline`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        requests: [
+          { type: 'execute', stmt: { sql: 'SELECT 1' } },
+          { type: 'close' }
+        ]
+      }),
+      signal: controller.signal
+    });
+
+    if (res.status === 401 || res.status === 403) {
+      result = {
+        ok: false,
+        errorCode: 'auth_failed',
+        message: `Turso authentication failed (HTTP ${res.status}). Please verify TURSO_AUTH_TOKEN.`
+      };
+    } else if (!res.ok) {
+      result = {
+        ok: false,
+        errorCode: 'unreachable',
+        message: `Turso endpoint returned HTTP ${res.status}. Please verify TURSO_DATABASE_URL.`
+      };
+    } else {
+      const json = (await res.json().catch(() => null)) as { results?: Array<{ type?: string; error?: { message?: string } }> } | null;
+      const first = json?.results?.[0];
+      if (!first || first.type === 'error' || first.error) {
+        result = {
+          ok: false,
+          errorCode: 'unreachable',
+          message: `Turso query probe failed: ${first?.error?.message || 'Unexpected response'}`
+        };
+      } else {
+        result = { ok: true };
+      }
+    }
+  } catch (err: any) {
+    const isAbort = err?.name === 'AbortError';
+    result = {
+      ok: false,
+      errorCode: 'unreachable',
+      message: isAbort
+        ? 'Turso connection timed out. Please verify TURSO_DATABASE_URL and network connectivity.'
+        : 'Unable to reach Turso endpoint. Please verify TURSO_DATABASE_URL.'
+    };
+  } finally {
+    clearTimeout(timeoutId);
+  }
+
+  if (tursoHealthCache.size >= 32) {
+    const firstKey = tursoHealthCache.keys().next().value;
+    if (firstKey !== undefined) tursoHealthCache.delete(firstKey);
+  }
+  tursoHealthCache.set(cacheKey, {
+    result,
+    expiresAt: now + (result.ok ? 60_000 : 10_000)
+  });
+  return result;
+}
+
 /**
  * Resolves the active database service type ('D1' | 'Turso' | 'File') based on environment variables.
  * - Serverless mode (Cloudflare Workers) defaults to 'D1'.
