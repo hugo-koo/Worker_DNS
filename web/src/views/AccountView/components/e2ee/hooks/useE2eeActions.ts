@@ -104,9 +104,19 @@ export function useE2eeActions({
   const handleEnrollPasskey = async () => {
     setProcessing(true);
     try {
-      const passkeys = await getPasskeys();
-      const passkeyId = passkeys.length > 0 ? passkeys[0].id : "primary";
-      const success = await e2ee.wrapCurrentKeyForPasskey(passkeyId);
+      const [passkeys, status] = await Promise.all([getPasskeys(), e2ee.getUserStatus()]);
+      const wrappedSet = new Set(status.wrappedPasskeys || []);
+      const unenrolledIds = passkeys.filter((p) => !wrappedSet.has(p.id)).map((p) => p.id);
+      if (unenrolledIds.length === 0) {
+        toasterRef.current?.show({
+          message: t("account.e2ee.allPasskeysEnrolled", "所有通行密钥均已关联至端到端加密。"),
+          intent: Intent.PRIMARY,
+          icon: "info-sign"
+        });
+        return;
+      }
+
+      const success = await e2ee.wrapCurrentKeyForPasskey(undefined, unenrolledIds);
       if (success) {
         toasterRef.current?.show({
           message: t("account.e2ee.enrollPasskeySuccess", "已成功将通行密钥关联至端到端加密！"),

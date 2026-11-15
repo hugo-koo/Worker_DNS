@@ -13,13 +13,57 @@ export interface DerivedPasskeyKek {
   passkeyId?: string;
 }
 
+export interface DerivePasskeyKekOptions {
+  /** Restrict WebAuthn prompt to specific passkey IDs (database ID or credential ID). */
+  targetPasskeyIds?: string[];
+}
+
 /**
  * Derives a 256-bit Key Encryption Key (KEK) using WebAuthn Passkey assertion.
  * Leverages WebAuthn PRF extension with dual salt evaluation (account + profileId)
  * to guarantee seamless decryption regardless of key wrap scope.
  */
-export async function derivePasskeyKek(saltScope: string = "account"): Promise<DerivedPasskeyKek> {
+export async function derivePasskeyKek(
+  saltScope: string = "account",
+  options?: DerivePasskeyKekOptions
+): Promise<DerivedPasskeyKek> {
   const authOptions = await getPasskeyAuthOptions();
+  const normalizeB64 = (s: string) => (s || "").replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let allowCredentials: any[] = authOptions.allowCredentials || [];
+  if (options?.targetPasskeyIds && options.targetPasskeyIds.length > 0) {
+    const targetSet = new Set(options.targetPasskeyIds);
+    const targetNormSet = new Set(options.targetPasskeyIds.map(normalizeB64));
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let filtered = allowCredentials.filter((c: any) => {
+      const cId = c?.id ? normalizeB64(String(c.id)) : "";
+      return (c?.passkey_id && targetSet.has(c.passkey_id)) || targetSet.has(c?.id) || targetNormSet.has(cId);
+    });
+
+    if (filtered.length === 0) {
+      const passkeys = await getPasskeys();
+      const matchedPasskeys = passkeys.filter(
+        (p) => targetSet.has(p.id) || targetSet.has(p.credential_id) || targetNormSet.has(normalizeB64(p.credential_id))
+      );
+      if (matchedPasskeys.length > 0) {
+        const matchedCredIds = new Set(matchedPasskeys.map((p) => normalizeB64(p.credential_id)));
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        filtered = allowCredentials.filter((c: any) => matchedCredIds.has(normalizeB64(String(c?.id || ""))));
+        if (filtered.length === 0) {
+          filtered = matchedPasskeys.map((p) => ({
+            id: p.credential_id,
+            type: "public-key",
+            passkey_id: p.id,
+          }));
+        }
+      }
+    }
+
+    if (filtered.length > 0) {
+      allowCredentials = filtered;
+    }
+  }
 
   // Primary salt is always "account"
   const saltAccount = new Uint8Array(32);
@@ -51,7 +95,7 @@ export async function derivePasskeyKek(saltScope: string = "account"): Promise<D
       userVerification: "preferred",
       rpId: authOptions.rpId || window.location.hostname,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      allowCredentials: (authOptions.allowCredentials || []).map((c: any) => ({
+      allowCredentials: allowCredentials.map((c: any) => ({
         ...c,
         id: base64UrlToUint8Array(c.id) as BufferSource,
       })),
@@ -86,14 +130,13 @@ export async function derivePasskeyKek(saltScope: string = "account"): Promise<D
 
   // Match credential ID to registered passkey if possible
   let passkeyId = credential.id;
-  const normalizeB64 = (s: string) => (s || "").replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
   const rawIdB64Url = credential.rawId ? bufferToBase64Url(credential.rawId) : "";
   const credIdNorm = normalizeB64(credential.id);
   const rawIdNorm = normalizeB64(rawIdB64Url);
 
-  if (authOptions.allowCredentials && authOptions.allowCredentials.length > 0) {
+  if (allowCredentials.length > 0) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const match = authOptions.allowCredentials.find((c: any) => {
+    const match = allowCredentials.find((c: any) => {
       const cNorm = normalizeB64(c.id);
       return cNorm === credIdNorm || cNorm === rawIdNorm || c.passkey_id === credential.id;
     });
@@ -109,7 +152,7 @@ export async function derivePasskeyKek(saltScope: string = "account"): Promise<D
       });
       if (match?.id) {
         passkeyId = match.id;
-      } else if (passkeys.length > 0) {
+      } else if (!options?.targetPasskeyIds?.length && passkeys.length > 0) {
         passkeyId = passkeys[0].id;
       }
     } catch (err) {

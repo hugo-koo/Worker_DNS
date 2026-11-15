@@ -45,7 +45,7 @@ export function useE2eeStatus({
 
   useEffect(() => {
     loadStatus();
-  }, [loadStatus]);
+  }, [loadStatus, user.passkeys_count]);
 
   const hasPasskey =
     (user.passkeys_count && user.passkeys_count > 0) ||

@@ -164,7 +164,9 @@ export class E2eeApi {
       throw new Error("No passkeys have been enrolled in E2EE yet. Please unlock with Recovery Key or reset the keypair.");
     }
 
-    const { kek, altKek, passkeyId } = await derivePasskeyKek("account");
+    const { kek, altKek, passkeyId } = await derivePasskeyKek("account", {
+      targetPasskeyIds: status.wrappedPasskeys
+    });
     const targetPasskeyId = passkeyId || status.wrappedPasskeys[0];
 
     const { encryptedSk, iv } = await fetchWrappedKey(targetPasskeyId);
@@ -189,8 +191,11 @@ export class E2eeApi {
       return true;
     }
 
-    // Use dual-salt derivation (account + profileId)
-    const { kek, altKek, passkeyId } = await derivePasskeyKek(profileId);
+    // Use dual-salt derivation (account + profileId), restricted to enrolled passkeys when known
+    const { kek, altKek, passkeyId } = await derivePasskeyKek(
+      profileId,
+      status.wrappedPasskeys?.length ? { targetPasskeyIds: status.wrappedPasskeys } : undefined
+    );
     const targetPasskeyId = passkeyId || status.wrappedPasskeys[0];
 
     const { encryptedSk, iv } = await fetchWrappedKey(targetPasskeyId, profileId);
@@ -247,23 +252,30 @@ export class E2eeApi {
   }
 
   /**
-   * Wraps the currently unlocked private key for a newly registered Passkey.
+   * Wraps the currently unlocked private key for a newly registered or selected Passkey.
+   *
+   * @param passkeyId - Specific passkey ID to wrap for (pins WebAuthn prompt to that passkey).
+   * @param targetPasskeyIds - Optional list of candidate passkey IDs when enrolling one of multiple unenrolled keys.
+   * @returns True if wrapping succeeded on the server.
    */
-  async wrapCurrentKeyForPasskey(passkeyId: string): Promise<boolean> {
+  async wrapCurrentKeyForPasskey(passkeyId?: string, targetPasskeyIds?: string[]): Promise<boolean> {
     const sk = this.keyStore.getPrivateKey("account");
     if (!sk) {
-      console.warn("[E2EE API] Cannot wrap passkey: private key is not unlocked in this session");
-      return false;
+      throw new Error("E2EE is locked in this session. Please unlock E2EE first.");
     }
 
-    try {
-      const { kek } = await derivePasskeyKek("account");
-      const { encryptedSk, iv } = await wrapPrivateKeyWithKek(kek, sk);
-      return await postWrapKey({ passkeyId, encryptedSk, iv });
-    } catch (err) {
-      console.warn("[E2EE API] Failed to wrap passkey KEK:", err);
-      return false;
+    const targets = targetPasskeyIds?.length ? targetPasskeyIds : passkeyId ? [passkeyId] : undefined;
+    const { kek, passkeyId: derivedPasskeyId } = await derivePasskeyKek(
+      "account",
+      targets ? { targetPasskeyIds: targets } : undefined
+    );
+    const resolvedPasskeyId = passkeyId || derivedPasskeyId;
+    if (!resolvedPasskeyId) {
+      throw new Error("Could not match the verified Passkey to an account credential.");
     }
+
+    const { encryptedSk, iv } = await wrapPrivateKeyWithKek(kek, sk);
+    return await postWrapKey({ passkeyId: resolvedPasskeyId, encryptedSk, iv });
   }
 
   /**

@@ -15,7 +15,7 @@ import type {
 import { KeyStore } from "./keyStore";
 import { DecryptEngine } from "./decryptEngine";
 import { E2eeApi } from "./api";
-import { derivePasskeyKek, type DerivedPasskeyKek } from "./passkeyKek";
+import { derivePasskeyKek, type DerivedPasskeyKek, type DerivePasskeyKekOptions } from "./passkeyKek";
 import {
   deriveRecoveryKek,
   wrapPrivateKeyWithRecoveryKey,
@@ -67,8 +67,11 @@ export class E2eeService {
 
   // ── Key Derivation & Wrapping ──
 
-  async derivePasskeyKek(saltScope: string = "account"): Promise<DerivedPasskeyKek> {
-    return derivePasskeyKek(saltScope);
+  async derivePasskeyKek(
+    saltScope: string = "account",
+    options?: DerivePasskeyKekOptions
+  ): Promise<DerivedPasskeyKek> {
+    return derivePasskeyKek(saltScope, options);
   }
 
   async deriveRecoveryKek(plaintextRecoveryKey: string, salt: Uint8Array): Promise<CryptoKey> {
@@ -140,8 +143,8 @@ export class E2eeService {
     return this.api.initUserE2eeWithRecoveryKey(plaintextRecoveryKey);
   }
 
-  async wrapCurrentKeyForPasskey(passkeyId: string): Promise<boolean> {
-    return this.api.wrapCurrentKeyForPasskey(passkeyId);
+  async wrapCurrentKeyForPasskey(passkeyId?: string, targetPasskeyIds?: string[]): Promise<boolean> {
+    return this.api.wrapCurrentKeyForPasskey(passkeyId, targetPasskeyIds);
   }
 
   async wrapCurrentKeyForRecovery(newRecoveryKey: string): Promise<boolean> {

@@ -182,11 +182,34 @@ export const usePasskeys = ({ onRefresh, toasterRef, user }: UsePasskeysProps): 
     });
 
     const passkeyId = res?.passkey?.id;
-    if (passkeyId && e2ee.isUnlocked()) {
-      try {
-        await e2ee.wrapCurrentKeyForPasskey(passkeyId);
-      } catch (wrapErr) {
-        console.warn("[Passkeys] Failed to wrap existing E2EE key for new passkey:", wrapErr);
+    if (passkeyId) {
+      if (e2ee.isUnlocked()) {
+        try {
+          await e2ee.wrapCurrentKeyForPasskey(passkeyId);
+        } catch (wrapErr: unknown) {
+          console.warn("[Passkeys] Failed to wrap existing E2EE key for new passkey:", wrapErr);
+          const wrapMsg = wrapErr instanceof Error ? wrapErr.message : String(wrapErr);
+          toasterRef?.current?.show({
+            message: t("account.passkey.e2eeWrapWarning", {
+              reason: wrapMsg,
+              defaultValue: `Passkey added, but E2EE key enrollment did not complete (${wrapMsg}). You can enroll it in the E2EE card.`
+            }),
+            intent: Intent.WARNING,
+            icon: "warning-sign"
+          });
+        }
+      } else {
+        const e2eeStatus = await e2ee.getUserStatus().catch(() => null);
+        if (e2eeStatus?.hasKeys) {
+          toasterRef?.current?.show({
+            message: t(
+              "account.passkey.e2eeLockedHint",
+              "Passkey added. Please unlock E2EE and click 'Enroll Passkey' in the E2EE card to allow this key to decrypt logs."
+            ),
+            intent: Intent.PRIMARY,
+            icon: "info-sign"
+          });
+        }
       }
     }
 

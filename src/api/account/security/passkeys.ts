@@ -397,6 +397,11 @@ export async function handlePasskeysRequest(
     }
 
     await passkeyModel.delete(passkeyId, user.id);
+    try {
+      await env.DB.prepare("DELETE FROM user_passkey_wrapped_keys WHERE passkey_id = ?").bind(passkeyId).run();
+    } catch {
+      // Ignore if E2EE wrapped key table is unavailable or already cascaded
+    }
     await activityLog.record(user.id, "passkey_deleted", clientIp, userAgent, { name: passkey.name, method: authResult.method }, sessionHash);
 
     // Re-read fresh user record after deletion to prevent stale totp_enabled race
