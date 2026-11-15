@@ -619,6 +619,7 @@
     "retention10m": "10分",
     "retention1h": "1時間",
     "retention24h": "24時間",
+    "retention3d": "3日間",
     "retention7d": "7日間",
     "retention30d": "30日間",
     "retention90d": "90日",

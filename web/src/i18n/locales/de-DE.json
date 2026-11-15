@@ -619,6 +619,7 @@
     "retention10m": "10 Minuten",
     "retention1h": "1 Stunde",
     "retention24h": "24 Stunden",
+    "retention3d": "3 Tage",
     "retention7d": "7 Tage",
     "retention30d": "30 Tage",
     "retention90d": "90 Tage",

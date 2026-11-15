@@ -619,6 +619,7 @@
     "retention10m": "10 минут",
     "retention1h": "1 час",
     "retention24h": "24 часа",
+    "retention3d": "3 дня",
     "retention7d": "7 дней",
     "retention30d": "30 дней",
     "retention90d": "90 дней",

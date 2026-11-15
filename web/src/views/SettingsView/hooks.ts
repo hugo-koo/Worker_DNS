@@ -33,6 +33,7 @@ export const useLogRetentionOptions = (_isAdmin: boolean, maxRetentionDays: numb
       { label: t("settings.retention10m", "10 分钟"), value: 0.007 },
       { label: t("settings.retention1h", "1 小时"), value: 0.0416 },
       { label: t("settings.retention24h", "24 小时"), value: 1 },
+      { label: t("settings.retention3d", "3 天"), value: 3 },
       { label: t("settings.retention7d", "7 天"), value: 7 },
       { label: t("settings.retention30d", "30 天"), value: 30 },
       { label: t("settings.retention90d", "90 天"), value: 90 },

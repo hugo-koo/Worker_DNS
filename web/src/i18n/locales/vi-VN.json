@@ -619,6 +619,7 @@
     "retention10m": "10 phút",
     "retention1h": "1 giờ",
     "retention24h": "24 giờ",
+    "retention3d": "3 ngày",
     "retention7d": "7 ngày",
     "retention30d": "30 ngày",
     "retention90d": "90 ngày",
