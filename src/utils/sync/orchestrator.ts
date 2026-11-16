@@ -303,10 +303,13 @@ async function _executeSyncAllListsForProfile(
       return;
     }
 
-    // 用户侧仅合并系统侧存储的过滤器：确保缺失全局布隆的个别列表被系统初始化编译一次
+    // 用户侧仅合并系统侧存储的过滤器：确保缺失全局布隆或规则统计元数据的列表被系统初始化编译一次
     for (const list of activeLists) {
-      const hasBloom = await listBloomModel.hasListBloom(list.url);
-      if (!hasBloom) {
+      const [hasBloom, meta] = await Promise.all([
+        listBloomModel.hasListBloom(list.url),
+        listModel.getGlobalListMetadata(list.url)
+      ]);
+      if (!hasBloom || !meta?.stats) {
         await syncGlobalList(list.url, env, listModel, listBloomModel, now);
       }
     }
@@ -407,9 +410,12 @@ async function _executeSyncSingleListForProfile(
       return;
     }
 
-    // 检查系统全局存储中是否已有编译产物，若缺失则补充拉取一次
-    const hasBloom = await listBloomModel.hasListBloom(list.url);
-    if (!hasBloom) {
+    // 检查系统全局存储中是否已有编译产物及规则统计元数据，若缺失则补充拉取一次
+    const [hasBloom, meta] = await Promise.all([
+      listBloomModel.hasListBloom(list.url),
+      listModel.getGlobalListMetadata(list.url)
+    ]);
+    if (!hasBloom || !meta?.stats) {
       await syncGlobalList(list.url, env, listModel, listBloomModel, now);
     }
 
