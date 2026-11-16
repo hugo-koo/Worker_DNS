@@ -487,6 +487,7 @@
     "title": "Externe Listen",
     "subtitle": "Abonnieren Sie von Drittanbietern gepflegte Domain-Sperrlisten (wie AdGuard Home usw.).",
     "formatDisclaimer": "Unterstützt Listen im AdGuard Home-Format oder reine Domainlisten. Das System gleicht Subdomains standardmäßig nicht automatisch ab (nur Regeln mit dem Präfix || blockieren alle Subdomains).",
+    "priorityDisclaimer": "Externe Listen haben untereinander keine Reihenfolge-Priorität (sie werden zusammengeführt). Für Einträge externer Listen gilt einheitlich: Zulassen (@@) > Umschreiben ($dnsrewrite) > Blockieren. Lokale benutzerdefinierte Regeln haben stets Vorrang vor externen Listen.",
     "syncAll": "Alle Listen synchronisieren",
     "urlPlaceholder": "Listen-URL eingeben...",
     "addSubscription": "Abonnement hinzufügen",

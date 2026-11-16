@@ -360,9 +360,13 @@ export const FilteringView: React.FC<FilteringViewProps> = ({ profileId, toaster
       </div>
 
       <Callout intent={Intent.WARNING} icon="info-sign" className="mb-6">
-        <p>
+        <p className="m-0">
+          {t("filtering.formatDisclaimer")}
+        </p>
+        <p className="mt-1.5 mb-0">
           {t(
-            "filtering.formatDisclaimer"
+            "filtering.priorityDisclaimer",
+            "外部列表之间不分先后（合并生效），其条目优先级统一遵循：「放行 (@@)」>「重写 ($dnsrewrite)」>「拦截」；本地自定义规则始终优先于外部列表。"
           )}
         </p>
       </Callout>

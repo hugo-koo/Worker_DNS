@@ -487,6 +487,7 @@
     "title": "Listas externas",
     "subtitle": "Suscríbete a listas de bloqueo de dominios mantenidas por terceros (como AdGuard Home, etc.).",
     "formatDisclaimer": "Admite listas en formato AdGuard Home o listas de dominios puros. De forma predeterminada, el sistema no coincide automáticamente con subdominios (solo las reglas con el prefijo || bloquean todos los subdominios).",
+    "priorityDisclaimer": "Las listas externas no tienen orden de prioridad entre sí (se fusionan). En las listas externas, la prioridad de las entradas sigue estrictamente: Permitir (@@) > Reescribir ($dnsrewrite) > Bloquear. Las reglas locales personalizadas siempre prevalecen sobre las listas externas.",
     "syncAll": "Sincronizar todas las listas",
     "urlPlaceholder": "Introduce la URL de la lista...",
     "addSubscription": "Añadir suscripción",

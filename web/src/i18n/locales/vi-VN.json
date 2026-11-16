@@ -487,6 +487,7 @@
     "title": "Danh sách bên ngoài",
     "subtitle": "Đăng ký danh sách chặn tên miền do bên thứ ba duy trì (như AdGuard Home, v.v.).",
     "formatDisclaimer": "Hỗ trợ danh sách định dạng AdGuard Home hoặc danh sách tên miền thuần túy. Theo mặc định, hệ thống không tự động khớp các miền phụ (chỉ các quy tắc có tiền tố || mới chặn tất cả các miền phụ).",
+    "priorityDisclaimer": "Các danh sách bên ngoài không phân biệt thứ tự trước sau (được gộp chung khi áp dụng). Thứ tự ưu tiên quy tắc trong danh sách bên ngoài là: Cho phép (@@) > Ghi đè ($dnsrewrite) > Chặn. Quy tắc tùy chỉnh cục bộ luôn được ưu tiên hơn danh sách bên ngoài.",
     "syncAll": "Đồng bộ tất cả danh sách",
     "urlPlaceholder": "Nhập URL danh sách chặn...",
     "addSubscription": "Thêm đăng ký",
