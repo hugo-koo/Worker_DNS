@@ -1,6 +1,7 @@
 import { D1Database } from "@cloudflare/workers-types";
 import { LogAggregationModel } from "../aggregation";
 import { ClientCountResult } from "./types";
+import { computeRollupWindow, buildRollupUnionParts } from "./rollupWindow";
 
 /**
  * Handles client device and IP-level analytics.
@@ -28,10 +29,10 @@ export class LogClientAnalytics {
     until: number,
     accessPointId?: string
   ): Promise<ClientCountResult[]> {
-    if (!this.aggregation) {
+    const queryRawClients = async (fromTs: number, toTs: number): Promise<ClientCountResult[]> => {
       let queryStr =
         "SELECT client_ip, geo_country, COUNT(*) as count FROM logs WHERE profile_id = ? AND timestamp >= ? AND timestamp <= ? AND client_ip IS NOT NULL AND client_ip != '' AND client_ip != '[Encrypted]'";
-      const params: (string | number)[] = [profileId, since, until];
+      const params: (string | number)[] = [profileId, fromTs, toTs];
       if (accessPointId) {
         queryStr += " AND access_point_id = ?";
         params.push(accessPointId);
@@ -42,81 +43,52 @@ export class LogClientAnalytics {
         .bind(...params)
         .all<ClientCountResult>();
       return results;
+    };
+
+    if (!this.aggregation) {
+      return queryRawClients(since, until);
     }
 
     const latestRollupHour = await this.aggregation.getLatestClientRollupHour(profileId);
-    const cutoff = latestRollupHour !== null ? latestRollupHour + 3600 : since;
+    const window = computeRollupWindow(since, until, latestRollupHour);
 
-    // Case 1: No rollups available or entire range is after cutoff -> query raw logs only
-    if (cutoff <= since) {
-      let queryStr =
-        "SELECT client_ip, geo_country, COUNT(*) as count FROM logs WHERE profile_id = ? AND timestamp >= ? AND timestamp <= ? AND client_ip IS NOT NULL AND client_ip != '' AND client_ip != '[Encrypted]'";
-      const params: (string | number)[] = [profileId, since, until];
-      if (accessPointId) {
-        queryStr += " AND access_point_id = ?";
-        params.push(accessPointId);
+    if (!window.useRollups) {
+      return queryRawClients(since, until);
+    }
+
+    const union = buildRollupUnionParts(
+      since,
+      until,
+      window,
+      (startHour, endHour) => {
+        let where = "profile_id = ? AND metric_type = 'client' AND key NOT LIKE 'enc:%' AND hour_timestamp >= ? AND hour_timestamp < ?";
+        const params: (string | number)[] = [profileId, startHour, endHour];
+        if (accessPointId) {
+          where += " AND access_point_id = ?";
+          params.push(accessPointId);
+        }
+        return {
+          sql: `SELECT key as client_ip, sub_key as geo_country, count FROM hourly_rollups WHERE ${where}`,
+          params
+        };
+      },
+      (fromTs, toTs) => {
+        let where = "profile_id = ? AND timestamp >= ? AND timestamp <= ? AND client_ip IS NOT NULL AND client_ip != '' AND client_ip != '[Encrypted]'";
+        const params: (string | number)[] = [profileId, fromTs, toTs];
+        if (accessPointId) {
+          where += " AND access_point_id = ?";
+          params.push(accessPointId);
+        }
+        return {
+          sql: `SELECT client_ip, COALESCE(geo_country, '') as geo_country, COUNT(*) as count FROM logs WHERE ${where} GROUP BY client_ip, COALESCE(geo_country, '')`,
+          params
+        };
       }
-      queryStr += " GROUP BY client_ip, geo_country ORDER BY count DESC LIMIT 20";
-      const { results } = await this.db
-        .prepare(queryStr)
-        .bind(...params)
-        .all<ClientCountResult>();
-      return results;
-    }
-
-    // Case 2: Entire range is within completed rollups
-    if (cutoff > until) {
-      const sinceHour = Math.floor(since / 3600) * 3600;
-      let queryStr = `
-        SELECT key as client_ip, NULLIF(sub_key, '') as geo_country, SUM(count) as count
-        FROM hourly_rollups
-        WHERE profile_id = ? AND metric_type = 'client' AND key NOT LIKE 'enc:%' AND hour_timestamp >= ? AND hour_timestamp <= ?
-      `;
-      const params: (string | number)[] = [profileId, sinceHour, until];
-      if (accessPointId) {
-        queryStr += " AND access_point_id = ?";
-        params.push(accessPointId);
-      }
-      queryStr += " GROUP BY key, sub_key ORDER BY count DESC LIMIT 20";
-      const { results } = await this.db
-        .prepare(queryStr)
-        .bind(...params)
-        .all<ClientCountResult>();
-      return results;
-    }
-
-    // Case 3: Spans historical rollups and unaggregated logs -> Hybrid UNION ALL query
-    const sinceHour = Math.floor(since / 3600) * 3600;
-    let rollupWhere = "profile_id = ? AND metric_type = 'client' AND key NOT LIKE 'enc:%' AND hour_timestamp >= ? AND hour_timestamp < ?";
-    const rollupParams: (string | number)[] = [profileId, sinceHour, cutoff];
-    if (accessPointId) {
-      rollupWhere += " AND access_point_id = ?";
-      rollupParams.push(accessPointId);
-    }
-
-    let logWhere = "profile_id = ? AND timestamp >= ? AND timestamp <= ? AND client_ip IS NOT NULL AND client_ip != '' AND client_ip != '[Encrypted]'";
-    const logParams: (string | number)[] = [profileId, cutoff, until];
-    if (accessPointId) {
-      logWhere += " AND access_point_id = ?";
-      logParams.push(accessPointId);
-    }
-
-    const queryStr = `
-      SELECT client_ip, NULLIF(geo_country, '') as geo_country, SUM(count) as count FROM (
-        SELECT key as client_ip, sub_key as geo_country, count
-        FROM hourly_rollups
-        WHERE ${rollupWhere}
-        UNION ALL
-        SELECT client_ip, COALESCE(geo_country, '') as geo_country, COUNT(*) as count
-        FROM logs
-        WHERE ${logWhere}
-        GROUP BY client_ip, COALESCE(geo_country, '')
-      ) GROUP BY client_ip, geo_country ORDER BY count DESC LIMIT 20
-    `;
+    );
 
     const { results } = await this.db
-      .prepare(queryStr)
-      .bind(...rollupParams, ...logParams)
+      .prepare(`SELECT client_ip, NULLIF(geo_country, '') as geo_country, SUM(count) as count FROM (${union.sql}) GROUP BY client_ip, geo_country ORDER BY count DESC LIMIT 20`)
+      .bind(...union.params)
       .all<ClientCountResult>();
 
     return results;
