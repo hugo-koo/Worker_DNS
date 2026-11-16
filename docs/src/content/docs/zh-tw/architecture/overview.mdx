@@ -89,7 +89,7 @@ flowchart TD
 DNS-Worker/
 ├── src/                               # 核心后端逻辑（Serverless 与 Serverfull 共享）
 │   ├── index.ts                       # Cloudflare Workers 入口与计划任务调度
-│   ├── router/                        # HTTP 請求路由層（API 鑑權門控、靜態資源/HTML 設定注入、執行時就緒檢查）
+│   ├── router/                        # HTTP 请求路由层（API 鉴权门控、静态资源/HTML 配置注入、运行时就绪检查）
 │   ├── api/                           # RESTful 与 WebSocket API 路由分层
 │   │   ├── auth/                      # 认证子模块（Turnstile 验证、锁定屏、密码找回）
 │   │   ├── account/                   # 账户管理（个人资料、安全凭据、WebAuthn、E2EE 设置）
@@ -105,33 +105,33 @@ DNS-Worker/
 │   ├── serverfull/                    # 独立服务器守护进程（UDP 53、DoT 853、嵌入式 HTTP、CLI 与系统服务）
 │   └── utils/                         # 工具库（DNS 编解码、ECH 编解码、规则拉取清洗、布隆编译器等）
 │
-├── web/                               # 本地優先前端單頁面應用 (React + TypeScript + Vite)
-│   └── src/                           # 前端原始碼目錄
-│       ├── components/                # 通用 UI 與業務元件（登入、註冊精靈、部署模式、鎖定畫面等）
-│       ├── config/                    # 前端執行時設定與常數定義
-│       ├── hooks/                     # 全域複用 React Hooks（認證狀態、E2EE、Turnstile 等）
-│       ├── i18n/                      # 國際化設定與多語系詞條（locales/）
-│       ├── layouts/                   # 頁面版面骨架（側邊欄、行動端導覽與響應式容器）
-│       ├── routes/                    # 前端路由定義與權限守衛
-│       ├── services/                  # 前端核心領域服務層
-│       │   ├── e2ee/                  # 瀏覽器端 NIST FIPS 203 ML-KEM-768 / P-256 金鑰與解密服務
-│       │   └── localDb/               # 本地優先 SQLite 領域服務（Worker 通訊、增量同步、分析查詢、儲存維護）
-│       ├── types/                     # 前端 TypeScript 型別與介面定義
-│       ├── utils/                     # 前端通用工具函式
-│       ├── views/                     # 頁面級業務檢視目錄
-│       │   ├── AccountView/           # 帳戶安全、工作階段管理、WebAuthn/TOTP 與 E2EE 設定
-│       │   ├── AnalyticsView/         # 多維統計圖表、Top 網域與流量趨勢分析
-│       │   ├── DashboardHomeView/     # 概覽儀表板首頁
-│       │   ├── DeploymentGuideView/   # 接入與部署指引頁面
-│       │   ├── FilteringView/         # 外部訂閱過濾清單管理與同步狀態
-│       │   ├── LogsView/              # 即時/本地查詢日誌流、檢索、匯出與解密顯示
-│       │   ├── RulesView/             # 自訂過濾與 DNS 重寫規則管理
-│       │   ├── SettingsView/          # Profile 接入點設定、隱私與危險操作設定
-│       │   ├── SetupView/             # 裝置接入精靈（DoH / DoT / DoQ / 路由器設定）
-│       │   ├── SystemView/            # 系統級設定與管理員控制台
-│       │   └── NotFoundView/          # 404 兜底頁面
-│       ├── service-worker/            # PWA Service Worker（靜態資源與受控快取策略）
-│       └── web-worker/                # 背景 Web Worker（sqlite/：承載 SQLite WASM 與 OPFS 驅動）
+├── web/                               # 本地优先前端单页面应用 (React + TypeScript + Vite)
+│   └── src/                           # 前端源码目录
+│       ├── components/                # 通用 UI 与业务组件（登录、注册向导、部署模式、锁屏等）
+│       ├── config/                    # 前端运行时配置与常量定义
+│       ├── hooks/                     # 全局复用 React Hooks（认证态、E2EE、Turnstile 等）
+│       ├── i18n/                      # 国际化配置与多语言词条（locales/）
+│       ├── layouts/                   # 页面布局骨架（侧边栏、移动端导航与响应式容器）
+│       ├── routes/                    # 前端路由定义与权限守卫
+│       ├── services/                  # 前端核心领域服务层
+│       │   ├── e2ee/                  # 浏览器端 NIST FIPS 203 ML-KEM-768 / P-256 密钥与解密服务
+│       │   └── localDb/               # 本地优先 SQLite 领域服务（Worker 通信、增量同步、分析查询、存储维护）
+│       ├── types/                     # 前端 TypeScript 类型与接口定义
+│       ├── utils/                     # 前端通用工具函数
+│       ├── views/                     # 页面级业务视图目录
+│       │   ├── AccountView/           # 账户安全、会话管理、WebAuthn/TOTP 与 E2EE 设置
+│       │   ├── AnalyticsView/         # 多维统计图表、Top 域名与流量趋势分析
+│       │   ├── DashboardHomeView/     # 概览仪表盘首页
+│       │   ├── DeploymentGuideView/   # 接入与部署指引页面
+│       │   ├── FilteringView/         # 外部订阅过滤列表管理与同步状态
+│       │   ├── LogsView/              # 实时/本地查询日志流、检索、导出与解密展示
+│       │   ├── RulesView/             # 自定义过滤与 DNS 重写规则管理
+│       │   ├── SettingsView/          # Profile 接入点配置、隐私与危险操作设置
+│       │   ├── SetupView/             # 设备接入向导（DoH / DoT / DoQ / 路由器配置）
+│       │   ├── SystemView/            # 系统级配置与管理员控制台
+│       │   └── NotFoundView/          # 404 兜底页面
+│       ├── service-worker/            # PWA Service Worker（静态资源与受控缓存策略）
+│       └── web-worker/                # 后台 Web Worker（sqlite/：承载 SQLite WASM 与 OPFS 驱动）
 │
 ├── migrations/                        # 版本化 SQL 数据库结构迁移脚本
 └── test/                              # 自动化测试矩阵（Turnstile 门控、Turso 协议、Serverfull 守护进程集成测试）

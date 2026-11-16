@@ -80,6 +80,16 @@ Within each profile's `/filter` view, lists are organized in a split layout:
 - **Linked Disabling**: When a user disables a filter list in a profile, if duplicate entries with the same URL exist across tiers, the system **simultaneously disables all matching entries** in that profile. This prevents deceptive states where a list appears disabled while identical rules remain active through another tier. Re-enabling affects only the individually toggled item.
 - **Deduplicated Engine Compilation**: When compiling active rules into Bloom filters and regex sets, the background synchronization pipeline automatically deduplicates active URLs (`Set<string>`). Identical URLs are fetched and parsed only once, minimizing network egress and edge compute overhead.
 
+#### 4. External List Priority & Conflict Resolution
+When multiple external subscriptions are enabled and contain conflicting entries for the same domain, DNS Worker resolves conflicts by **rule kind precedence** rather than list ordering:
+
+- **No Order Precedence Among External Lists (Merged Evaluation)**: Regardless of whether a list is profile-level, user-level, or system-level—and regardless of the order in which lists were added or synced—all enabled external lists are compiled into a unified rule set. List ordering has no effect on matching outcomes.
+- **External Rule Entry Priority: `Allow (@@)` > `Rewrite ($dnsrewrite)` > `Block`**:
+  1. **Allow / Exception Rules (`@@`) First**: If any enabled external list contains a matching `@@` exception rule, the query is permitted even if other external lists contain rewrite or block rules for that domain. Putting exceptions first ensures false positives from broad blocklists can always be corrected by subscribing to allowlist feeds.
+  2. **DNS Rewrites (`$dnsrewrite`) Second**: If no external exception matches, matching `$dnsrewrite` rules are applied next (synthesizing custom A / AAAA / CNAME records or NXDOMAIN / REFUSED responses).
+  3. **Block Rules (Bloom / Wildcard / Regex) Third**: Only when neither exceptions nor rewrites match does the query proceed to the dual-state Bloom filter (exact and `||` subdomain rules) and the wildcard/regex pattern pool.
+- **Local Custom Rules Always Override External Lists**: Manual rules configured in the **Rules** view are evaluated in order of **Local `ALLOW` > Local `REDIRECT` > Local `BLOCK`** before any external list is consulted. Consequently, a user's explicit local `BLOCK` rule cannot be bypassed by an external list's `@@` exception, and a local `ALLOW` rule always overrides any external blocklist.
+
 ---
 
 ### Custom Allowlist, Blocklist & Rewrites
