@@ -650,7 +650,7 @@
     "echHelpBenefit1": "プロバイダや中間者による閲覧先ドメインの盗聴を防止",
     "echHelpBenefit2": "DoH と連携して平文 SNI の漏洩や検閲を回避",
     "ttlOverrideTitle": "TTL 上書き",
-    "ttlOverrideDesc": "解決結果の種別ごとに返却する DNS レコードの TTL を上書きします（0〜2147483647 秒、0 はキャッシュ無効）。",
+    "ttlOverrideDesc": "解決結果の種別ごとに返却する DNS レコードの TTL を上書きします（0〜{{max}} 秒、0 はキャッシュ無効）。",
     "ttlPassLabel": "許可応答 (PASS)",
     "ttlRedirectLabel": "リダイレクト応答 (REDIRECT)",
     "ttlBlockLabel": "ブロック応答 (BLOCK)",

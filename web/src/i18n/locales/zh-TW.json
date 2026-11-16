@@ -650,7 +650,7 @@
     "echHelpBenefit1": "防止中間人及 ISP 窺探您正在存取的具體網頁與子網域名稱",
     "echHelpBenefit2": "配合 DoH 與自訂表層 SNI，消除明文 SNI 阻斷與識別風險",
     "ttlOverrideTitle": "TTL 重寫",
-    "ttlOverrideDesc": "依解析結果類型重寫回傳的 DNS 記錄 TTL（支援 0 - 2147483647 秒，0 表示不快取）。",
+    "ttlOverrideDesc": "依解析結果類型重寫回傳的 DNS 記錄 TTL（支援 0 - {{max}} 秒，0 表示不快取）。",
     "ttlPassLabel": "放行回應 (PASS)",
     "ttlRedirectLabel": "重新導向回應 (REDIRECT)",
     "ttlBlockLabel": "攔截回應 (BLOCK)",

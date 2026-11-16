@@ -650,7 +650,7 @@
     "echHelpBenefit1": "Ngăn chặn nhà mạng và bên trung gian theo dõi miền phụ bạn đang truy cập",
     "echHelpBenefit2": "Kết hợp với DoH để loại bỏ rò rỉ SNI dạng văn bản thuần",
     "ttlOverrideTitle": "Ghi đè TTL",
-    "ttlOverrideDesc": "Ghi đè TTL của bản ghi DNS trả về theo loại kết quả phân giải (0 - 2147483647 giây; 0 để tắt lưu bộ nhớ đệm).",
+    "ttlOverrideDesc": "Ghi đè TTL của bản ghi DNS trả về theo loại kết quả phân giải (0 - {{max}} giây; 0 để tắt lưu bộ nhớ đệm).",
     "ttlPassLabel": "Phản hồi cho phép (PASS)",
     "ttlRedirectLabel": "Phản hồi chuyển hướng (REDIRECT)",
     "ttlBlockLabel": "Phản hồi chặn (BLOCK)",

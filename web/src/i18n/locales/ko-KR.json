@@ -650,7 +650,7 @@
     "echHelpBenefit1": "ISP나 중간자가 방문 중인 세부 하위 도메인을 감청하는 것을 방지",
     "echHelpBenefit2": "DoH와 결합하여 평문 SNI 노출 및 차단 위험 제거",
     "ttlOverrideTitle": "TTL 재정의",
-    "ttlOverrideDesc": "해석 결과 유형별로 반환되는 DNS 레코드 TTL을 재정의합니다(0 - 2147483647초, 0은 캐시 비활성화).",
+    "ttlOverrideDesc": "해석 결과 유형별로 반환되는 DNS 레코드 TTL을 재정의합니다(0 - {{max}}초, 0은 캐시 비활성화).",
     "ttlPassLabel": "허용 응답 (PASS)",
     "ttlRedirectLabel": "리디렉션 응답 (REDIRECT)",
     "ttlBlockLabel": "차단 응답 (BLOCK)",

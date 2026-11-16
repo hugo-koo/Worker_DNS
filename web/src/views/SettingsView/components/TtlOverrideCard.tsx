@@ -25,29 +25,29 @@ const TTL_ROWS: TtlRowConfig[] = [
     key: "pass",
     code: "PASS",
     intent: Intent.SUCCESS,
-    defaultTtl: 60,
+    defaultTtl: 5,
     labelKey: "settings.ttlPassLabel",
-    defaultLabel: "放行响应 (PASS)",
+    defaultLabel: "PASS",
   },
   {
     key: "redirect",
     code: "REDIRECT",
     intent: Intent.PRIMARY,
-    defaultTtl: 60,
+    defaultTtl: 5,
     labelKey: "settings.ttlRedirectLabel",
-    defaultLabel: "重定向响应 (REDIRECT)",
+    defaultLabel: "REDIRECT",
   },
   {
     key: "block",
     code: "BLOCK",
     intent: Intent.DANGER,
-    defaultTtl: 3600,
+    defaultTtl: 5,
     labelKey: "settings.ttlBlockLabel",
-    defaultLabel: "拦截响应 (BLOCK)",
+    defaultLabel: "BLOCK",
   },
 ];
 
-const MAX_DNS_TTL = 2147483647;
+const MAX_DNS_TTL = 86400;
 
 /**
  * Renders the TTL Override settings card allowing per-action (PASS / REDIRECT / BLOCK)
@@ -133,7 +133,8 @@ export const TtlOverrideCard: React.FC<TtlOverrideCardProps> = ({ settings, setS
       <p className="text-xs opacity-70 mb-4">
         {t(
           "settings.ttlOverrideDesc",
-          "按解析结果类型重写返回的 DNS 记录 TTL（支持 0 - 2147483647 秒，0 表示不缓存）。"
+          "按解析结果类型重写返回的 DNS 记录 TTL（支持 0 - {{max}} 秒，0 表示不缓存）。",
+          { max: MAX_DNS_TTL }
         )}
       </p>
 

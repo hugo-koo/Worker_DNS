@@ -650,7 +650,7 @@
     "echHelpBenefit1": "Empêche les FAI et les intermédiaires d'intercepter le sous-domaine exact visité",
     "echHelpBenefit2": "Associé au DoH, élimine les fuites de SNI en clair",
     "ttlOverrideTitle": "Remplacer le TTL",
-    "ttlOverrideDesc": "Remplace le TTL de l'enregistrement DNS renvoyé selon l'action de résolution (0 - 2147483647 secondes ; 0 désactive la mise en cache).",
+    "ttlOverrideDesc": "Remplace le TTL de l'enregistrement DNS renvoyé selon l'action de résolution (0 - {{max}} secondes ; 0 désactive la mise en cache).",
     "ttlPassLabel": "Réponse autorisée (PASS)",
     "ttlRedirectLabel": "Réponse redirigée (REDIRECT)",
     "ttlBlockLabel": "Réponse bloquée (BLOCK)",

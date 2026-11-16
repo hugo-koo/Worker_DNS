@@ -650,7 +650,7 @@
     "echHelpBenefit1": "Evita que los ISP y observadores vean el dominio exacto o subdominio que visita",
     "echHelpBenefit2": "Junto con DoH y ECH Fronting, elimina el riesgo de filtración de SNI en texto claro",
     "ttlOverrideTitle": "Sobrescribir TTL",
-    "ttlOverrideDesc": "Sobrescribe el TTL del registro DNS devuelto según la acción de resolución (0 - 2147483647 segundos; 0 desactiva la caché).",
+    "ttlOverrideDesc": "Sobrescribe el TTL del registro DNS devuelto según la acción de resolución (0 - {{max}} segundos; 0 desactiva la caché).",
     "ttlPassLabel": "Respuesta permitida (PASS)",
     "ttlRedirectLabel": "Respuesta redirigida (REDIRECT)",
     "ttlBlockLabel": "Respuesta bloqueada (BLOCK)",

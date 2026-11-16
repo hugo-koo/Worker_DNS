@@ -650,7 +650,7 @@
     "echHelpBenefit1": "Verhindert, dass ISPs und Dritte die aufgerufene Domain oder Subdomain mitlesen",
     "echHelpBenefit2": "Eliminiert zusammen mit DoH das Risiko von Klartext-SNI-Blockaden",
     "ttlOverrideTitle": "TTL überschreiben",
-    "ttlOverrideDesc": "Überschreibt die zurückgegebene DNS-Eintrag-TTL nach Auflösungsergebnis (0 - 2147483647 Sekunden; 0 deaktiviert Caching).",
+    "ttlOverrideDesc": "Überschreibt die zurückgegebene DNS-Eintrag-TTL nach Auflösungsergebnis (0 - {{max}} Sekunden; 0 deaktiviert Caching).",
     "ttlPassLabel": "Durchgelassene Antwort (PASS)",
     "ttlRedirectLabel": "Umgeleitete Antwort (REDIRECT)",
     "ttlBlockLabel": "Blockierte Antwort (BLOCK)",
