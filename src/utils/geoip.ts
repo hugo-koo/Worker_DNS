@@ -73,7 +73,9 @@ export async function fetchGeoIP(ip: string): Promise<GeoIP | null> {
 
   // 1. Primary provider: ipwho.is (HTTPS, no auth required)
   try {
-    const response2 = await fetch(`https://ipwho.is/${encodeURIComponent(ip)}`);
+    const response2 = await fetch(`https://ipwho.is/${encodeURIComponent(ip)}`, {
+      signal: AbortSignal.timeout(3500),
+    });
     if (response2.ok) {
       const data2 = (await response2.json()) as any;
       if (data2.success) {
@@ -95,7 +97,33 @@ export async function fetchGeoIP(ip: string): Promise<GeoIP | null> {
       }
     }
   } catch (e2) {
-    console.error("GeoIP Fetch Error:", e2);
+    console.warn("Primary GeoIP (ipwho.is) failed, trying fallback:", e2);
+  }
+
+  // 2. Fallback provider: api.ip.sb (when ipwho.is rate-limits or times out)
+  try {
+    const fallbackRes = await fetch(`https://api.ip.sb/geoip/${encodeURIComponent(ip)}`, {
+      signal: AbortSignal.timeout(3500),
+    });
+    if (fallbackRes.ok) {
+      const data = (await fallbackRes.json()) as any;
+      if (data.country_code && data.country) {
+        const geo: GeoIP = {
+          country: data.country,
+          country_code: data.country_code,
+          region: data.region,
+          city: data.city,
+          isp: data.isp || data.organization || (data.asn ? `AS${data.asn}` : undefined),
+          org: data.organization,
+          as: data.asn ? `AS${data.asn} ${data.asn_organization || data.organization || ""}`.trim() : undefined,
+          timezone: data.timezone,
+        };
+        await storeInCache(geo);
+        return geo;
+      }
+    }
+  } catch (eFallback) {
+    console.error("GeoIP fallback Fetch Error:", eFallback);
   }
 
   return null;

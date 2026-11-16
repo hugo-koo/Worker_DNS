@@ -78,6 +78,9 @@ export const MapGeographies: React.FC<MapGeographiesProps> = ({
             });
           };
 
+          const isPinned = hoveredCountry?.code === countryCode && Boolean(hoveredCountry?.isPinned);
+          const baseFill = isPinned ? "var(--map-hover)" : `var(--map-color-${fillLevel})`;
+
           return (
             <Geography
               key={geo.rsmKey}
@@ -98,24 +101,31 @@ export const MapGeographies: React.FC<MapGeographiesProps> = ({
               onClick={handleGeographyClick}
               style={{
                 default: {
-                  fill: `var(--map-color-${fillLevel})`,
+                  fill: baseFill,
                   stroke: "var(--map-stroke)",
-                  strokeWidth: 0.5,
+                  strokeWidth: isPinned ? 0.9 : 0.5,
                   outline: "none",
                   transition: "fill 250ms, stroke 250ms",
                 },
                 hover: {
                   fill: "var(--map-hover)",
                   stroke: "var(--map-stroke)",
-                  strokeWidth: 0.5,
+                  strokeWidth: 0.75,
                   outline: "none",
                   cursor: "pointer",
                 },
                 pressed: {
                   fill: "var(--map-hover)",
                   stroke: "var(--map-stroke)",
-                  strokeWidth: 0.5,
+                  strokeWidth: 0.75,
                   outline: "none",
+                },
+                focused: {
+                  fill: baseFill,
+                  stroke: "var(--map-stroke)",
+                  strokeWidth: isPinned ? 0.9 : 0.5,
+                  outline: "none",
+                  cursor: "pointer",
                 },
               }}
             />

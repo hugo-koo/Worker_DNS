@@ -93,9 +93,15 @@ export function mergeServerAnalytics(
   };
 }
 
+function sumCounts(items?: { count: number }[]): number {
+  if (!items || items.length === 0) return 0;
+  return items.reduce((acc, item) => acc + (Number(item.count) || 0), 0);
+}
+
 /**
  * Injects decrypted local SQLite analytics into current state for fields where
- * the server only has encrypted blobs. Preserves authoritative server summary and trend.
+ * the server only has encrypted blobs or partial plaintext coverage. Preserves
+ * authoritative server summary and trend.
  *
  * @param current - Current active analytics state.
  * @param freshLocal - Freshly computed local SQLite analytics aggregation.
@@ -111,19 +117,37 @@ export function mergeLocalDecryptedAnalytics(
     return freshLocal;
   }
 
+  const preferLocal = <T extends { count: number }>(
+    serverValid: boolean,
+    currentList: T[],
+    localList: T[]
+  ): T[] => {
+    if (localList.length === 0) return currentList;
+    if (!serverValid) return localList;
+    return sumCounts(localList) > sumCounts(currentList) ? localList : currentList;
+  };
+
   return {
     ...current,
-    destinations: flags.serverHasDestinations
-      ? current.destinations
-      : (freshLocal.destinations.length > 0 ? freshLocal.destinations : current.destinations),
-    top_allowed: flags.serverHasValidTopAllowed
-      ? current.top_allowed
-      : (freshLocal.top_allowed.length > 0 ? freshLocal.top_allowed : current.top_allowed),
-    top_blocked: flags.serverHasValidTopBlocked
-      ? current.top_blocked
-      : (freshLocal.top_blocked.length > 0 ? freshLocal.top_blocked : current.top_blocked),
-    clients: flags.serverHasValidClients
-      ? current.clients
-      : (freshLocal.clients.length > 0 ? freshLocal.clients : current.clients)
+    destinations: preferLocal(
+      flags.serverHasDestinations,
+      current.destinations,
+      freshLocal.destinations
+    ),
+    top_allowed: preferLocal(
+      flags.serverHasValidTopAllowed,
+      current.top_allowed,
+      freshLocal.top_allowed
+    ),
+    top_blocked: preferLocal(
+      flags.serverHasValidTopBlocked,
+      current.top_blocked,
+      freshLocal.top_blocked
+    ),
+    clients: preferLocal(
+      flags.serverHasValidClients,
+      current.clients,
+      freshLocal.clients
+    )
   };
 }

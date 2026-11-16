@@ -39,9 +39,21 @@ export function recordSuccessAndCache(
     (async () => {
       try {
         const clientCountryPromise = resolveClientGeoCountry(request, clientIp);
-        const firstIp = parsedAnswers.find(
+        let firstIp = parsedAnswers.find(
           (a) => a.type === "A" || a.type === "AAAA"
         )?.data;
+        if (!firstIp) {
+          // HTTPS (Type 65) / SVCB (Type 64) records often carry ipv4hint / ipv6hint in RDATA
+          const svcbAnswer = parsedAnswers.find(
+            (a) => (a.type === "HTTPS" || a.type === "SVCB") && typeof a.data === "string"
+          );
+          if (svcbAnswer) {
+            const hintMatch = svcbAnswer.data.match(/\b(?:ipv4hint|ipv6hint)=([^\s,]+)/);
+            if (hintMatch?.[1]) {
+              firstIp = hintMatch[1];
+            }
+          }
+        }
         let destGeoJson = "";
         let destCountryCode: string | null = null;
         let destCountry: string | null = null;

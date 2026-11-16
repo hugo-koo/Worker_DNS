@@ -57,6 +57,10 @@
   .bp6-dark {
     color: #f5f8fa;
   }
+
+  .rsm-geography:focus {
+    outline: none;
+  }
 }
 
 /* 适配 Tailwind 的 dark 修饰符 */

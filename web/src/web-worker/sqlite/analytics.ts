@@ -128,7 +128,7 @@ export function handleQueryAnalytics(params: WorkerAnalyticsParams): WorkerAnaly
       AND (
         (dest_country_code IS NOT NULL AND dest_country_code != '')
         OR
-        (dest_geoip IS NOT NULL AND json_extract(dest_geoip, '$.country_code') IS NOT NULL AND json_extract(dest_geoip, '$.country_code') != '')
+        (dest_geoip IS NOT NULL AND dest_geoip LIKE '{%' AND json_extract(dest_geoip, '$.country_code') IS NOT NULL AND json_extract(dest_geoip, '$.country_code') != '')
       )
     GROUP BY country_code 
     ORDER BY count DESC 
@@ -184,7 +184,7 @@ export function handleQueryISPs(params: WorkerQueryParamsISPs): { name: string; 
   baseWhere += ` AND (
     (dest_isp IS NOT NULL AND dest_isp != '')
     OR
-    (dest_geoip IS NOT NULL AND (
+    (dest_geoip IS NOT NULL AND dest_geoip LIKE '{%' AND (
       (json_extract(dest_geoip, '$.isp') IS NOT NULL AND json_extract(dest_geoip, '$.isp') != '')
       OR
       (json_extract(dest_geoip, '$.org') IS NOT NULL AND json_extract(dest_geoip, '$.org') != '')
