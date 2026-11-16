@@ -184,6 +184,7 @@ export function useAnalyticsData(
       }
 
       // Step 2: Fetch Authoritative Analytics from Server
+      let expectedServerTotal: number | undefined;
       try {
         const queryParams = buildAnalyticsQueryParams(selectedRange, interval, apIdFilter);
 
@@ -213,6 +214,10 @@ export function useAnalyticsData(
         }
 
         if (serverAnalytics && !signal.aborted) {
+          expectedServerTotal = (serverAnalytics.summary || []).reduce(
+            (acc, item) => acc + (item.count || 0),
+            0
+          );
           const flags = inspectServerAnalytics(serverAnalytics);
           serverFlagsRef.current = flags;
 
@@ -266,7 +271,8 @@ export function useAnalyticsData(
           signal,
           () => {
             updateFromFreshLocal();
-          }
+          },
+          expectedServerTotal
         );
 
         if (!signal.aborted && (inserted > 0 || isUnlocked)) {

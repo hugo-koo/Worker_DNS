@@ -189,12 +189,13 @@ export class LocalDbSyncEngine {
     let currentBefore: number | undefined = undefined;
     let hasMore = true;
     let pageCount = 0;
-    const MAX_PAGES = 50; // Safety guard: up to 5,000 logs per interval pass
+    const PAGE_SIZE = 500;
+    const MAX_PAGES = 25; // Safety guard: up to 12,500 logs per interval pass
 
     while (hasMore && pageCount < MAX_PAGES) {
       if (signal?.aborted) break;
 
-      let url = `/api/profiles/${profileId}/logs?start=${start}&end=${end}&limit=100`;
+      let url = `/api/profiles/${profileId}/logs?start=${start}&end=${end}&limit=${PAGE_SIZE}`;
       if (currentBefore !== undefined) {
         url += `&before=${currentBefore}`;
       }
@@ -214,7 +215,7 @@ export class LocalDbSyncEngine {
         pageCount++;
         onProgress?.(totalInserted);
 
-        if (logs.length < 100) {
+        if (logs.length < PAGE_SIZE) {
           hasMore = false;
         } else if (
           oldestTimestamp === undefined ||
@@ -406,14 +407,15 @@ export class LocalDbSyncEngine {
     since: number,
     until: number,
     signal?: AbortSignal,
-    onProgress?: (inserted: number) => void
+    onProgress?: (inserted: number) => void,
+    expectedCount?: number
   ): Promise<number> {
     await this.bridge.init();
     if (signal?.aborted || since >= until) return 0;
 
     let totalInserted = 0;
     let passes = 0;
-    const MAX_PASSES = 25; // Supports fetching up to 25 passes * 5,000 logs = 125,000 logs
+    const MAX_PASSES = 25; // Supports fetching up to 25 passes * 12,500 logs
 
     while (!signal?.aborted && passes < MAX_PASSES) {
       const watermark = await this.getWatermark(profileId);
@@ -446,6 +448,39 @@ export class LocalDbSyncEngine {
 
       // Yield control briefly to ensure UI remains responsive
       await new Promise((r) => setTimeout(r, 20));
+    }
+
+    // Gap-repair check: incremental forward syncs (capped to 200 logs) can advance the watermark
+    // past middle gaps. If the server reports more logs in [since, until] than local SQLite holds,
+    // perform one full interval pass to backfill the missing records.
+    if (!signal?.aborted && expectedCount !== undefined && expectedCount > 0) {
+      try {
+        const localAnalytics = await this.bridge.sendRequest<{ summary?: { count: number }[] }>(
+          "QUERY_ANALYTICS",
+          {
+            profileId,
+            since,
+            until,
+            bucketSec: 3600
+          }
+        );
+        const localCount = Array.isArray(localAnalytics?.summary)
+          ? localAnalytics.summary.reduce((acc, curr) => acc + (curr.count || 0), 0)
+          : 0;
+
+        if (localCount < expectedCount) {
+          const repaired = await this.syncInterval(
+            profileId,
+            since,
+            until,
+            signal,
+            onProgress
+          );
+          totalInserted += repaired;
+        }
+      } catch {
+        // Non-critical gap-repair check failure
+      }
     }
 
     return totalInserted;

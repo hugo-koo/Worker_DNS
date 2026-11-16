@@ -101,9 +101,10 @@ export class LocalDbService {
     since: number,
     until: number,
     signal?: AbortSignal,
-    onProgress?: (inserted: number) => void
+    onProgress?: (inserted: number) => void,
+    expectedCount?: number
   ): Promise<number> {
-    return this.syncEngine.syncMissingIntervals(profileId, since, until, signal, onProgress);
+    return this.syncEngine.syncMissingIntervals(profileId, since, until, signal, onProgress, expectedCount);
   }
 
   /** Synchronizes target time interval records with chunked transfer and progress reporting */
