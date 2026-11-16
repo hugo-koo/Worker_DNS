@@ -131,7 +131,9 @@ export async function syncGlobalList(
         }
       }
     },
-    { etag: meta?.etag, lastModified: meta?.last_modified }
+    // Skip conditional 304 headers when compiled rule stats are not yet recorded,
+    // ensuring legacy lists backfill their metadata on the next sync.
+    meta?.stats ? { etag: meta.etag, lastModified: meta.last_modified } : undefined
   );
 
   if (notModified) {

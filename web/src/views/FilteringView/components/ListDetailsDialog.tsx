@@ -283,8 +283,9 @@ export const ListDetailsDialog: React.FC<ListDetailsDialogProps> = ({
                   </span>
                 )}
                 {selectedList.etag && (
-                  <span className="truncate max-w-full">
-                    ETag: <strong className="font-mono">{selectedList.etag}</strong>
+                  <span className="inline-flex items-center gap-1 max-w-[220px] min-w-0" title={selectedList.etag}>
+                    <span className="shrink-0">ETag:</span>
+                    <strong className="font-mono truncate">{selectedList.etag}</strong>
                   </span>
                 )}
               </div>
@@ -308,8 +309,9 @@ export const ListDetailsDialog: React.FC<ListDetailsDialogProps> = ({
                     </span>
                   )}
                   {selectedList.etag && (
-                    <span className="truncate max-w-full">
-                      ETag: <strong className="font-mono">{selectedList.etag}</strong>
+                    <span className="inline-flex items-center gap-1 max-w-[220px] min-w-0" title={selectedList.etag}>
+                      <span className="shrink-0">ETag:</span>
+                      <strong className="font-mono truncate">{selectedList.etag}</strong>
                     </span>
                   )}
                 </div>
