@@ -157,6 +157,20 @@ export interface Rule {
   include_subdomains?: boolean | number;
 }
 
+export interface ListMetadataStats {
+  total_rules: number;
+  exact_rules: number;
+  subdomain_rules: number;
+  wildcard_rules: number;
+  regex_rules: number;
+  exception_rules: number;
+  rewrite_rules: number;
+  comment_lines: number;
+  unsupported_lines: number;
+  total_bytes?: number;
+  truncated?: boolean;
+}
+
 export interface List {
   id: number;
   profile_id: string;
@@ -169,6 +183,7 @@ export interface List {
   sync_error?: string | null;
   etag?: string | null;
   last_modified?: number | null;
+  metadata?: ListMetadataStats | null;
 }
 
 export interface UserList {

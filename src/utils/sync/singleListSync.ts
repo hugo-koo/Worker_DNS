@@ -1,7 +1,7 @@
 import { Env } from "../../types";
 import { BloomFilter } from "../bloom";
 import { fetchListContent } from "../listFetcher";
-import { ListModel } from "../../models/list";
+import { ListModel, ListMetadataStats } from "../../models/list";
 import { ListBloomModel } from "../../models/listBloom";
 import { AdguardRulesModel } from "../../models/adguardRules";
 import { AdGuardRuleKind, AdGuardPayload, ParsedAdGuardRule } from "../../lib/adguard";
@@ -57,8 +57,19 @@ export async function syncGlobalList(
 
   let count = 0;
   let domainsSinceYield = 0;
+  const stats: ListMetadataStats = {
+    total_rules: 0,
+    exact_rules: 0,
+    subdomain_rules: 0,
+    wildcard_rules: 0,
+    regex_rules: 0,
+    exception_rules: 0,
+    rewrite_rules: 0,
+    comment_lines: 0,
+    unsupported_lines: 0,
+  };
 
-  const { error: fetchError, truncated, notModified, etag, lastModified } = await fetchListContent(
+  const { error: fetchError, truncated, totalBytes, commentLines, unsupportedLines, notModified, etag, lastModified } = await fetchListContent(
     canonicalUrl,
     maxListBytes,
     timeoutMs,
@@ -68,6 +79,9 @@ export async function syncGlobalList(
           listBloom.add(rule.domain);
           if (rule.includeSubdomains) {
             listBloom.addPipePipe(rule.domain);
+            stats.subdomain_rules++;
+          } else {
+            stats.exact_rules++;
           }
           count++;
         } else if (rule.kind === AdGuardRuleKind.EXCEPTION && rule.domain) {
@@ -77,6 +91,7 @@ export async function syncGlobalList(
               includeSubdomains: Boolean(rule.includeSubdomains),
               raw: rule.raw
             });
+            stats.exception_rules++;
             count++;
           }
         } else if (rule.kind === AdGuardRuleKind.DNS_REWRITE && rule.domain && rule.rewrite) {
@@ -89,6 +104,7 @@ export async function syncGlobalList(
               includeSubdomains: Boolean(rule.includeSubdomains),
               raw: rule.raw
             };
+            stats.rewrite_rules++;
             count++;
           }
         } else if (rule.kind === AdGuardRuleKind.COMPLEX_PATTERN && rule.patternRegex) {
@@ -98,6 +114,11 @@ export async function syncGlobalList(
               apexIndex: rule.apexIndex,
               raw: rule.raw
             });
+            if (rule.raw.startsWith("/")) {
+              stats.regex_rules++;
+            } else {
+              stats.wildcard_rules++;
+            }
             count++;
           }
         }
@@ -128,6 +149,12 @@ export async function syncGlobalList(
   let syncError: string | null = fetchError;
 
   if (!fetchError) {
+    stats.total_rules = count;
+    stats.comment_lines = commentLines ?? 0;
+    stats.unsupported_lines = unsupportedLines ?? 0;
+    stats.total_bytes = totalBytes;
+    stats.truncated = truncated || count >= maxListDomains;
+
     if (truncated) {
       syncError = `List truncated at ${(maxListBytes / 1024 / 1024).toFixed(0)} MB: Maximum list size reached. Excess rules were omitted.`;
       console.warn(
@@ -159,7 +186,8 @@ export async function syncGlobalList(
     now,
     etag ?? meta?.etag,
     lastModified ?? meta?.last_modified,
-    syncError
+    syncError,
+    fetchError ? undefined : stats
   );
   return { syncError, notModified: false };
 }

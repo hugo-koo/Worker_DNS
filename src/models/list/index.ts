@@ -11,6 +11,7 @@ import type {
   DistributedSystemListItem,
   RevokeSystemListResult,
   GlobalListMetadataRecord,
+  ListMetadataStats,
   ToggleProfileListResult,
   AddListResult,
   BulkListItem,
@@ -224,9 +225,10 @@ export class ListModel {
     now: number,
     etag?: string | null,
     lastModified?: number | string | null,
-    syncError: string | null = null
+    syncError: string | null = null,
+    stats?: ListMetadataStats | null
   ): Promise<boolean> {
-    return this.metadata.updateGlobalListMetadata(url, now, etag, lastModified, syncError);
+    return this.metadata.updateGlobalListMetadata(url, now, etag, lastModified, syncError, stats);
   }
 
   /**

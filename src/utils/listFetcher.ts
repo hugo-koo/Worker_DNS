@@ -12,6 +12,10 @@ export interface FetchListResult {
   truncated: boolean;
   /** 实际处理字节数 */
   totalBytes?: number;
+  /** 注释与元信息行数 (! / #) */
+  commentLines?: number;
+  /** 忽略的非 DNS / 不支持规则行数 (如元素隐藏 ## 等) */
+  unsupportedLines?: number;
   /** 是否命中了 HTTP 304 Not Modified 协商缓存 */
   notModified?: boolean;
   /** 上游返回的最新 ETag */
@@ -265,6 +269,8 @@ export async function fetchListContent(
       const decoder = new TextDecoder("utf-8", { fatal: false, ignoreBOM: true });
       let buffer = "";
       let count = 0;
+      let commentLines = 0;
+      let unsupportedLines = 0;
       let totalBytes = 0;
       let truncated = false;
 
@@ -296,12 +302,18 @@ export async function fetchListContent(
             lineStart = newlineIdx + 1;
 
             const rule = parseAdGuardLine(line);
-            if (rule && rule.kind !== AdGuardRuleKind.COMMENT && rule.kind !== AdGuardRuleKind.UNSUPPORTED) {
-              const res = onDomain(rule);
-              if (res instanceof Promise) {
-                await res;
+            if (rule) {
+              if (rule.kind === AdGuardRuleKind.COMMENT) {
+                commentLines++;
+              } else if (rule.kind === AdGuardRuleKind.UNSUPPORTED) {
+                unsupportedLines++;
+              } else {
+                const res = onDomain(rule);
+                if (res instanceof Promise) {
+                  await res;
+                }
+                count++;
               }
-              count++;
             }
           }
 
@@ -317,12 +329,18 @@ export async function fetchListContent(
           line = line.slice(0, -1);
         }
         const rule = parseAdGuardLine(line);
-        if (rule && rule.kind !== AdGuardRuleKind.COMMENT && rule.kind !== AdGuardRuleKind.UNSUPPORTED) {
-          const res = onDomain(rule);
-          if (res instanceof Promise) {
-            await res;
+        if (rule) {
+          if (rule.kind === AdGuardRuleKind.COMMENT) {
+            commentLines++;
+          } else if (rule.kind === AdGuardRuleKind.UNSUPPORTED) {
+            unsupportedLines++;
+          } else {
+            const res = onDomain(rule);
+            if (res instanceof Promise) {
+              await res;
+            }
+            count++;
           }
-          count++;
         }
       }
 
@@ -338,6 +356,8 @@ export async function fetchListContent(
         error: null,
         truncated,
         totalBytes,
+        commentLines,
+        unsupportedLines,
         notModified: false,
         etag: respEtag,
         lastModified: respLastModified,

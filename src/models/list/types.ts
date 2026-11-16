@@ -1,6 +1,6 @@
-import { List, UserList } from "../../types";
+import { List, UserList, ListMetadataStats } from "../../types";
 
-export type { List, UserList };
+export type { List, UserList, ListMetadataStats };
 
 /**
  * Result of distributing a list to all users in the system.
@@ -49,6 +49,7 @@ export interface GlobalListMetadataRecord {
   last_modified: number | null;
   last_synced_at: number | null;
   sync_error: string | null;
+  stats?: ListMetadataStats | null;
 }
 
 /**

@@ -1,6 +1,6 @@
 import { D1Database } from "@cloudflare/workers-types";
 import { List, AddListResult, BulkListItem, ToggleProfileListResult } from "./types";
-import { normalizeListUrl, parseUnixTimestamp } from "./utils";
+import { normalizeListUrl, parseUnixTimestamp, parseListStats } from "./utils";
 
 /**
  * ListProfileModel manages profile-scoped filter lists (`lists` table),
@@ -31,17 +31,19 @@ export class ListProfileModel {
         COALESCE(gm.last_synced_at, l.last_synced_at) AS last_synced_at,
         COALESCE(gm.sync_error, l.sync_error) AS sync_error,
         COALESCE(gm.etag, l.etag) AS etag,
-        COALESCE(gm.last_modified, l.last_modified) AS last_modified
+        COALESCE(gm.last_modified, l.last_modified) AS last_modified,
+        gm.stats AS stats_json
       FROM lists l
       LEFT JOIN global_list_metadata gm ON l.url = gm.url
       WHERE l.profile_id = ?
-    `).bind(profileId).all<List>();
+    `).bind(profileId).all<List & { stats_json?: string | null }>();
 
-    const profileLists: List[] = (profileRaw || []).map((item) => ({
+    const profileLists: List[] = (profileRaw || []).map(({ stats_json, ...item }) => ({
       ...item,
       enabled: Boolean(item.enabled),
       scope: "profile" as const,
       last_modified: parseUnixTimestamp(item.last_modified),
+      metadata: parseListStats(stats_json),
     }));
 
     // 2. Fetch User-level & System-level lists for this profile's owner
@@ -62,7 +64,8 @@ export class ListProfileModel {
         gm.last_synced_at,
         gm.sync_error,
         gm.etag,
-        gm.last_modified
+        gm.last_modified,
+        gm.stats AS stats_json
       FROM user_lists ul
       LEFT JOIN profile_user_list_overrides pulo 
         ON pulo.user_list_id = ul.id AND pulo.profile_id = ?
@@ -79,6 +82,7 @@ export class ListProfileModel {
       sync_error: string | null;
       etag: string | null;
       last_modified: number | string | null;
+      stats_json: string | null;
     }>();
 
     const userLists: List[] = (userRaw || []).map((row) => ({
@@ -94,6 +98,7 @@ export class ListProfileModel {
       sync_error: row.sync_error,
       etag: row.etag,
       last_modified: parseUnixTimestamp(row.last_modified),
+      metadata: parseListStats(row.stats_json),
     }));
 
     return [...profileLists, ...userLists];

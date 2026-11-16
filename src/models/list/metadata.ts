@@ -1,6 +1,6 @@
 import { D1Database } from "@cloudflare/workers-types";
-import { GlobalListMetadataRecord } from "./types";
-import { normalizeListUrl, parseUnixTimestamp } from "./utils";
+import { GlobalListMetadataRecord, ListMetadataStats } from "./types";
+import { normalizeListUrl, parseUnixTimestamp, parseListStats } from "./utils";
 
 /**
  * ListMetadataModel manages centralized metadata for filter lists in `global_list_metadata`,
@@ -28,6 +28,7 @@ export class ListMetadataModel {
         last_modified: number | string | null;
         last_synced_at: number | null;
         sync_error: string | null;
+        stats: string | null;
       }>();
     if (!row) return null;
 
@@ -37,6 +38,7 @@ export class ListMetadataModel {
       last_modified: parseUnixTimestamp(row.last_modified),
       last_synced_at: row.last_synced_at,
       sync_error: row.sync_error,
+      stats: parseListStats(row.stats),
     };
   }
 
@@ -49,6 +51,7 @@ export class ListMetadataModel {
    * @param etag - Optional ETag header.
    * @param lastModified - Optional Last-Modified header.
    * @param syncError - Optional sync error text.
+   * @param stats - Optional compiled rule statistics.
    * @returns Boolean indicating success.
    */
   async updateGlobalListMetadata(
@@ -56,20 +59,23 @@ export class ListMetadataModel {
     now: number,
     etag?: string | null,
     lastModified?: number | string | null,
-    syncError: string | null = null
+    syncError: string | null = null,
+    stats?: ListMetadataStats | null
   ): Promise<boolean> {
     const canonicalUrl = normalizeListUrl(url);
     const normalizedLastModified = parseUnixTimestamp(lastModified);
+    const statsJson = stats ? JSON.stringify(stats) : null;
 
     const result = await this.db
       .prepare(
-        `INSERT INTO global_list_metadata (url, etag, last_modified, last_synced_at, sync_error, created_at)
-         VALUES (?, ?, ?, ?, ?, ?)
+        `INSERT INTO global_list_metadata (url, etag, last_modified, last_synced_at, sync_error, stats, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(url) DO UPDATE SET
            etag = COALESCE(excluded.etag, global_list_metadata.etag),
            last_modified = COALESCE(excluded.last_modified, global_list_metadata.last_modified),
            last_synced_at = excluded.last_synced_at,
-           sync_error = excluded.sync_error`
+           sync_error = excluded.sync_error,
+           stats = COALESCE(excluded.stats, global_list_metadata.stats)`
       )
       .bind(
         canonicalUrl,
@@ -77,6 +83,7 @@ export class ListMetadataModel {
         normalizedLastModified,
         now,
         syncError || null,
+        statsJson,
         now
       )
       .run();
