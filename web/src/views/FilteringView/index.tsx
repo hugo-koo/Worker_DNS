@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Button, Intent, Callout, ButtonGroup } from "@blueprintjs/core";
 import { useTranslation } from "react-i18next";
-import { RefreshCw } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useIsMobile } from "../../hooks/useIsMobile";
 import { clsx } from "clsx";
@@ -10,7 +9,8 @@ import type {  FilteringViewProps, FilterList  } from "./types";
 import { AddListCard } from "./components/AddListCard";
 import { ListsTable } from "./components/ListsTable";
 import { ListDetailsDialog } from "./components/ListDetailsDialog";
-import { getProfileLists, addCustomProfileList, deleteCustomProfileList, syncProfileLists, syncSingleProfileList, toggleProfileList, addProfileRule } from "../../services";
+import { SyncProgressButton } from "./components/SyncProgressButton";
+import { getProfileLists, addCustomProfileList, deleteCustomProfileList, syncProfileLists, syncSingleProfileList, getProfileSyncStatus, toggleProfileList, addProfileRule } from "../../services";
 
 export const FilteringView: React.FC<FilteringViewProps> = ({ profileId, toasterRef }) => {
   const navigate = useNavigate();
@@ -19,6 +19,10 @@ export const FilteringView: React.FC<FilteringViewProps> = ({ profileId, toaster
   const [newUrl, setNewUrl] = useState("");
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [syncAllProgress, setSyncAllProgress] = useState(0);
+  const [syncAllDetail, setSyncAllDetail] = useState<string | undefined>(undefined);
+  const [syncingSingleId, setSyncingSingleId] = useState<number | null>(null);
+  const [syncSingleProgress, setSyncSingleProgress] = useState(0);
   const { t } = useTranslation();
 
   const [selectedList, setSelectedList] = useState<FilterList | null>(null);
@@ -47,55 +51,91 @@ export const FilteringView: React.FC<FilteringViewProps> = ({ profileId, toaster
   const waitForSyncCompletion = async (oldLists: FilterList[]) => {
     const oldSyncTimes = new Map(oldLists.map(l => [l.id, l.last_synced_at]));
     let attempts = 0;
-    const maxAttempts = 15; // 30 seconds max
-    
+    const maxAttempts = 60; // 60 seconds max
+    let currentProgress = 8;
+    setSyncAllProgress(currentProgress);
+    setSyncAllDetail(undefined);
+
     while (attempts < maxAttempts) {
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      await new Promise(resolve => setTimeout(resolve, 1000));
       try {
-        const data = await getProfileLists(profileId);
+        const [data, status] = await Promise.all([
+          getProfileLists(profileId),
+          getProfileSyncStatus(profileId).catch(() => null),
+        ]);
         const newLists = data as FilterList[];
-        
-        let allUpdated = true;
+
+        let updatedCount = 0;
         for (const list of newLists) {
-          if (oldSyncTimes.has(list.id) && list.last_synced_at === oldSyncTimes.get(list.id)) {
-            allUpdated = false;
-            break;
-          }
-          if (!oldSyncTimes.has(list.id) && !list.last_synced_at) {
-            allUpdated = false;
-            break;
+          const prevSync = oldSyncTimes.get(list.id);
+          if (prevSync !== undefined ? list.last_synced_at !== prevSync : Boolean(list.last_synced_at)) {
+            updatedCount++;
           }
         }
-        
-        if (allUpdated && newLists.length > 0) {
+
+        const totalLists = Math.max(1, newLists.length);
+        const dbPercent = Math.round((updatedCount / totalLists) * 95);
+        const serverPercent = status?.syncing && status.type === "all" ? status.percent : 0;
+
+        if (status?.syncing && status.type === "all" && status.total > 0) {
+          setSyncAllDetail(`${status.current}/${status.total}`);
+        } else if (newLists.length > 0) {
+          setSyncAllDetail(`${updatedCount}/${newLists.length}`);
+        }
+
+        const allUpdated = updatedCount >= newLists.length && newLists.length > 0;
+        if (allUpdated || (status && !status.syncing && attempts >= 1 && updatedCount > 0)) {
+          setSyncAllProgress(100);
           setLists(newLists);
+          await new Promise(resolve => setTimeout(resolve, 300));
           return true;
         }
-      } catch (e) {
+
+        currentProgress = Math.min(94, Math.max(currentProgress + 4, dbPercent, serverPercent));
+        setSyncAllProgress(currentProgress);
+      } catch {
         // Ignore fetch errors during polling
       }
       attempts++;
     }
-    
+
     await fetchData();
     return false;
   };
 
   const waitForSingleSyncCompletion = async (listId: number, oldSyncTime?: number | null) => {
     let attempts = 0;
-    const maxAttempts = 15; // 30 seconds max
+    const maxAttempts = 60; // 60 seconds max
+    let currentProgress = 12;
+    setSyncSingleProgress(currentProgress);
+
     while (attempts < maxAttempts) {
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
       try {
-        const data = await getProfileLists(profileId);
+        const [data, status] = await Promise.all([
+          getProfileLists(profileId),
+          getProfileSyncStatus(profileId).catch(() => null),
+        ]);
         const newLists = data as FilterList[];
         const current = newLists.find((l) => l.id === listId);
-        if (current && (current.last_synced_at ?? 0) !== (oldSyncTime ?? 0)) {
+        const timestampUpdated = current && (current.last_synced_at ?? 0) !== (oldSyncTime ?? 0);
+        const serverDone = status && !status.syncing && attempts >= 1;
+
+        if (timestampUpdated || (serverDone && current?.last_synced_at)) {
+          setSyncSingleProgress(100);
           setLists(newLists);
-          setSelectedList(current);
+          if (current) setSelectedList(current);
+          await new Promise((resolve) => setTimeout(resolve, 300));
           return true;
         }
-      } catch (e) {
+
+        const serverPercent =
+          status?.syncing && status.type === "single" && status.listId === listId
+            ? status.percent
+            : 0;
+        currentProgress = Math.min(94, Math.max(currentProgress + 6, serverPercent));
+        setSyncSingleProgress(currentProgress);
+      } catch {
         // Ignore fetch errors during polling
       }
       attempts++;
@@ -105,6 +145,8 @@ export const FilteringView: React.FC<FilteringViewProps> = ({ profileId, toaster
   };
 
   const handleSyncSingleList = async (listId: number) => {
+    setSyncingSingleId(listId);
+    setSyncSingleProgress(8);
     try {
       const oldList = lists.find((l) => l.id === listId);
       const oldSyncTime = oldList?.last_synced_at;
@@ -129,6 +171,9 @@ export const FilteringView: React.FC<FilteringViewProps> = ({ profileId, toaster
         intent: Intent.DANGER,
         icon: "error",
       });
+    } finally {
+      setSyncingSingleId(null);
+      setSyncSingleProgress(0);
     }
   };
 
@@ -245,6 +290,8 @@ export const FilteringView: React.FC<FilteringViewProps> = ({ profileId, toaster
 
   const syncLists = async () => {
     setSyncing(true);
+    setSyncAllProgress(5);
+    setSyncAllDetail(undefined);
     try {
       await syncProfileLists(profileId);
       toasterRef?.current?.show({
@@ -265,6 +312,8 @@ export const FilteringView: React.FC<FilteringViewProps> = ({ profileId, toaster
       console.error(e);
     } finally {
       setSyncing(false);
+      setSyncAllProgress(0);
+      setSyncAllDetail(undefined);
     }
   };
 
@@ -296,13 +345,17 @@ export const FilteringView: React.FC<FilteringViewProps> = ({ profileId, toaster
           )}
           <p className="bp6-text-muted mt-2!">{t("filtering.subtitle")}</p>
         </div>
-        <Button
-          icon={<RefreshCw size={16} />}
-          text={t("filtering.syncAll")}
-          onClick={syncLists}
-          loading={syncing || loading}
-          disabled={syncing || loading || lists.length === 0}
+        <SyncProgressButton
+          syncing={syncing}
+          progress={syncAllProgress}
+          detailText={syncAllDetail}
+          iconSize={16}
+          label={t("filtering.syncAll")}
+          syncingLabel={t("filtering.syncing", "同步中...")}
+          loading={loading}
+          disabled={loading || lists.length === 0}
           className={isMobile ? "w-full" : ""}
+          onClick={syncLists}
         />
       </div>
 
@@ -369,6 +422,8 @@ export const FilteringView: React.FC<FilteringViewProps> = ({ profileId, toaster
         onToggleEnabled={setListEnabled}
         onAllowDomain={allowDomain}
         onSyncSingle={handleSyncSingleList}
+        syncingSingle={selectedList !== null && syncingSingleId === selectedList.id}
+        syncSingleProgress={syncSingleProgress}
       />
     </div>
   );

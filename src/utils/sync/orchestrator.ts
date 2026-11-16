@@ -6,12 +6,23 @@ import { ListBloomModel } from "../../models/listBloom";
 import { combineAndPromote } from "./combine";
 import { syncSingleList, syncGlobalList } from "./singleListSync";
 
+export interface SyncProgress {
+  syncing: boolean;
+  type?: "all" | "single" | "next" | "rebuild";
+  listId?: number;
+  stage: "preparing" | "fetching" | "combining" | "done";
+  current: number;
+  total: number;
+  percent: number;
+}
+
 /**
  * 正在执行的同步任务描述
  */
 interface InFlightSync {
   type: "all" | "next" | "single" | "rebuild";
   listId?: number;
+  progress: SyncProgress;
   promise: Promise<void>;
 }
 
@@ -20,6 +31,24 @@ interface InFlightSync {
  * 彻底防止多协程导致的大列表重复拉取、内存飙升与 D1 SQLite 数据库写锁冲突。
  */
 const inFlightSyncs = new Map<string, InFlightSync>();
+
+/**
+ * 返回指定 Profile 当前正在进行中的同步进度；若未在同步则返回空闲状态。
+ */
+export function getProfileSyncProgress(profileId: string): SyncProgress {
+  const active = inFlightSyncs.get(profileId);
+  if (!active) {
+    return { syncing: false, stage: "done", current: 0, total: 0, percent: 0 };
+  }
+  return { ...active.progress };
+}
+
+function updateInFlightProgress(profileId: string, patch: Partial<SyncProgress>): void {
+  const active = inFlightSyncs.get(profileId);
+  if (active) {
+    active.progress = { ...active.progress, ...patch };
+  }
+}
 
 /**
  * 检查指定 profile 是否正在进行同步（供监控或测试使用）
@@ -132,7 +161,11 @@ export async function syncNextListForProfile(
     }
   })();
 
-  inFlightSyncs.set(profileId, { type: "next", promise: syncPromise });
+  inFlightSyncs.set(profileId, {
+    type: "next",
+    progress: { syncing: true, type: "next", stage: "fetching", current: 0, total: 1, percent: 25 },
+    promise: syncPromise
+  });
   return syncPromise;
 }
 
@@ -272,7 +305,11 @@ export async function syncAllListsForProfile(
     }
   })();
 
-  inFlightSyncs.set(profileId, { type: "all", promise: syncPromise });
+  inFlightSyncs.set(profileId, {
+    type: "all",
+    progress: { syncing: true, type: "all", stage: "preparing", current: 0, total: 0, percent: 5 },
+    promise: syncPromise
+  });
   return syncPromise;
 }
 
@@ -304,7 +341,15 @@ async function _executeSyncAllListsForProfile(
     }
 
     // 用户侧仅合并系统侧存储的过滤器：确保缺失全局布隆或规则统计元数据的列表被系统初始化编译一次
-    for (const list of activeLists) {
+    updateInFlightProgress(profileId, {
+      stage: "fetching",
+      current: 0,
+      total: activeLists.length,
+      percent: 10
+    });
+
+    for (let idx = 0; idx < activeLists.length; idx++) {
+      const list = activeLists[idx];
       const [hasBloom, meta] = await Promise.all([
         listBloomModel.hasListBloom(list.url),
         listModel.getGlobalListMetadata(list.url)
@@ -312,9 +357,15 @@ async function _executeSyncAllListsForProfile(
       if (!hasBloom || !meta?.stats) {
         await syncGlobalList(list.url, env, listModel, listBloomModel, now);
       }
+      updateInFlightProgress(profileId, {
+        current: idx + 1,
+        total: activeLists.length,
+        percent: Math.round(10 + ((idx + 1) / activeLists.length) * 70)
+      });
     }
 
     await profileModel.updateListUpdatedAt(profileId, now);
+    updateInFlightProgress(profileId, { stage: "combining", percent: 85 });
 
     const maxDomains = Number(env.MAX_SYNC_DOMAINS) || 1000000;
     const falsePositiveRate = Number(env.BLOOM_FALSE_POSITIVE_RATE) || 0.0001;
@@ -332,6 +383,7 @@ async function _executeSyncAllListsForProfile(
       falsePositiveRate,
       env
     );
+    updateInFlightProgress(profileId, { stage: "done", percent: 100 });
     console.log(`[Sync] Profile ${profileId}: manual recombine cycle complete.`);
   } catch (e) {
     console.error(`[Sync] Critical failure in manual sync for Profile ${profileId}:`, e);
@@ -387,7 +439,20 @@ export async function syncSingleListForProfile(
     }
   })();
 
-  inFlightSyncs.set(profileId, { type: "single", listId, promise: syncPromise });
+  inFlightSyncs.set(profileId, {
+    type: "single",
+    listId,
+    progress: {
+      syncing: true,
+      type: "single",
+      listId,
+      stage: "preparing",
+      current: 0,
+      total: 1,
+      percent: 10
+    },
+    promise: syncPromise
+  });
   return syncPromise;
 }
 
@@ -411,6 +476,7 @@ async function _executeSyncSingleListForProfile(
     }
 
     // 检查系统全局存储中是否已有编译产物及规则统计元数据，若缺失则补充拉取一次
+    updateInFlightProgress(profileId, { stage: "fetching", current: 0, total: 1, percent: 25 });
     const [hasBloom, meta] = await Promise.all([
       listBloomModel.hasListBloom(list.url),
       listModel.getGlobalListMetadata(list.url)
@@ -418,6 +484,7 @@ async function _executeSyncSingleListForProfile(
     if (!hasBloom || !meta?.stats) {
       await syncGlobalList(list.url, env, listModel, listBloomModel, now);
     }
+    updateInFlightProgress(profileId, { stage: "combining", current: 1, total: 1, percent: 75 });
 
     // 用户侧仅合并系统侧存储的过滤器
     if (list.enabled) {
@@ -435,6 +502,7 @@ async function _executeSyncSingleListForProfile(
         env
       );
     }
+    updateInFlightProgress(profileId, { stage: "done", percent: 100 });
     console.log(`[Sync] Profile ${profileId}: list #${listId} merged from system storage.`);
   } catch (e) {
     console.error(`[Sync] Critical failure in single list merge for Profile ${profileId}, list ${listId}:`, e);
@@ -466,7 +534,11 @@ export async function rebuildProfileBloom(
     }
   })();
 
-  inFlightSyncs.set(profileId, { type: "rebuild", promise: syncPromise });
+  inFlightSyncs.set(profileId, {
+    type: "rebuild",
+    progress: { syncing: true, type: "rebuild", stage: "combining", current: 0, total: 1, percent: 50 },
+    promise: syncPromise
+  });
   return syncPromise;
 }
 

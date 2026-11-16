@@ -151,6 +151,22 @@ export async function syncProfileLists(profileId: string): Promise<void> {
   if (!res.ok) throw new Error(await res.text());
 }
 
+export interface SyncProgress {
+  syncing: boolean;
+  type?: "all" | "single" | "next" | "rebuild";
+  listId?: number;
+  stage: "preparing" | "fetching" | "combining" | "done";
+  current: number;
+  total: number;
+  percent: number;
+}
+
+export async function getProfileSyncStatus(profileId: string): Promise<SyncProgress> {
+  const res = await profileFetch(`/api/profiles/${profileId}/lists/sync-status`);
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
 export async function syncSingleProfileList(profileId: string, listId: number): Promise<void> {
   const res = await profileFetch(`/api/profiles/${profileId}/lists/${listId}/sync`, {
     method: "POST"

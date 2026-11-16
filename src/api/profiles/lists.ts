@@ -1,7 +1,7 @@
 import { Env, User, ExecutionContext } from "../../types";
 import { ListModel } from "../../models/list";
 import { ProfileModel } from "../../models/profile";
-import { syncNextListForProfile, syncAllListsForProfile, syncSingleListForProfile, rebuildProfileBloom } from "../../utils/sync";
+import { syncNextListForProfile, syncAllListsForProfile, syncSingleListForProfile, rebuildProfileBloom, getProfileSyncProgress } from "../../utils/sync";
 import { isSafeUrl } from "../../utils/validator";
 import { pipeline } from "../../pipeline";
 import { ListBloomModel } from "../../models/listBloom";
@@ -24,6 +24,12 @@ export async function handleProfileListsRequest(
   const profileModel = new ProfileModel(env.DB);
 
   if (request.method === 'GET') {
+    if (pathParts[4] === 'sync-status') {
+      return new Response(JSON.stringify(getProfileSyncProgress(profileId)), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
     // GET /api/profiles/:id/lists/:listId/check?domain=example.com
     //
     // Answers "does this list block this domain" straight from the list's own

@@ -1,10 +1,11 @@
 import React, { useState, useRef } from "react";
 import { Dialog, Button, Intent, Callout, Switch, InputGroup, Tag, PopoverNext } from "@blueprintjs/core";
-import { Copy, ExternalLink, Trash2, Search, ShieldOff, RefreshCw, BarChart3 } from "lucide-react";
+import { Copy, ExternalLink, Trash2, Search, ShieldOff, BarChart3 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { formatDateTime } from "../../../utils/date";
 import { checkDomainAgainstList, type ListCheckResult } from "../../../services";
 import type { FilterList } from "../types";
+import { SyncProgressButton } from "./SyncProgressButton";
 
 export interface ListDetailsDialogProps {
   profileId: string;
@@ -18,6 +19,10 @@ export interface ListDetailsDialogProps {
   onAllowDomain: (domain: string) => Promise<void>;
   /** Triggers manual sync for this single list */
   onSyncSingle?: (id: number) => Promise<void>;
+  /** Whether this list is currently syncing */
+  syncingSingle?: boolean;
+  /** Progress percentage (0-100) for single list sync */
+  syncSingleProgress?: number;
 }
 
 function formatBytes(bytes: number): string {
@@ -35,6 +40,8 @@ export const ListDetailsDialog: React.FC<ListDetailsDialogProps> = ({
   onToggleEnabled,
   onAllowDomain,
   onSyncSingle,
+  syncingSingle: externalSyncingSingle = false,
+  syncSingleProgress = 0,
 }) => {
   const { t } = useTranslation();
   const [query, setQuery] = useState("");
@@ -44,7 +51,8 @@ export const ListDetailsDialog: React.FC<ListDetailsDialogProps> = ({
   const [allowing, setAllowing] = useState(false);
   const [allowed, setAllowed] = useState(false);
   const [toggling, setToggling] = useState(false);
-  const [syncingSingle, setSyncingSingle] = useState(false);
+  const [localSyncingSingle, setLocalSyncingSingle] = useState(false);
+  const syncingSingle = externalSyncingSingle || localSyncingSingle;
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   /** Monotonic id of the newest check, so stale responses can be discarded. */
   const checkToken = useRef(0);
@@ -121,11 +129,11 @@ export const ListDetailsDialog: React.FC<ListDetailsDialogProps> = ({
 
   const handleSync = async () => {
     if (!selectedList || !onSyncSingle) return;
-    setSyncingSingle(true);
+    setLocalSyncingSingle(true);
     try {
       await onSyncSingle(selectedList.id);
     } finally {
-      setSyncingSingle(false);
+      setLocalSyncingSingle(false);
     }
   };
 
@@ -498,12 +506,13 @@ export const ListDetailsDialog: React.FC<ListDetailsDialogProps> = ({
         )}
         <div className="flex gap-2">
           {onSyncSingle && (
-            <Button
-              icon={<RefreshCw size={14} className={syncingSingle ? "animate-spin" : ""} />}
+            <SyncProgressButton
+              syncing={syncingSingle}
+              progress={syncSingleProgress}
               intent={Intent.PRIMARY}
-              loading={syncingSingle}
-              disabled={syncingSingle}
-              text={t("filtering.syncSingle", "同步此列表")}
+              iconSize={14}
+              label={t("filtering.syncSingle", "同步此列表")}
+              syncingLabel={t("filtering.syncing", "同步中...")}
               onClick={() => void handleSync()}
             />
           )}
