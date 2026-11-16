@@ -6,6 +6,25 @@ import { pipelineConfig } from "./config";
 import { pipelineResolver } from "./resolver";
 import { pipelineFilter } from "./filter";
 
+/**
+ * Returns true when filtering is actively paused and has not yet reached its Unix expiry timestamp.
+ *
+ * @param settings - Current profile settings.
+ * @param nowSec - Current Unix timestamp in seconds.
+ * @returns Whether filtering rules and default block policy should be bypassed.
+ */
+export function isFilteringPaused(
+  settings: ProfileSettings,
+  nowSec: number = Math.floor(Date.now() / 1000)
+): boolean {
+  const pause = settings.pause_filtering;
+  if (!pause?.enabled) return false;
+  if (pause.expires_at > 0 && nowSec >= pause.expires_at) {
+    return false;
+  }
+  return true;
+}
+
 export const pipeline = {
   clearCache: pipelineCache.clear,
 
@@ -61,6 +80,13 @@ export const pipeline = {
       };
       const final = await pipelineResolver.resolve(request, query, context, fallbackSettings, "PASS", "Fail-Open Fallback");
       return { ...final, timings: { ...timings, ...final.timings } };
+    }
+
+    // 停用过滤检查：若开启且未过期，跳过所有过滤规则与默认拦截策略，直接流向上游服务器
+    if (isFilteringPaused(config.settings)) {
+      track('pause_check');
+      const bypassed = await pipelineResolver.resolve(request, query, context, config.settings, "PASS", "Filtering Paused");
+      return { ...bypassed, timings: { ...timings, ...bypassed.timings } };
     }
 
     // 匹配规则 (本地 + 外部)

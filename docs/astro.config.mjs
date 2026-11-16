@@ -131,6 +131,53 @@ export default defineConfig({
           `,
         },
         {
+          tag: 'script',
+          content: `
+            // Mirror heading <Badge /> elements into Starlight's desktop and mobile TOC links
+            function syncTocHeadingBadges() {
+              const badgeMap = new Map();
+              const headings = document.querySelectorAll('.sl-markdown-content :is(h1, h2, h3, h4, h5, h6)[id]');
+              for (const heading of headings) {
+                const badge = heading.querySelector('.sl-badge');
+                if (badge) {
+                  badgeMap.set(heading.id, badge);
+                }
+              }
+              if (!badgeMap.size) return;
+
+              const tocLinks = document.querySelectorAll('starlight-toc a[href^="#"], mobile-starlight-toc a[href^="#"]');
+              for (const link of tocLinks) {
+                if (link.dataset.badgeSynced === 'true' || link.querySelector('.sl-toc-badge')) continue;
+
+                const rawId = (link.getAttribute('href') || '').slice(1);
+                let decodedId = rawId;
+                try {
+                  decodedId = decodeURIComponent(rawId);
+                } catch {
+                  // Keep rawId if href contains malformed percent-encoding
+                }
+
+                const sourceBadge = badgeMap.get(rawId) || badgeMap.get(decodedId);
+                if (!sourceBadge) continue;
+
+                const clone = sourceBadge.cloneNode(true);
+                clone.classList.add('sl-toc-badge');
+                link.classList.add('sl-toc-link-with-badge');
+                link.appendChild(clone);
+                link.dataset.badgeSynced = 'true';
+              }
+            }
+
+            if (document.readyState === 'loading') {
+              document.addEventListener('DOMContentLoaded', syncTocHeadingBadges);
+            } else {
+              syncTocHeadingBadges();
+            }
+            document.addEventListener('astro:page-load', syncTocHeadingBadges);
+            document.addEventListener('astro:after-swap', syncTocHeadingBadges);
+          `,
+        },
+        {
           tag: 'meta',
           attrs: {
             name: 'keywords',

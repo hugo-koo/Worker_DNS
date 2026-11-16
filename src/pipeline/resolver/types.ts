@@ -1,3 +1,35 @@
+import type { ProfileSettings } from "../../types";
+
+/**
+ * Resolves the configured TTL override (in seconds) for a given DNS action if enabled and valid.
+ *
+ * @param settings - Current profile settings.
+ * @param action - The resolution action ('PASS' | 'REDIRECT' | 'BLOCK').
+ * @returns Override TTL in seconds (0..2147483647), or undefined when disabled/unset.
+ */
+export function resolveTtlOverride(
+  settings: ProfileSettings,
+  action: "PASS" | "REDIRECT" | "BLOCK"
+): number | undefined {
+  const rule =
+    action === "PASS"
+      ? settings.ttl_override?.pass
+      : action === "REDIRECT"
+        ? settings.ttl_override?.redirect
+        : settings.ttl_override?.block;
+
+  if (!rule?.enabled) {
+    return undefined;
+  }
+
+  const parsed = Number(rule.ttl);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return undefined;
+  }
+
+  return Math.min(2147483647, Math.floor(parsed));
+}
+
 /**
  * Custom error representing an upstream HTTP error response during DoH resolution.
  */

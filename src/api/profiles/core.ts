@@ -219,15 +219,71 @@ export async function handleProfilesCoreRequest(
       }
     }
 
-    // 检查旧配置中的 log_retention_days
+    if (newSettings.ttl_override !== undefined) {
+      if (!newSettings.ttl_override || typeof newSettings.ttl_override !== 'object' || Array.isArray(newSettings.ttl_override)) {
+        return new Response("Invalid ttl_override configuration.", { status: 400 });
+      }
+      const ttlKeys: Array<keyof NonNullable<ProfileSettings['ttl_override']>> = ['pass', 'redirect', 'block'];
+      for (const key of ttlKeys) {
+        const entry = newSettings.ttl_override[key];
+        if (entry === undefined) continue;
+        if (!entry || typeof entry !== 'object' || typeof entry.enabled !== 'boolean') {
+          return new Response(`Invalid ttl_override.${key} configuration.`, { status: 400 });
+        }
+        const ttlNum = Number(entry.ttl);
+        if (!Number.isInteger(ttlNum) || ttlNum < 0 || ttlNum > 2147483647) {
+          return new Response(`Invalid ttl_override.${key}.ttl value. Must be an integer between 0 and 2147483647.`, { status: 400 });
+        }
+        entry.ttl = ttlNum;
+      }
+    }
+
+    // 检查旧配置中的 log_retention_days 与 pause_filtering
     const oldProfile = await profileModel.getById(profileId);
     let oldDays = 30;
+    let oldPause: ProfileSettings['pause_filtering'] | undefined;
     try {
       const oldSettings = JSON.parse(oldProfile?.settings || "{}");
       if (oldSettings?.log_retention_days != null) {
         oldDays = Number(oldSettings.log_retention_days);
       }
+      oldPause = oldSettings?.pause_filtering;
     } catch {}
+
+    if (newSettings.pause_filtering !== undefined) {
+      const pause = newSettings.pause_filtering;
+      if (!pause || typeof pause !== 'object' || Array.isArray(pause) || typeof pause.enabled !== 'boolean') {
+        return new Response("Invalid pause_filtering configuration.", { status: 400 });
+      }
+      const durationSec = Number(pause.duration_seconds);
+      if (!Number.isInteger(durationSec) || durationSec < 0 || durationSec > 360000) {
+        return new Response("Invalid pause_filtering.duration_seconds value. Must be an integer between 0 and 360000.", { status: 400 });
+      }
+      const nowSec = Math.floor(Date.now() / 1000);
+      if (!pause.enabled) {
+        newSettings.pause_filtering = {
+          enabled: false,
+          duration_seconds: durationSec,
+          expires_at: 0
+        };
+      } else if (durationSec === 0) {
+        newSettings.pause_filtering = {
+          enabled: true,
+          duration_seconds: 0,
+          expires_at: 0
+        };
+      } else {
+        const wasActiveSameDuration =
+          Boolean(oldPause?.enabled) &&
+          oldPause?.duration_seconds === durationSec &&
+          Number(oldPause?.expires_at || 0) > nowSec;
+        newSettings.pause_filtering = {
+          enabled: true,
+          duration_seconds: durationSec,
+          expires_at: wasActiveSameDuration ? Number(oldPause!.expires_at) : nowSec + durationSec
+        };
+      }
+    }
 
     await profileModel.updateSettings(profileId, newSettings);
 

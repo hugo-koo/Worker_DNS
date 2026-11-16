@@ -8,7 +8,8 @@
     "start": "astro dev",
     "build": "astro build",
     "preview": "astro preview",
-    "convert-tw": "node scripts/convert-tw.mjs"
+    "convert-tw": "node scripts/convert-tw.mjs",
+    "check": "node scripts/check-docs.mjs"
   },
   "dependencies": {
     "@astrojs/starlight": "^0.42.6",

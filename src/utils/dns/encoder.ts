@@ -286,3 +286,61 @@ export function buildResponse(
     return fallback;
   }
 }
+
+/**
+ * Rewrites the TTL field (in seconds) of all Answer and Authority resource records
+ * in a raw DNS wire response packet, leaving Question and EDNS0 OPT records intact.
+ *
+ * @param raw - The raw DNS wire response packet.
+ * @param ttl - Target TTL in seconds (clamped to 0..2147483647).
+ * @returns A new Uint8Array with updated TTL bytes.
+ */
+export function rewriteDNSPacketTTL(raw: Uint8Array, ttl: number): Uint8Array {
+  if (!raw || raw.length < 12) {
+    return raw;
+  }
+
+  const safeTtl = Math.max(0, Math.min(2147483647, Math.floor(ttl)));
+  const out = new Uint8Array(raw);
+  const qCount = (out[4] << 8) | out[5];
+  const anCount = (out[6] << 8) | out[7];
+  const nsCount = (out[8] << 8) | out[9];
+  const rrCount = anCount + nsCount;
+
+  if (rrCount === 0) {
+    return out;
+  }
+
+  let offset = 12;
+  for (let i = 0; i < qCount; i++) {
+    if (offset >= out.length) return out;
+    const { read } = decodeName(out, offset);
+    if (read === 0) return out;
+    offset += read + 4;
+    if (offset > out.length) return out;
+  }
+
+  for (let i = 0; i < rrCount; i++) {
+    if (offset >= out.length) break;
+    const { read } = decodeName(out, offset);
+    if (read === 0) break;
+    offset += read;
+
+    if (offset + 10 > out.length) break;
+    const typeCode = (out[offset] << 8) | out[offset + 1];
+    const rdLength = (out[offset + 8] << 8) | out[offset + 9];
+    if (offset + 10 + rdLength > out.length) break;
+
+    // Preserve EDNS0 OPT pseudo-RR (type 41) because its TTL field stores extended RCODE/flags
+    if (typeCode !== 41) {
+      out[offset + 4] = (safeTtl >>> 24) & 0xff;
+      out[offset + 5] = (safeTtl >>> 16) & 0xff;
+      out[offset + 6] = (safeTtl >>> 8) & 0xff;
+      out[offset + 7] = safeTtl & 0xff;
+    }
+
+    offset += 10 + rdLength;
+  }
+
+  return out;
+}

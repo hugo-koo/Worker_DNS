@@ -19,6 +19,29 @@ const targetDir = path.join(docsRoot, 'src', 'content', 'docs', 'zh-tw');
 const converter = OpenCC.Converter({ from: 'cn', to: 'twp' });
 
 /**
+ * Post-conversion technical glossary overrides for consistent Traditional Chinese (TW) docs.
+ */
+const TW_GLOSSARY_OVERRIDES = [
+  ['密钥', '金鑰'],
+  ['环境变量', '環境變數'],
+  ['默认', '預設'],
+  ['端点', '端點'],
+  ['并发', '併發'],
+  ['缓存', '快取'],
+  ['凭据', '憑證'],
+  ['会话', '會話'],
+  ['刷新令牌', '重新整理令牌'],
+];
+
+function convertText(text) {
+  let out = converter(text);
+  for (const [src, dst] of TW_GLOSSARY_OVERRIDES) {
+    out = out.replaceAll(src, dst);
+  }
+  return out;
+}
+
+/**
  * Converts text while preserving fenced code blocks, inline code, and URLs.
  */
 function convertMarkdown(content) {
@@ -48,13 +71,13 @@ function convertMarkdown(content) {
     const key = `@@@MDLINK_${linkIndex++}@@@`;
     // Replace zh-cn with zh-tw in internal docs links
     const convertedUrl = url.replace(/\/zh-cn\//g, '/zh-tw/');
-    const convertedText = converter(text);
+    const convertedText = convertText(text);
     links.push({ key, replacement: `[${convertedText}](${convertedUrl})` });
     return key;
   });
 
   // 4. Convert remaining prose text
-  let converted = converter(withoutLinks);
+  let converted = convertText(withoutLinks);
 
   // 5. Restore markdown links
   for (const { key, replacement } of links) {

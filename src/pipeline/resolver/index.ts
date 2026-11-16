@@ -1,6 +1,7 @@
 import { Context, DNSQuery, ProfileSettings, ResolutionResult } from "../../types";
-import { parseDNSAnswer } from "../../utils/dns";
+import { parseDNSAnswer, rewriteDNSPacketTTL } from "../../utils/dns";
 import { isSafeUrl } from "../../utils/validator";
+import { resolveTtlOverride } from "./types";
 import {
   fetchFromUpstream,
   resolveUpstreamEndpoint,
@@ -88,14 +89,21 @@ export const pipelineResolver = {
         reason
       );
 
-      const answer = echRes.answer;
-      const parsedAnswers = echRes.parsedAnswers;
+      const overrideTtl = resolveTtlOverride(settings, action);
+      const answer =
+        overrideTtl !== undefined
+          ? rewriteDNSPacketTTL(echRes.answer, overrideTtl)
+          : echRes.answer;
+      const parsedAnswers =
+        overrideTtl !== undefined ? parseDNSAnswer(answer) : echRes.parsedAnswers;
       const effectiveReason = echRes.effectiveReason;
 
       const minTTL =
-        parsedAnswers.length > 0
-          ? Math.max(10, Math.min(...parsedAnswers.map((a) => a.ttl)))
-          : 60;
+        overrideTtl !== undefined
+          ? overrideTtl
+          : parsedAnswers.length > 0
+            ? Math.max(10, Math.min(...parsedAnswers.map((a) => a.ttl)))
+            : 60;
 
       recordSuccessAndCache(
         request,

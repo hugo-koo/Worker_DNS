@@ -85,13 +85,21 @@ export function recordSuccessAndCache(
         );
 
         const rcode = answer.length >= 12 ? answer[3] & 0x0f : -1;
-        if (answer.length >= 12 && minTTL > 0 && (rcode === 0 || rcode === 3)) {
+        const pauseExpiresMs =
+          effectiveReason === "Filtering Paused" &&
+          settings.pause_filtering?.expires_at &&
+          settings.pause_filtering.expires_at > 0
+            ? settings.pause_filtering.expires_at * 1000
+            : Infinity;
+        const cacheExpiresAt = Math.min(Date.now() + minTTL * 1000, pauseExpiresMs);
+
+        if (answer.length >= 12 && minTTL > 0 && cacheExpiresAt > Date.now() && (rcode === 0 || rcode === 3)) {
           dnsCache.set(`${context.profileId}:${query.name.toLowerCase()}:${query.type}`, {
             answer,
             ttl: minTTL,
             action,
             reason: effectiveReason,
-            expiresAt: Date.now() + minTTL * 1000
+            expiresAt: cacheExpiresAt
           });
         }
       } catch {

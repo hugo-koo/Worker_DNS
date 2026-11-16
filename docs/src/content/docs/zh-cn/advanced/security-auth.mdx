@@ -6,6 +6,7 @@ sidebar:
 ---
 
 import { Image } from 'astro:assets';
+import { Aside } from '@astrojs/starlight/components';
 import loginImg from '../../../../../screenshots/dns.obex-login.webp';
 import settingsImg from '../../../../../screenshots/dns.obex-settings.webp';
 
@@ -17,7 +18,7 @@ DNS Worker 在后台解析管道与 Web 控制面板中全面践行零信任深�
 
 <Image src={loginImg} alt="Web 控制面板生物识别通行密钥登录" format="webp" />
 
-Web 管理面板严格遵循 **WebApp Trust** 零信任安全架构标准：
+Web 管理面板采用零信任身份认证与令牌轮换架构：
 
 ```mermaid
 sequenceDiagram
@@ -26,7 +27,7 @@ sequenceDiagram
     participant Server as DNS Worker 服务端
 
     Browser->>Server: POST /api/auth/login (密码 + 随机数 Nonce)
-    Note over Server: Argon2 / PBKDF2 校验
+    Note over Server: PBKDF2-HMAC-SHA256 校验
     Server-->>Browser: Access Token (内存) + Refresh Token (Cookie)
     Browser->>Server: 授权 API 调用 (Authorization: Bearer)
     Browser->>Server: POST /api/auth/refresh (RTR 宽限窗口)
@@ -39,7 +40,7 @@ sequenceDiagram
 - **随机数防重放**：所有敏感操作均包含加密随机数，杜绝重放攻击。
 - **非可导出 Web Crypto 密钥**：前端私钥运算（如后量子 ML-KEM、AES-GCM 日志解密）在独立 Web Worker 中使用不可导出的 Web Crypto API 原生对象执行。
 - **单次刷新令牌轮换 (RTR)**：Refresh Token 具备一次性属性，每次换发新 Token 时旧 Token 立即吊销。
-- **并发宽限窗口**：在多浏览器标签页并发请求时，通过原子宽限期（`RTR_GRACE_WINDOW_MS`）避免误判登出。
+- **并发宽限窗口**：在多浏览器标签页并发请求时，通过原子 15 秒宽限期（`ROTATION_GRACE_PERIOD_SECONDS = 15`）避免误判登出。
 
 ---
 
@@ -100,11 +101,21 @@ flowchart TD
 - **类型**：`string`
 - **职责**：初次部署时系统预设的管理员密码。初始化创建后凭据将安全加密存储于数据库中。
 
+### `ACCESS_TOKEN_EXPIRATION_MINUTES`
+- **类型**：`number`（默认：`10`）
+- **职责**：Access JWT 令牌的有效期（分钟）。
+
+### `SESSION_ABSOLUTE_MAX_MINUTES` / `OPTIONAL_SESSION_ABSOLUTE_MAX_DAYS`
+- **类型**：`number`（默认：`1440` 分钟 / `7` 天）
+- **职责**：分别限制标准会话（`s_`）与 Keep Logged In 持久会话（`k_`）自 `created_at` 起的不可逾越绝对有效期上限，确保即便持续活跃也需定期重新认证。
+
 ---
 
 ## 4. NIST SP 800-63B-4 (AAL2) 合规声明
 
-Web 控制台的认证与会话管理架构符合 **NIST SP 800-63B-4 Authenticator Assurance Level 2 (AAL2)** 安全规范（自助注册流程对应 **NIST SP 800-63A IAL1** 伪名化身份登记）：
+<Aside type="note" title="合规范围说明">
+Web 控制台的认证与会话管理架构符合 **NIST SP 800-63B-4 Authenticator Assurance Level 2 (AAL2)** 安全规范（自助注册流程对应 **NIST SP 800-63A IAL1** 伪名化身份登记）。
+</Aside>
 
 - **抗钓鱼多因素认证（MFA）**：支持 FIDO2/WebAuthn Passkey（ES256/RS256，严格校验 RP ID、Origin、UP/UV 标志位及单调递增 `signCount`），以及带 90 秒防重放窗口的 RFC 6238 TOTP 与一次性 Mod-11 恢复密钥。
 - **记忆秘密（密码）策略**：支持 12–128 位密码与长短语，允许空格与 Unicode 字符（NFC 规范化），不设强制字符配额或定期强制改密；在注册、改密与重置密码流程中结合客户端 HIBP k-Anonymity 匿名范围查询与边缘泄露凭据请求头进行弱/泄露密码拦截。

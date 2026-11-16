@@ -5,6 +5,8 @@ sidebar:
   order: 3
 ---
 
+import { Badge } from '@astrojs/starlight/components';
+
 As a hybrid application engineered to run both on Cloudflare Workers edge network (Serverless) and dedicated standalone hosts (VPS/Docker Serverfull), DNS Worker enforces rigorous design and coding standards to preserve data integrity, security, and long-term maintainability.
 
 ---
@@ -15,15 +17,15 @@ To balance engineering rigor with development agility, every guideline in this d
 
 | Level Badge | Scope & Authority | Adjudication Principle |
 | :--- | :--- | :--- |
-| **`[Strict]`** | **Non-negotiable foundational requirements**.<br/>Directly impacts security boundaries (SSRF, RBAC bypass), data integrity (immutable migration hashes, integer timestamps), protocol mandates (RFC 8484 HTTP/2 minimum), or static analysis (disallowing `any`). | Minimized to only critical invariants. Must pass continuous integration and peer review with zero waivers. |
-| **`[Recommended]`** | **Core engineering standards & best practices**.<br/>Covers architectural isolation, modularity, defensive error handling, table recreation patterns, and comprehensive automated test suites. | Must be followed in all normal circumstances; deviations require explicit justification in the PR review. |
-| **`[Reference]`** | **Code consistency & advanced tuning heuristics**.<br/>Covers naming conventions, human-in-the-loop markers (`TODO: [HUMAN]`), and high-QPS memory profiling. | Encouraged to improve readability, maintainability, and developer experience. |
+| <Badge text="Strict" variant="danger" /> | **Core baseline standards**.<br/>Directly impacts security boundaries (SSRF, RBAC bypass), data integrity (immutable migration hashes, integer timestamps), protocol mandates (RFC 8484 HTTP/2 minimum), or static analysis (disallowing `any`). | Kept focused on essential invariants and verified during CI and code review; any necessary exception in special cases requires core maintainer sign-off. |
+| <Badge text="Recommended" variant="tip" /> | **Core engineering standards & best practices**.<br/>Covers architectural isolation, modularity, defensive error handling, table recreation patterns, and comprehensive automated test suites. | Must be followed in all normal circumstances; deviations require explicit justification in the PR review. |
+| <Badge text="Reference" variant="note" /> | **Code consistency & advanced tuning heuristics**.<br/>Covers naming conventions, human-in-the-loop markers (`TODO: [HUMAN]`), and high-QPS memory profiling. | Encouraged to improve readability, maintainability, and developer experience. |
 
 ---
 
 ## 1. Architectural & Collaborative Principles
 
-### 1.1 Respect Architectural Layering `[Recommended]`
+### 1.1 Respect Architectural Layering <Badge text="Recommended" variant="tip" />
 
 * **Rationale**: DNS Worker must operate both in Cloudflare Workers (serverless, no disk access) and Node.js standalone daemons (Serverfull), with a Local-First OPFS frontend. Breaking architectural boundaries leaks state and introduces coupling that undermines cross-runtime portability.
 * **Good Practice**:
@@ -40,13 +42,13 @@ To balance engineering rigor with development agility, every guideline in this d
   db.prepare('UPDATE lists SET is_system = 0 WHERE id = ?').run(listId);
   ```
 
-### 1.2 Minimally Invasive Modifications `[Recommended]`
+### 1.2 Minimally Invasive Modifications <Badge text="Recommended" variant="tip" />
 
 * **Rationale**: In human-AI collaborative workflows, restricting the blast radius of changes preserves existing tested code, minimizes regression risk, and keeps `git blame` histories clean.
 * **Good Practice**: When adding features like admin list revocation, extend [`src/models/list.ts`](file:///d:/Coding/OriginalProject/ObexDNS/src/models/list.ts) with `revokeSystemList` and wire the API endpoint, keeping existing query methods and schemas intact.
 * **Anti-Pattern**: Reformatting or renaming unrelated functions across hundreds of lines while fixing an isolated bug.
 
-### 1.3 Modularity & Single Responsibility `[Recommended]`
+### 1.3 Modularity & Single Responsibility <Badge text="Recommended" variant="tip" />
 
 * **Rationale**: Pure functions and isolated modules simplify unit testing, prevent subtle side effects, and are portable across Workers and Node.js runtimes.
 * **Good Practice**:
@@ -58,7 +60,7 @@ To balance engineering rigor with development agility, every guideline in this d
   ```
 * **Anti-Pattern**: Handling HTTP parsing, remote downloads, regex evaluation, Bloom filter bit operations, and database writes all in a single monolithic controller.
 
-### 1.4 Human-in-the-Loop Markers `[Reference]`
+### 1.4 Human-in-the-Loop Markers <Badge text="Reference" variant="note" />
 
 * **Rationale**: Explicitly annotate code paths requiring human decisions or environment-specific credentials to prevent automated workflows from making invalid assumptions.
 * **Good Practice**:
@@ -66,11 +68,17 @@ To balance engineering rigor with development agility, every guideline in this d
   // TODO: [HUMAN] Inject production OAuth Client Secret and encryption keys before deploying
   ```
 
+### 1.5 Single Source of Truth <Badge text="Strict" variant="danger" />
+
+* **Rationale**: Every piece of business state, configuration constant, type definition, error code, or validation rule in the system must have a single authoritative definition (Single Source of Truth). Duplicating constants, enums, or validation logic across multiple modules, frontend/backend boundaries, or configuration files is strictly prohibited, as partial updates lead to state divergence, inconsistent validation, or silent data corruption.
+* **Good**: Define shared enums, error codes, schema validation rules, or system constants in a single shared module (e.g., `src/shared/` or core type definition files) and import them consistently across backend, frontend, and tests.
+* **Bad**: Hardcoding the same password length limits, retention day options, or permission role lists separately in both backend API handlers and frontend form components, then updating only one of them later.
+
 ---
 
 ## 2. Code Standardization & Strict Typing
 
-### 2.1 Disallow `any` Escapes and Implicit Type Bypass `[Strict]`
+### 2.1 Disallow `any` Escapes and Implicit Type Bypass <Badge text="Strict" variant="danger" />
 
 * **Rationale**: TypeScript's static analysis is the primary safeguard for DNS wire parsing and cryptographic operations. Using `any` completely disables type checking, allowing silent type errors to crash production with `TypeError: Cannot read properties of undefined`.
 * **Good Practice**:
@@ -90,7 +98,7 @@ To balance engineering rigor with development agility, every guideline in this d
   export async function revokeSystemList(url: any): Promise<any> { ... }
   ```
 
-### 2.2 Explicit Signatures for Exported Entities `[Recommended]`
+### 2.2 Explicit Signatures for Exported Entities <Badge text="Recommended" variant="tip" />
 
 * **Rationale**: Publicly exported functions, models, and React component props should explicitly declare their TypeScript types and return types to establish stable contracts and prevent accidental breaking changes from deep inference.
 * **Good Practice**:
@@ -103,7 +111,7 @@ To balance engineering rigor with development agility, every guideline in this d
   export const DistributeFilterCard: React.FC<DistributeFilterCardProps> = ({ toasterRef, onSavingChange }) => { ... };
   ```
 
-### 2.3 Unified Naming Conventions `[Reference]`
+### 2.3 Unified Naming Conventions <Badge text="Reference" variant="note" />
 
 * **Rationale**: Consistent naming across variables (`camelCase`), types/components (`PascalCase`), and constants (`UPPER_SNAKE_CASE`) clarifies identifier semantics and lifecycles at a glance.
 * **Good Practice**:
@@ -111,7 +119,7 @@ To balance engineering rigor with development agility, every guideline in this d
   * Classes, Types, Components: `PascalCase` (e.g., `ListModel`, `ListsTable`, `SingleListSyncResult`).
   * Constants & Enums: `UPPER_SNAKE_CASE` (e.g., `DEFAULT_MAX_SYNC_DOMAINS`, `APP_VERSION`).
 
-### 2.4 Defensive Programming for External Inputs `[Recommended]`
+### 2.4 Defensive Programming for External Inputs <Badge text="Recommended" variant="tip" />
 
 * **Rationale**: External DNS upstreams, third-party blocklist providers, and web forms are untrusted boundaries subject to flakiness, invalid formatting, and timeouts. Defensive guards prevent transient failures from crashing daemon threads.
 * **Good Practice**:
@@ -146,7 +154,7 @@ flowchart LR
     D -->|"Deferred Localization<br/>formatDateTime(ts * 1000)"| E["Rendered User View<br/>(2026/11/07 17:30 UTC+8)"]
 ```
 
-### 3.1 Integer Unix Timestamps in Database and Domain Models `[Strict]`
+### 3.1 Integer Unix Timestamps in Database and Domain Models <Badge text="Strict" variant="danger" />
 
 * **Rationale**: Text date representations (ISO-8601, RFC 2822) consume excessive storage and introduce sorting mismatches and timezone parsing bugs in SQLite/D1. Using integer Unix timestamps in seconds (`Math.floor(Date.now() / 1000)` / SQLite `INTEGER`) ensures zero-overhead comparisons and unambiguous index lookups.
 * **Good Practice**:
@@ -171,7 +179,7 @@ flowchart LR
   );
   ```
 
-### 3.2 Immediate Parsing at Ingestion & Dynamic Protocol Serialization `[Recommended]`
+### 3.2 Immediate Parsing at Ingestion & Dynamic Protocol Serialization <Badge text="Recommended" variant="tip" />
 
 * **Rationale**: External protocol formats (such as RFC 7231 `Last-Modified` strings) belong solely to the wire layer. Converting to Unix timestamps at the system boundary keeps internal models clean, while outbound requests serialize on demand.
 * **Good Practice**:
@@ -186,7 +194,7 @@ flowchart LR
   }
   ```
 
-### 3.3 Deferred Formatting in UI Presentation Layer `[Recommended]`
+### 3.3 Deferred Formatting in UI Presentation Layer <Badge text="Recommended" variant="tip" />
 
 * **Rationale**: Date formatting, relative time ("5 minutes ago"), and user timezone offsets (`user.timezone`) are strictly view concerns. APIs returning raw numeric timestamps allow frontends full localization freedom.
 * **Good Practice**:
@@ -201,13 +209,13 @@ flowchart LR
 
 Because schemas must run across Cloudflare D1, Turso libSQL, and standalone SQLite servers, migrations follow an immutable append-only lifecycle:
 
-### 4.1 Past Migrations Are Immutable `[Strict]`
+### 4.1 Past Migrations Are Immutable <Badge text="Strict" variant="danger" />
 
 * **Rationale**: Once merged or deployed to production, existing migration files (`migrations/0000_*.sql` through existing sequence numbers) form an immutable baseline. Modifying them corrupts migration hashes, causes schema drift, and breaks production databases.
 * **Good Practice**: When altering the `lists` table, create a new numbered migration such as `migrations/0065_add_is_system_to_lists.sql`.
 * **Anti-Pattern**: Modifying `0000_init.sql` directly to add columns to existing tables.
 
-### 4.2 SQLite Table Recreation Pattern for Schema Evolution `[Recommended]`
+### 4.2 SQLite Table Recreation Pattern for Schema Evolution <Badge text="Recommended" variant="tip" />
 
 * **Rationale**: SQLite has limited support for altering existing column constraints or types. The standard SQLite table recreation pattern (create new table, copy sanitized data, drop old table, rename) is guaranteed safe across all SQLite engines.
 * **Good Practice**:
@@ -224,7 +232,7 @@ Because schemas must run across Cloudflare D1, Turso libSQL, and standalone SQLi
   ALTER TABLE global_list_metadata_new RENAME TO global_list_metadata;
   ```
 
-### 4.3 Automated Embedded Migrations Synchronization `[Recommended]`
+### 4.3 Automated Embedded Migrations Synchronization <Badge text="Recommended" variant="tip" />
 
 * **Rationale**: Cloudflare Workers lacks a filesystem at runtime and cannot read `.sql` files dynamically. Generating a static TypeScript array allows seamless bootstrap migrations on serverless edge nodes.
 * **Good Practice**: Run `npm run db:generate-migrations` after creating any migration SQL file.
@@ -233,7 +241,7 @@ Because schemas must run across Cloudflare D1, Turso libSQL, and standalone SQLi
 
 ## 5. Security Architecture & Defensive Design
 
-### 5.1 Mandatory SSRF Prevention on Outbound Requests `[Strict]`
+### 5.1 Mandatory SSRF Prevention on Outbound Requests <Badge text="Strict" variant="danger" />
 
 * **Rationale**: DNS services initiate outbound requests for blocklists and upstream queries. Allowing requests to private IP ranges (RFC 1918), loopback interfaces (`127.0.0.1`), or cloud metadata endpoints (`169.254.169.254`) allows attackers to probe internal networks or steal IAM credentials.
 * **Good Practice**:
@@ -244,7 +252,7 @@ Because schemas must run across Cloudflare D1, Turso libSQL, and standalone SQLi
   }
   ```
 
-### 5.2 Prefer HTTP/3 for DoH with Mandatory Minimum HTTP/2 `[Strict]`
+### 5.2 Prefer HTTP/3 for DoH with Mandatory Minimum HTTP/2 <Badge text="Strict" variant="danger" />
 
 * **Rationale**:
   * **HTTP/3 is the Preferred Protocol**: Built upon UDP/QUIC, HTTP/3 (DoH3 / RFC 9114) delivers 0-RTT handshakes, completely eliminates transport-layer head-of-line blocking, and provides native resilience against packet loss on mobile networks. The system and standalone daemons should prioritize and advertise HTTP/3.
@@ -270,7 +278,7 @@ Because schemas must run across Cloudflare D1, Turso libSQL, and standalone SQLi
   * Permitting serial DoH queries over multiplexing-deficient HTTP/1.1 connections;
   * Silently downgrading failed DoH queries to plain UDP without user knowledge or diagnostic feedback.
 
-### 5.3 Post-Quantum Zero-Knowledge E2EE for Audit Logs `[Recommended]`
+### 5.3 Post-Quantum Zero-Knowledge E2EE for Audit Logs <Badge text="Recommended" variant="tip" />
 
 * **Rationale**: DNS logs reveal sensitive browsing behavior. Using ML-KEM-768 post-quantum key encapsulation with AES-256-GCM envelope encryption ensures the server stores only ciphertext; private keys reside solely in user Passkeys / Web Crypto.
 
@@ -278,12 +286,12 @@ Because schemas must run across Cloudflare D1, Turso libSQL, and standalone SQLi
 
 ## 6. Test-Driven Mindset & Quality Assurance
 
-### 6.1 Automated Verification for Core Changes `[Recommended]`
+### 6.1 Automated Verification for Core Changes <Badge text="Recommended" variant="tip" />
 
 * **Rationale**: DNS resolution, Bloom filter chunking, cryptography, and RBAC isolation have cascading effects. Changes must be accompanied by automated unit and integration tests.
 * **Good Practice**: When implementing admin list distribution and user retention, write [`test/test_distribute_filter.ts`](file:///d:/Coding/OriginalProject/ObexDNS/test/test_distribute_filter.ts) covering happy paths, privilege boundaries, and idempotency.
 
-### 6.2 Full Baseline Verification Before Merging `[Recommended]`
+### 6.2 Full Baseline Verification Before Merging <Badge text="Recommended" variant="tip" />
 
 * **Rationale**: Validates that changes do not introduce type errors or build failures.
 * **Good Practice**:
@@ -297,6 +305,6 @@ Because schemas must run across Cloudflare D1, Turso libSQL, and standalone SQLi
   npm run build:serverfull               # Standalone daemon production build
   ```
 
-### 6.3 Performance Profiling for Critical Paths `[Reference]`
+### 6.3 Performance Profiling for Critical Paths <Badge text="Reference" variant="note" />
 
 * **Rationale**: High QPS DNS throughput amplifies small memory allocations or GC pauses. Profile hot paths (Bloom filter checks, LRU cache) under load.

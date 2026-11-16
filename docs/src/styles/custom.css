@@ -9,3 +9,25 @@
   --sl-color-accent: #2563eb;
   --sl-color-accent-high: #1e3a8a;
 }
+
+.sl-badge {
+  font-family: var(--sl-font, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+  white-space: nowrap;
+}
+
+/* Compact heading level badges mirrored into the right-hand and mobile TOC */
+starlight-toc a.sl-toc-link-with-badge,
+mobile-starlight-toc a.sl-toc-link-with-badge {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
+.sl-toc-badge {
+  flex-shrink: 0;
+  font-size: 0.6875rem;
+  line-height: 1.1;
+  padding: 0.1rem 0.35rem;
+  margin-inline-start: 0.25rem;
+}

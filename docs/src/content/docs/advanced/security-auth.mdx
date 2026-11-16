@@ -6,6 +6,7 @@ sidebar:
 ---
 
 import { Image } from 'astro:assets';
+import { Aside } from '@astrojs/starlight/components';
 import loginImg from '../../../../screenshots/dns.obex-login.webp';
 import settingsImg from '../../../../screenshots/dns.obex-settings.webp';
 
@@ -17,7 +18,7 @@ DNS Worker implements defense-in-depth zero-trust security standards across both
 
 <Image src={loginImg} alt="Web Dashboard Biometric Authentication" format="webp" />
 
-The Web Dashboard adheres to the **WebApp Trust** architectural framework:
+The Web Dashboard implements a zero-trust authentication and token rotation architecture:
 
 ```mermaid
 sequenceDiagram
@@ -26,7 +27,7 @@ sequenceDiagram
     participant Server as DNS Worker Server
 
     Browser->>Server: POST /api/auth/login (Password + Nonce)
-    Note over Server: Argon2 / PBKDF2 Verification
+    Note over Server: PBKDF2-HMAC-SHA256 Verification
     Server-->>Browser: Access Token (Memory) + Refresh Token (Cookie)
     Browser->>Server: Authenticated RPC (Authorization: Bearer)
     Browser->>Server: POST /api/auth/refresh (RTR Grace Window)
@@ -39,7 +40,7 @@ sequenceDiagram
 - **Nonce Anti-Replay**: Every sensitive state modification includes a cryptographic nonce to prevent replay attacks.
 - **Non-Extractable Web Crypto Keys**: Client-side cryptographic operations (such as PQC ML-KEM and AES-GCM log decryption) use non-extractable Web Crypto API handles in isolated Web Workers.
 - **Refresh Token Rotation (RTR)**: Refresh tokens are single-use. When a refresh token is exchanged, a new token is issued and the previous token is invalidated.
-- **Concurrency Grace Period**: Concurrent requests from multiple browser tabs during token rotation are accommodated within an atomic grace window (`RTR_GRACE_WINDOW_MS`) to prevent accidental logouts.
+- **Concurrency Grace Period**: Concurrent requests from multiple browser tabs during token rotation are accommodated within an atomic 15-second grace window (`ROTATION_GRACE_PERIOD_SECONDS = 15`) to prevent accidental logouts.
 
 ---
 
@@ -100,11 +101,21 @@ Configure these variables in `.env` (Serverfull) or as Cloudflare Workers Secret
 - **Type**: `string`
 - **Role**: Initial administrator password for the Web Dashboard on first deployment. Once created, credentials are stored securely in the database.
 
+### `ACCESS_TOKEN_EXPIRATION_MINUTES`
+- **Type**: `number` (default: `10`)
+- **Role**: Access JWT lifetime in minutes.
+
+### `SESSION_ABSOLUTE_MAX_MINUTES` / `OPTIONAL_SESSION_ABSOLUTE_MAX_DAYS`
+- **Type**: `number` (defaults: `1440` minutes / `7` days)
+- **Role**: Immutable absolute session lifetime ceilings for standard (`s_`) and persistent (`k_`) sessions based on `created_at`, enforcing periodic re-authentication even during continuous activity.
+
 ---
 
 ## 4. NIST SP 800-63B-4 (AAL2) Compliance Statement
 
-The Web Dashboard authentication and session management architecture conforms to **NIST SP 800-63B-4 Authenticator Assurance Level 2 (AAL2)** requirements (with pseudonymous self-asserted enrollment at **NIST SP 800-63A IAL1**):
+<Aside type="note" title="Compliance Scope">
+The Web Dashboard authentication and session management architecture conforms to **NIST SP 800-63B-4 Authenticator Assurance Level 2 (AAL2)** requirements (with pseudonymous self-asserted enrollment at **NIST SP 800-63A IAL1**).
+</Aside>
 
 - **Phishing-Resistant & Multi-Factor Authenticators**: Supports FIDO2/WebAuthn Passkeys (ES256/RS256 with strict RP ID, origin, UP/UV flag, and monotonic `signCount` verification) as well as RFC 6238 TOTP with 90-second single-use anti-replay protection and single-use modulo-11 Recovery Keys.
 - **Memorized Secrets Policy**: Enforces a 12–128 character length range without arbitrary composition rules or forced periodic rotation, accepts spaces and Unicode passphrases (NFC-normalized), and checks passwords against known data breaches via client-side HIBP k-Anonymity range queries and upstream credential-leak headers.

@@ -41,6 +41,7 @@ jobs:
       - name: Build Astro Documentation
         run: |
           cd docs
+          npm run check
           npm run build
 
       - name: Upload Pages artifact

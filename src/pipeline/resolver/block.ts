@@ -8,6 +8,7 @@ import {
 } from "../../utils/dns";
 import { resolveClientGeoCountry } from "../../utils/geoip";
 import { enqueueLog } from "../logBatcher";
+import { resolveTtlOverride } from "./types";
 
 /**
  * Resolver function type used for resolving CNAME targets during redirection.
@@ -56,10 +57,12 @@ export async function handleBlockOrRedirect(
   recursiveResolver?: RecursiveResolverFn
 ): Promise<ResolutionResult> {
   const clientIp = request.headers.get("CF-Connecting-IP") || "127.0.0.1";
+  const overrideTtl = resolveTtlOverride(settings, action);
   let answer: Uint8Array;
   let displayAnswer = customAnswer || "";
 
   if (action === "REDIRECT" && customAnswer) {
+    const redirectTtl = overrideTtl ?? 60;
     if (
       responseType === "CNAME" &&
       (query.type === "A" || query.type === "AAAA") &&
@@ -84,7 +87,7 @@ export async function handleBlockOrRedirect(
         if (upstreamRes.answer && upstreamRes.answer.length > 0) {
           const parsedTargetAnswers = parseDNSAnswer(upstreamRes.answer);
           const records: DNSRecord[] = [
-            { type: "CNAME", value: customAnswer, ttl: 60 }
+            { type: "CNAME", value: customAnswer, ttl: redirectTtl }
           ];
 
           for (const a of parsedTargetAnswers) {
@@ -93,23 +96,24 @@ export async function handleBlockOrRedirect(
                 name: a.name,
                 type: a.type,
                 value: a.data,
-                ttl: a.ttl
+                ttl: overrideTtl ?? a.ttl
               });
             }
           }
           answer = buildResponseMulti(query.raw, records, 0);
         } else {
-          answer = buildResponse(query.raw, responseType, customAnswer);
+          answer = buildResponse(query.raw, responseType, customAnswer, redirectTtl);
         }
       } catch (e) {
         console.error("CNAME resolution failed:", e);
-        answer = buildResponse(query.raw, responseType, customAnswer);
+        answer = buildResponse(query.raw, responseType, customAnswer, redirectTtl);
       }
     } else {
       answer = buildResponse(
         query.raw,
         responseType || query.type,
-        customAnswer
+        customAnswer,
+        redirectTtl
       );
     }
   } else {
@@ -117,21 +121,21 @@ export async function handleBlockOrRedirect(
     const mode = settings.block_mode || "NULL_IP";
 
     if (mode === "NXDOMAIN") {
-      answer = buildResponse(query.raw, query.type, "", 3600, 3);
+      answer = buildResponse(query.raw, query.type, "", overrideTtl ?? 3600, 3);
       displayAnswer = "NXDOMAIN";
     } else if (mode === "NODATA") {
-      answer = buildResponse(query.raw, query.type, "", 3600, 0);
+      answer = buildResponse(query.raw, query.type, "", overrideTtl ?? 3600, 0);
       displayAnswer = "NODATA";
     } else if (mode === "CUSTOM_IP") {
       const customIp =
         query.type === "AAAA"
           ? settings.custom_block_ipv6 || "::"
           : settings.custom_block_ipv4 || "0.0.0.0";
-      answer = buildResponse(query.raw, query.type, customIp);
+      answer = buildResponse(query.raw, query.type, customIp, overrideTtl ?? 60);
       displayAnswer = customIp;
     } else {
       const nullIp = query.type === "AAAA" ? "::" : "0.0.0.0";
-      answer = buildResponse(query.raw, query.type, nullIp);
+      answer = buildResponse(query.raw, query.type, nullIp, overrideTtl ?? 60);
       displayAnswer = nullIp;
     }
   }
@@ -166,5 +170,5 @@ export async function handleBlockOrRedirect(
     })()
   );
 
-  return { answer, ttl: 3600, action, reason, latency };
+  return { answer, ttl: overrideTtl ?? 3600, action, reason, latency };
 }
