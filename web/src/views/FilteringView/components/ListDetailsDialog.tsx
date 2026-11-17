@@ -151,18 +151,41 @@ export const ListDetailsDialog: React.FC<ListDetailsDialogProps> = ({
           </Callout>
         )}
 
-        <div className="bg-gray-50 dark:bg-gray-800 p-4 rounded-lg border border-gray-200 dark:border-gray-700 break-all font-mono text-sm flex items-center justify-between gap-2">
-          <span>{selectedList?.url}</span>
-          {selectedList?.scope === "system" && (
-            <Tag intent={Intent.PRIMARY} minimal className="shrink-0 font-sans">
-              {t("filtering.tagSystem", "系统")}
-            </Tag>
+        <div className="bg-gray-50 dark:bg-gray-800 px-3.5 py-3 rounded-lg border border-gray-200 dark:border-gray-700 font-mono text-sm flex items-center justify-between gap-2">
+          {selectedList?.url && /^https?:\/\//i.test(selectedList.url) ? (
+            <a
+              href={selectedList.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              title={t("setup.learnMore", "Open link")}
+              className="inline-flex items-center gap-1.5 min-w-0 break-all text-blue-600 dark:text-blue-400 hover:underline"
+            >
+              <span>{selectedList.url}</span>
+              <ExternalLink size={13} className="shrink-0 opacity-75" />
+            </a>
+          ) : (
+            <span className="break-all min-w-0">{selectedList?.url}</span>
           )}
-          {selectedList?.scope === "user" && (
-            <Tag intent={Intent.SUCCESS} minimal className="shrink-0 font-sans">
-              {t("filtering.tagUser", "用户")}
-            </Tag>
-          )}
+          <div className="flex items-center gap-1.5 shrink-0">
+            {selectedList?.scope === "system" && (
+              <Tag intent={Intent.PRIMARY} minimal className="font-sans">
+                {t("filtering.tagSystem", "系统")}
+              </Tag>
+            )}
+            {selectedList?.scope === "user" && (
+              <Tag intent={Intent.SUCCESS} minimal className="font-sans">
+                {t("filtering.tagUser", "用户")}
+              </Tag>
+            )}
+            <Button
+              minimal
+              small
+              icon={<Copy size={14} />}
+              title={t("setup.copyUrl", "Copy link")}
+              aria-label={t("setup.copyUrl", "Copy link")}
+              onClick={() => { if (selectedList) onCopy(selectedList.url); }}
+            />
+          </div>
         </div>
 
         {selectedList?.scope === "system" && (
@@ -291,7 +314,7 @@ export const ListDetailsDialog: React.FC<ListDetailsDialogProps> = ({
                   </span>
                 )}
                 {selectedList.etag && (
-                  <span className="inline-flex items-center gap-1 max-w-[220px] min-w-0" title={selectedList.etag}>
+                  <span className="inline-flex items-center gap-1 max-w-full min-w-0" title={selectedList.etag}>
                     <span className="shrink-0">ETag:</span>
                     <strong className="font-mono truncate">{selectedList.etag}</strong>
                   </span>
@@ -317,7 +340,7 @@ export const ListDetailsDialog: React.FC<ListDetailsDialogProps> = ({
                     </span>
                   )}
                   {selectedList.etag && (
-                    <span className="inline-flex items-center gap-1 max-w-[220px] min-w-0" title={selectedList.etag}>
+                    <span className="inline-flex items-center gap-1 max-w-full min-w-0" title={selectedList.etag}>
                       <span className="shrink-0">ETag:</span>
                       <strong className="font-mono truncate">{selectedList.etag}</strong>
                     </span>
@@ -440,20 +463,6 @@ export const ListDetailsDialog: React.FC<ListDetailsDialogProps> = ({
               ? formatDateTime(new Date(selectedList.last_synced_at * 1000))
               : "-"}
           </span>
-          <div className="flex gap-2 shrink-0">
-            <Button
-              className="shrink-0 whitespace-nowrap min-w-fit w-auto"
-              icon={<Copy size={14} />}
-              text={t("setup.copyUrl", "Copy link")}
-              onClick={() => { if (selectedList) onCopy(selectedList.url); }}
-            />
-            <Button
-              className="shrink-0 whitespace-nowrap min-w-fit w-auto"
-              icon={<ExternalLink size={14} />}
-              text={t("setup.learnMore", "Open link")}
-              onClick={() => { if (selectedList) window.open(selectedList.url, "_blank"); }}
-            />
-          </div>
         </div>
       </div>
 
