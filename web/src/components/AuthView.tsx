@@ -97,6 +97,12 @@ export const AuthView: React.FC<AuthViewProps> = ({
       ? authConfig?.turnstile_enabled_login
       : authConfig?.turnstile_enabled_signup);
 
+  // Display exact host (including non-standard port) above the auth panel as an anti-phishing visual cue.
+  const currentHost: string =
+    typeof window !== "undefined"
+      ? window.location.host || window.location.hostname
+      : "";
+
   useEffect(() => {
     if (isTurnstileEnabled && authConfig?.turnstile_site_key) {
       loadTurnstileScript(() => {
@@ -137,7 +143,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
 
       {/* Form Container Card (Right Panel) */}
       <div
-        className={`flex-1 flex items-center justify-center p-4 relative z-10 bg-gray-50/50 dark:bg-gray-900/30 lg:bg-gray-50 lg:dark:bg-gray-900/50 transition-all duration-500 ease-in-out ${
+        className={`flex-1 flex items-center justify-center p-4 max-sm:pt-14 relative z-10 bg-gray-50/50 dark:bg-gray-900/30 lg:bg-gray-50 lg:dark:bg-gray-900/50 transition-all duration-500 ease-in-out ${
           !isPanelVisible
             ? "max-lg:translate-x-full max-lg:opacity-0 max-lg:pointer-events-none"
             : "translate-x-0 opacity-100"
@@ -158,6 +164,18 @@ export const AuthView: React.FC<AuthViewProps> = ({
             isBlurring ? "blur-lg opacity-20 scale-95" : "blur-0 opacity-100 scale-100"
           )}
         >
+          {currentHost && (
+            <div
+              className="mb-3 text-center px-2"
+              onClick={(e: React.MouseEvent) => e.stopPropagation()}
+            >
+              {/* Never truncate host with ellipsis so attackers cannot hide a trailing phishing domain */}
+              <span className="font-mono text-xs opacity-50 break-all select-all">
+                {currentHost}
+              </span>
+            </div>
+          )}
+
           <Card
             elevation={Elevation.FOUR}
             className="w-full p-8 rounded-2xl shadow-none! z-10 dark:bg-gray-900 border border-gray-100 dark:border-gray-800"
