@@ -181,34 +181,15 @@ export class LogAggregationModel {
 
     const statements: D1PreparedStatement[] = [];
     for (const item of map.values()) {
-      let finalKey = item.key;
-      let finalSubKey = item.subKey;
-
-      if (item.metricType !== 'action') {
-        if (options?.redactedProfiles?.has(item.profileId)) {
-          // Fail closed when E2EE key status could not be verified
-          continue;
-        }
-        if (options?.encryptedProfiles?.has(item.profileId)) {
-          if (!options.encryptRollup) {
-            continue;
-          }
-          try {
-            const encryptedKey = await options.encryptRollup(item.profileId, {
-              metricType: item.metricType,
-              key: item.key,
-              subKey: item.subKey
-            });
-            if (!encryptedKey) {
-              continue;
-            }
-            finalKey = encryptedKey;
-            finalSubKey = '';
-          } catch {
-            // Fail closed on rollup encryption failure
-            continue;
-          }
-        }
+      // Skip non-action rollups for E2EE / redacted profiles: analytics queries explicitly
+      // filter `key NOT LIKE 'enc:%'` and compute client/dest/isp locally from decrypted logs,
+      // so encrypted rollup rows were pure write-only waste.
+      if (
+        item.metricType !== 'action' &&
+        (options?.redactedProfiles?.has(item.profileId) ||
+          options?.encryptedProfiles?.has(item.profileId))
+      ) {
+        continue;
       }
 
       statements.push(
@@ -221,8 +202,8 @@ export class LogAggregationModel {
           item.profileId,
           item.metricType,
           item.hourTimestamp,
-          finalKey,
-          finalSubKey,
+          item.key,
+          item.subKey,
           item.accessPointId,
           item.count
         )
@@ -419,7 +400,7 @@ export class LogAggregationModel {
             WHERE profile_id = ? AND timestamp >= ? AND timestamp < ?
             GROUP BY (timestamp / 3600) * 3600, action, COALESCE(access_point_id, '')
             ON CONFLICT (profile_id, metric_type, hour_timestamp, key, sub_key, access_point_id)
-            DO UPDATE SET count = count + excluded.count
+            DO UPDATE SET count = excluded.count
           `).bind(profile.id, profile.id, effectiveSince, effectiveUntil),
 
           // 2. Client IP & Country rollups
@@ -439,7 +420,7 @@ export class LogAggregationModel {
               AND client_ip IS NOT NULL AND client_ip != '' AND client_ip != '[Encrypted]'
             GROUP BY (timestamp / 3600) * 3600, client_ip, COALESCE(geo_country, ''), COALESCE(access_point_id, '')
             ON CONFLICT (profile_id, metric_type, hour_timestamp, key, sub_key, access_point_id)
-            DO UPDATE SET count = count + excluded.count
+            DO UPDATE SET count = excluded.count
           `).bind(profile.id, profile.id, effectiveSince, effectiveUntil),
 
           // 3. Destination Country rollups
@@ -477,7 +458,7 @@ export class LogAggregationModel {
                      END),
                      COALESCE(access_point_id, '')
             ON CONFLICT (profile_id, metric_type, hour_timestamp, key, sub_key, access_point_id)
-            DO UPDATE SET count = count + excluded.count
+            DO UPDATE SET count = excluded.count
           `).bind(profile.id, profile.id, effectiveSince, effectiveUntil),
 
           // 4. Domain rollups
@@ -495,10 +476,11 @@ export class LogAggregationModel {
             WHERE profile_id = ? AND timestamp >= ? AND timestamp < ?
               AND (encrypt_version IS NULL OR encrypt_version = 0)
               AND domain IS NOT NULL AND domain != '' AND domain != '[Encrypted]'
+              AND domain NOT LIKE 'enc:%'
             GROUP BY (timestamp / 3600) * 3600, domain, action, COALESCE(access_point_id, '')
             HAVING COUNT(*) >= ?
             ON CONFLICT (profile_id, metric_type, hour_timestamp, key, sub_key, access_point_id)
-            DO UPDATE SET count = count + excluded.count
+            DO UPDATE SET count = excluded.count
           `).bind(profile.id, profile.id, effectiveSince, effectiveUntil, minDomainCount),
 
           // 5. Destination ISP rollups
@@ -538,7 +520,7 @@ export class LogAggregationModel {
                      COALESCE(access_point_id, '')
             HAVING sub_key != ''
             ON CONFLICT (profile_id, metric_type, hour_timestamp, key, sub_key, access_point_id)
-            DO UPDATE SET count = count + excluded.count
+            DO UPDATE SET count = excluded.count
           `).bind(profile.id, profile.id, effectiveSince, effectiveUntil)
         ];
 

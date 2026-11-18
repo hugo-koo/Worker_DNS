@@ -63,7 +63,7 @@ export const SignupRecoveryStep: React.FC<SignupRecoveryStepProps> = ({
           text={
             copiedRecovery
               ? t("account.totp.copied", "Copied!")
-              : t("account.totp.copyKeys", "Copy All Keys")
+              : t("account.totp.copyKeys", "Copy Key")
           }
           intent={copiedRecovery ? Intent.SUCCESS : Intent.NONE}
           onClick={onCopy}

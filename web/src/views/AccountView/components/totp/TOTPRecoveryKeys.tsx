@@ -36,13 +36,13 @@ export const TOTPRecoveryKeys: React.FC<TOTPRecoveryKeysProps> = ({
       <div className="flex items-center gap-2 mb-4">
         <ShieldCheck size={20} className="text-green-500" />
         <H4 style={{ margin: 0 }}>
-          {t("account.totp.recoveryKeysTitle", "Save Your Recovery Keys")}
+          {t("account.totp.recoveryKeysTitle", "Save Your Recovery Key")}
         </H4>
       </div>
       <Callout intent={Intent.WARNING} className="mb-4">
         {t(
           "account.totp.recoveryKeysWarning",
-          "Store these keys safely. Each key can only be used once."
+          "Store your recovery key safely (e.g., in a password manager). It can only be used once."
         )}
       </Callout>
       <div className={recoveryKeys.length === 1 ? "space-y-2 mb-4" : "grid grid-cols-2 gap-2 mb-4"}>
@@ -62,7 +62,7 @@ export const TOTPRecoveryKeys: React.FC<TOTPRecoveryKeysProps> = ({
           text={
             copied
               ? t("account.totp.copied", "Copied!")
-              : t("account.totp.copyKeys", "Copy All Keys")
+              : t("account.totp.copyKeys", "Copy Key")
           }
           intent={copied ? Intent.SUCCESS : Intent.NONE}
           onClick={onCopy}
@@ -70,7 +70,7 @@ export const TOTPRecoveryKeys: React.FC<TOTPRecoveryKeysProps> = ({
         <Button
           fill
           intent={Intent.PRIMARY}
-          text={t("account.totp.done", "Done, I've saved them")}
+          text={t("account.totp.done", "Done — I've saved my key")}
           onClick={onDone}
         />
       </div>

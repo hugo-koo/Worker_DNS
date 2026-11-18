@@ -133,11 +133,6 @@ export class ProfileModel {
     return result.success;
   }
 
-  async updateLastActive(id: string, now: number): Promise<boolean> {
-    const result = await this.db.prepare("UPDATE profiles SET last_active_at = ? WHERE id = ?").bind(now, id).run();
-    return result.success;
-  }
-
   async getSyncTargets(threshold: number, limit: number): Promise<{id: string}[]> {
     const { results } = await this.db.prepare(
       "SELECT id FROM profiles WHERE (list_updated_at IS NULL OR list_updated_at <= ?) AND EXISTS (SELECT 1 FROM lists WHERE lists.profile_id = profiles.id) ORDER BY list_updated_at ASC LIMIT ?"

@@ -17,8 +17,12 @@ import { KemKeyRecord } from "../types";
 let hasEnsuredKemIndexes = false;
 
 /**
- * Ensures critical covering index exists on logs(kem_key_id) and kem_keys(created_at)
- * to prevent full table scans that otherwise read millions of rows.
+ * Ensures covering index exists on kem_keys(created_at) so orphan pre-checks
+ * avoid scanning all historical keys.
+ *
+ * NOTE: idx_logs_kem_key_id is intentionally NOT created here; orphan checks
+ * bind (profile_id, timestamp) against the clustered primary key of logs instead,
+ * eliminating +1 row write amplification on every encrypted DNS log insert.
  *
  * @param db - D1Database instance.
  * @returns True if index creation was initiated or already performed.
@@ -26,18 +30,11 @@ let hasEnsuredKemIndexes = false;
 export async function ensureKemIndexes(db: D1Database): Promise<boolean> {
   if (hasEnsuredKemIndexes) return true;
   try {
-    const s1 = db.prepare("CREATE INDEX IF NOT EXISTS idx_logs_kem_key_id ON logs(kem_key_id) WHERE kem_key_id IS NOT NULL");
-    if (typeof s1.run === "function") {
-      await s1.run();
-    } else if (typeof s1.bind === "function") {
-      await (s1.bind() as any).run();
-    }
-
-    const s2 = db.prepare("CREATE INDEX IF NOT EXISTS idx_kem_keys_created_at ON kem_keys(created_at)");
-    if (typeof s2.run === "function") {
-      await s2.run();
-    } else if (typeof s2.bind === "function") {
-      await (s2.bind() as any).run();
+    const stmt = db.prepare("CREATE INDEX IF NOT EXISTS idx_kem_keys_created_at ON kem_keys(created_at)");
+    if (typeof stmt.run === "function") {
+      await stmt.run();
+    } else if (typeof stmt.bind === "function") {
+      await (stmt.bind() as any).run();
     }
 
     hasEnsuredKemIndexes = true;
@@ -56,19 +53,6 @@ export class KemKeyModel {
    */
   static resetIndexFlag(): void {
     hasEnsuredKemIndexes = false;
-  }
-
-  /**
-   * Verifies if idx_logs_kem_key_id exists in sqlite_master.
-   */
-  private async hasLogsKemKeyIndex(): Promise<boolean> {
-    try {
-      const stmt = this.db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'idx_logs_kem_key_id'");
-      const row = typeof stmt.first === "function" ? await stmt.first() : await (stmt.bind() as any).first();
-      return !!row;
-    } catch {
-      return hasEnsuredKemIndexes;
-    }
   }
 
   /**
@@ -124,17 +108,9 @@ export class KemKeyModel {
   async cleanupOrphans(safetyWindowSec = 86400, batchLimit = 100): Promise<number> {
     const cutoffTimestamp = Math.floor(Date.now() / 1000) - safetyWindowSec;
     try {
-      // 1. Ensure covering index on logs(kem_key_id) exists to guarantee index-seek instead of full scan
       await ensureKemIndexes(this.db);
 
-      // 2. Defensive index check: if index is missing and could not be verified, abort to save read quota
-      const indexReady = await this.hasLogsKemKeyIndex();
-      if (!indexReady && !hasEnsuredKemIndexes) {
-        console.warn("[KemKeyModel] Aborting orphan cleanup: idx_logs_kem_key_id index is not confirmed. Run migrations to enable index-based cleanup.");
-        return 0;
-      }
-
-      // 3. Fast index seek to check if any candidate keys older than the safety window exist.
+      // Fast index seek to check if any candidate keys older than the safety window exist.
       // If none exist, skip the correlated subquery entirely to save database read quota.
       const candidate = await this.db
         .prepare("SELECT id FROM kem_keys WHERE created_at <= ? LIMIT 1")
@@ -145,6 +121,8 @@ export class KemKeyModel {
         return 0;
       }
 
+      // Bounded clustered-PK seek on logs(profile_id, timestamp, id) around the key's active window
+      // avoids requiring idx_logs_kem_key_id secondary index writes on every DNS log insert.
       const result = await this.db
         .prepare(`
           DELETE FROM kem_keys
@@ -152,7 +130,11 @@ export class KemKeyModel {
             SELECT k.id FROM kem_keys k
             WHERE k.created_at <= ?
               AND NOT EXISTS (
-                SELECT 1 FROM logs l WHERE l.kem_key_id = k.id AND l.kem_key_id IS NOT NULL
+                SELECT 1 FROM logs l
+                WHERE l.profile_id = k.profile_id
+                  AND l.timestamp >= k.created_at - 300
+                  AND l.timestamp <= k.expires_at + 3600
+                  AND l.kem_key_id = k.id
               )
             LIMIT ?
           )
@@ -197,7 +179,11 @@ export class KemKeyModel {
           WHERE profile_id = ?
             AND created_at <= ?
             AND NOT EXISTS (
-              SELECT 1 FROM logs l WHERE l.kem_key_id = kem_keys.id AND l.kem_key_id IS NOT NULL
+              SELECT 1 FROM logs l
+              WHERE l.profile_id = kem_keys.profile_id
+                AND l.timestamp >= kem_keys.created_at - 300
+                AND l.timestamp <= kem_keys.expires_at + 3600
+                AND l.kem_key_id = kem_keys.id
             )
         `)
         .bind(profileId, cutoffTimestamp)

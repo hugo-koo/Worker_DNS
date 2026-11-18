@@ -223,7 +223,7 @@ export const LoginMfaStep: React.FC<LoginMfaStepProps> = ({
       {mfaMethod === "recovery" && (
         <div className="space-y-4">
           <FormGroup
-            label={t("account.totp.recoveryKeysTitle", "Recovery Keys")}
+            label={t("account.totp.recoveryKeysTitle", "Recovery Key")}
             helperText={t("auth.recoveryPrompt", "Please enter your 30-character recovery key (5 groups of 6 digits)")}
           >
             <div className="pt-2">

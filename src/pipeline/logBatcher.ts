@@ -207,36 +207,10 @@ export async function flushLogBatch(env: Env, ctx?: ExecutionContext): Promise<v
     })
   );
 
-  // Generate atomic rollup UPSERT statements, encrypting sensitive metrics for E2EE profiles
-  // and omitting them if key lookup/encryption fails (fail closed).
-  const rollupStatements = await logModel.aggregation.createRollupUpsertStatements(logsToFlush, {
-    encryptedProfiles,
-    redactedProfiles: failedKeyProfiles,
-    encryptRollup: async (pid, payload) => {
-      const pubKey = keyMap.get(pid);
-      if (!pubKey) return null;
-      const sensitiveRollup = {
-        domain: payload.key,
-        client_ip: payload.subKey,
-        reason: payload.metricType,
-      };
-      if ("pqc_pk" in pubKey) {
-        const activeDek = dekMap.get(pid);
-        if (!activeDek) return null;
-        const enc = await encryptSensitiveLogDataWithDek(activeDek.dek, sensitiveRollup);
-        const parsed = JSON.parse(enc) as { iv: string; ciphertext: string };
-        return `enc:v2:${JSON.stringify({ k: activeDek.kemKeyId, ...parsed })}`;
-      }
-      if ("kty" in pubKey) {
-        const enc = await encryptSensitiveLogData(pubKey, sensitiveRollup);
-        return `enc:v1:${enc}`;
-      }
-      return null;
-    },
-  });
-  if (rollupStatements.length > 0) {
-    statements.push(...rollupStatements);
-  }
+  // Hourly rollups across all metrics (action, client, dest, domain, isp) are delegated
+  // to the hourly cron `aggregateHourlyRollups()` so micro-batches never incur per-request
+  // rollup write amplification or dead random-IV E2EE rollup inserts. Unaggregated hours
+  // are seamlessly served from raw `logs` via hybrid rollupWindow queries.
 
   const redactSensitiveLogFields = (target: ResolutionLog, redactedDomain: string): void => {
     target.domain = redactedDomain;

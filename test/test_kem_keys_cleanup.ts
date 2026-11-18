@@ -1,5 +1,8 @@
 import assert from "node:assert";
-import { KemKeyModel } from "../src/models/kemKey";
+import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
+import { NodeD1Database, runMigrations } from "../src/serverfull/db";
+import { KemKeyModel, ensureKemIndexes } from "../src/models/kemKey";
 import { LogRetentionModel } from "../src/models/log/retention";
 
 /**
@@ -268,6 +271,59 @@ async function runTests(): Promise<void> {
     assert(kemKeyCleanup.query.includes("NOT EXISTS"), "kem_keys cleanup must use zero dependents check");
 
     console.log("  ✓ Passed: LogRetentionModel.cleanupGlobal successfully triggers orphan kem_keys cleanup.");
+  }
+
+  // ── Test 5: Real SQLite Migration 0071 + Foreign Keys ON Verification ────────
+  console.log("\n5. Testing real SQLite migration 0071 & orphan cleanup without idx_logs_kem_key_id...");
+  {
+    const sqlite = new DatabaseSync(":memory:");
+    sqlite.exec("PRAGMA foreign_keys = ON;");
+    const migrationsDir = path.resolve(process.cwd(), "migrations");
+    runMigrations(sqlite, migrationsDir);
+
+    const logIndexes = sqlite.prepare("PRAGMA index_list('logs')").all() as { name: string }[];
+    const hasSecondaryLogsIndex = logIndexes.some((idx) => idx.name === "idx_logs_kem_key_id");
+    assert.strictEqual(hasSecondaryLogsIndex, false, "idx_logs_kem_key_id must be dropped by migration 0071");
+
+    const db = new NodeD1Database(sqlite);
+    KemKeyModel.resetIndexFlag();
+    await ensureKemIndexes(db);
+
+    const logIndexesAfterEnsure = sqlite.prepare("PRAGMA index_list('logs')").all() as { name: string }[];
+    assert.strictEqual(
+      logIndexesAfterEnsure.some((idx) => idx.name === "idx_logs_kem_key_id"),
+      false,
+      "ensureKemIndexes must NOT re-create idx_logs_kem_key_id on logs"
+    );
+
+    const refNow = Math.floor(Date.now() / 1000);
+    sqlite.prepare("INSERT INTO users (id, username, hashed_password, role, created_at) VALUES (?, ?, ?, ?, ?)").run(
+      "u_kem", "kemuser", "hash", "user", refNow
+    );
+    sqlite.prepare("INSERT INTO profiles (id, profile_key, owner_id, name, settings, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)").run(
+      "p_kem", "pkey_kem", "u_kem", "Default", "{}", refNow, refNow
+    );
+
+    // Referenced old key -> must survive cleanup even with foreign_keys=ON & no idx_logs_kem_key_id
+    sqlite.prepare("INSERT INTO kem_keys (id, profile_id, kem_ct, created_at, expires_at) VALUES (?, ?, ?, ?, ?)").run(
+      "kem_used", "p_kem", "ct_used", refNow - 100000, refNow - 96400
+    );
+    sqlite.prepare(
+      "INSERT INTO logs (profile_id, timestamp, id, domain, record_type, action, encrypt_version, kem_key_id, encrypted_payload) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    ).run("p_kem", refNow - 99000, 1, "", "A", "PASS", 2, "kem_used", "payload");
+
+    // Unreferenced old orphan key -> must be purged cleanly
+    sqlite.prepare("INSERT INTO kem_keys (id, profile_id, kem_ct, created_at, expires_at) VALUES (?, ?, ?, ?, ?)").run(
+      "kem_orphan", "p_kem", "ct_orphan", refNow - 100000, refNow - 96400
+    );
+
+    const kemModel = new KemKeyModel(db);
+    const deleted = await kemModel.cleanupOrphans(86400, 100);
+    assert.strictEqual(deleted, 1, "Exactly 1 orphaned key must be deleted");
+
+    const remainingKeys = sqlite.prepare("SELECT id FROM kem_keys").all() as { id: string }[];
+    assert.deepStrictEqual(remainingKeys.map((k) => k.id), ["kem_used"], "Used key must be preserved");
+    console.log("  ✓ Passed: Migration 0071 removes logs index overhead and bounded PK cleanup works with FK ON.");
   }
 
   console.log("\n========================================================");

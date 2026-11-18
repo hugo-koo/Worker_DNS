@@ -157,7 +157,7 @@ export const SignupWizard: React.FC<SignupWizardProps> = ({
               : t("auth.signup")
             : signupStep === "totp"
             ? t("auth.mfaSetupTitle", "配置多因素认证 (MFA)")
-            : t("account.totp.recoveryKeysTitle", "Save Recovery Keys")}
+            : t("account.totp.recoveryKeysTitle", "Save Your Recovery Key")}
         </H3>
         <p className="text-gray-500 mt-2 text-center text-sm leading-relaxed">
           {signupStep === "username" || signupStep === "password"
@@ -168,7 +168,7 @@ export const SignupWizard: React.FC<SignupWizardProps> = ({
               : t("auth.protectInternet")
             : signupStep === "totp"
             ? t("auth.mfaSetupDesc", "任选一种认证方式即可完成配置，保障账号安全。")
-            : t("account.totp.recoveryKeysWarning", "Store keys safely.")}
+            : t("account.totp.recoveryKeysWarning", "Store your recovery key safely. It can only be used once.")}
         </p>
       </div>
 

@@ -70,7 +70,6 @@ export interface User {
   totp_skip_password?: number; // 0 | 1 — when 1, login skips password check
   passkeys_count?: number;
   created_at?: number;
-  last_active_at?: number;
   last_resolve_at?: number;
   timezone?: string | null;
   locale?: string | null;

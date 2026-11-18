@@ -126,3 +126,26 @@ Because Cloudflare D1 imposes database storage and daily write quota limits (500
 #### `AUTO_VACUUM` & `SQLITE_JOURNAL_MODE` *(Serverfull Only)*
 - **Defaults**: `WAL` (Write-Ahead Logging)
 - **Description**: Direct SQLite engine flags in Serverfull mode for concurrent reads and resilient crash recovery.
+
+---
+
+## 6. Estimated Database I/O per 1,000 DNS Queries
+
+The table below estimates the **database rows read and written per 1,000 incoming DNS requests** across common configuration and deployment scenarios (reflecting the `WITHOUT ROWID` `logs` schema, zero secondary indexes on `logs`, and hourly cron rollup aggregation).
+
+> **Note on storage engine accounting:**
+> - **Cloudflare D1 / Serverfull SQLite** supports `WITHOUT ROWID`, so `logs` uses a single clustered B-tree (**1 row written per log**), and `kem_keys` writes **3 rows per key** (clustered PK + 2 indexes).
+> - **TursoDB (Limbo)** falls back to standard rowid tables (`WITHOUT ROWID` stripped during migration), so each row carries a rowid B-tree plus primary-key autoindex (**2 rows written per `logs` insert**, **4 rows written per `kem_keys` insert**).
+
+| Scenario (per 1,000 DNS Queries) | Rows Read (Hot L1/L2 Cache) | Rows Read (Cold Isolates / Hourly Cron) | Rows Written (D1 / Serverfull SQLite) | Rows Written (TursoDB / Limbo) | Key Drivers |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Plaintext Logs (Full Logging)** | **~0 – 50** | **~1,200 – 6,000** | **~1,020 – 1,150** | **~2,020 – 2,150** | 1× `logs` insert per query + hourly Cron `aggregateHourlyRollups` scan & summary (`action`, `client`, `dest`, `domain`, `isp`). |
+| **E2EE Enabled (`P256-MLKEM768`, Full Logging)** | **~0 – 60** | **~1,050 – 3,000** | **~1,005 – 1,090** | **~2,005 – 2,090** | `logs` payload is encrypted; Cron only aggregates plaintext `action` buckets (skips `client`/`dest`/`isp`/`domain`). Adds **1 `kem_keys` insert per cold isolate/hour** (~3–4 rows/key). |
+| **Skip `PASS` Logs (`skip_log_on_pass` Enabled, ~35–40% Block Rate)** | **~0 – 50** | **~450 – 2,200** | **~350 – 450** | **~700 – 850** | Normal `PASS` queries never touch `logs` or `hourly_rollups`. Compatible with both Plaintext and E2EE (with E2EE, add isolate `kem_keys` overhead). |
+| **Zero Retention (`log_retention_days = 0`)** | **~0 – 50** | **~0 – 500** | **~1 – 3** | **~2 – 5** | Completely skips `logs`, `hourly_rollups`, and `kem_keys`; only hourly-throttled `users.last_active_at` activity tracking writes to the DB. |
+
+### Cost & Quota Notes
+
+- **Isolate Churn in Serverless E2EE**: Under E2EE, active Data Encryption Keys (DEKs) live strictly in Worker isolate RAM for zero-knowledge forward secrecy (max 1 hour). A warm isolate or Serverfull process mints only **1 `kem_key` per hour (~3–4 rows written)**, whereas frequent multi-PoP cold starts mint 1 key per cold isolate (`~3–4 rows` each).
+- **Delayed Expiration Deletions**: When stored logs age past `log_retention_days`, `LogRetentionModel.cleanupGlobal()` deletes them asynchronously (capped by `LOG_CLEANUP_DAILY_BUDGET`, default `20,000` rows/day), incurring an eventual `~1–2` additional row writes per expired log row.
+- **Quick Monthly Write Estimate**: On Turso Free (`10M` rows written/month), `100,000` DNS queries/day with full logging consumes roughly `~205K rows/day` (`~6.15M/month`), fitting comfortably under the `10M/month` limit; enabling `skip_log_on_pass` lowers that further to `~75K rows/day` (`~2.25M/month`).

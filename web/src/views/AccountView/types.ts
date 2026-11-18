@@ -9,7 +9,6 @@ export interface UserInfo {
   mfa_enabled?: boolean;
   has_recovery_keys?: boolean;
   recovery_keys_encrypted?: boolean;
-  last_active_at?: number;
   last_resolve_at?: number;
   timezone?: string | null;
   locale?: string | null;

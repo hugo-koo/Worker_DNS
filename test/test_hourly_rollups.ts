@@ -196,6 +196,25 @@ async function runTests() {
   assert.ok(actionCheck.some(r => r.key === "PASS" && r.count >= 1), "Aggregated PASS action must exist in hourly_rollups");
   console.log("  PASS: profile-bounded aggregateHourlyRollups executed safely with index range seek");
 
+  // 9. Test E2EE optimization: non-action metrics skipped for encryptedProfiles
+  const e2eeStmts = await logModel.aggregation.createRollupUpsertStatements(sampleLogs, {
+    encryptedProfiles: new Set(["test_prof"]),
+  });
+  assert.strictEqual(e2eeStmts.length, 2, "E2EE rollup statements must only include the 2 action buckets (PASS, BLOCK) and skip client/dest/isp");
+  console.log("  PASS: E2EE optimization skips unread enc: client/dest/isp rollup writes");
+
+  // 10. Test idempotency of aggregateHourlyRollups (count = excluded.count prevents double-counting)
+  const beforeCountRow = rawDb.prepare(
+    "SELECT count FROM hourly_rollups WHERE profile_id = 'test_prof' AND metric_type = 'action' AND hour_timestamp = ? AND key = 'PASS'"
+  ).get(prevHourTs) as { count: number } | undefined;
+  assert.ok(beforeCountRow, "PASS rollup row must exist before idempotency re-run");
+  await logModel.aggregateHourlyRollups(hourTs - 3600, hourTs, 1);
+  const afterCountRow = rawDb.prepare(
+    "SELECT count FROM hourly_rollups WHERE profile_id = 'test_prof' AND metric_type = 'action' AND hour_timestamp = ? AND key = 'PASS'"
+  ).get(prevHourTs) as { count: number } | undefined;
+  assert.strictEqual(afterCountRow?.count, beforeCountRow.count, "Re-running aggregateHourlyRollups must not double-count");
+  console.log("  PASS: aggregateHourlyRollups is idempotent (no double-counting on re-run)");
+
   console.log("\n======================================================");
   console.log("   ALL HOURLY ROLLUPS & PRE-ENCRYPTION TESTS PASSED!  ");
   console.log("======================================================");

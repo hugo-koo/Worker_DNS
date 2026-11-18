@@ -12,7 +12,7 @@ import {
 import { resolveUpstreamEndpoint, fetchFromUpstream } from '../pipeline/resolver/transport';
 import { DEFAULT_FAIL_OPEN_UPSTREAM } from '../constants/presets';
 
-/** In-memory throttle tracker for profile and user last_active database updates */
+/** In-memory throttle tracker for user last DNS resolution database updates */
 const activeThrottleMemoryMap = new Map<string, number>();
 
 /**
@@ -220,7 +220,7 @@ export async function handleDoHRequest(
           await cacheUtils.set(cache, `active_dns:${clientIp}`, profileId, activeDnsTtl);
         }
 
-        // Update profile activity timestamp (throttled hourly)
+        // Update user DNS resolution activity timestamp (throttled hourly for last_resolve_at & lifecycle inactivity)
         const nowSec = Math.floor(Date.now() / 1000);
         const throttleSec = Number(env.THROTTLE_ACTIVE_SEC) || 3600;
 
@@ -242,9 +242,6 @@ export async function handleDoHRequest(
         activeThrottleMemoryMap.set(profileId, nowSec);
 
         try {
-          const profileModel = new ProfileModel(env.DB);
-          await profileModel.updateLastActive(profileId, nowSec);
-          
           const userModel = new UserModel(env.DB, env);
           await userModel.updateLastActiveByProfile(profileId, nowSec);
         } catch {
