@@ -12,6 +12,7 @@ import { ProfileList } from "./components/ProfileList";
 
 interface DashboardHomeProps {
   profiles: Profile[];
+  targetSection?: string;
   onSelect: (p: Profile) => void;
   onCreate: () => void;
   showCreate: boolean;
@@ -28,6 +29,7 @@ interface DashboardHomeProps {
 
 export const DashboardHomeView = ({
   profiles,
+  targetSection = "setup",
   onSelect,
   onCreate,
   showCreate,
@@ -115,6 +117,7 @@ export const DashboardHomeView = ({
 
           <ProfileList
             profiles={profiles}
+            targetSection={targetSection}
             onSelect={onSelect}
             onDelete={onDelete}
           />

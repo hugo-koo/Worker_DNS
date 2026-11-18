@@ -7,6 +7,7 @@ import { SessionLockButton } from "../components/SessionLockButton";
 import { MigrationStatusBadge } from "../components/MigrationStatusBadge";
 import type { Profile, UserInfo } from "../types/auth";
 import { useIsMobile } from "../hooks/useIsMobile";
+import { createSpaLinkClickHandler } from "../utils/navigation";
 
 /**
  * Properties for the HeaderNavbar component.
@@ -74,9 +75,10 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
             aria-label={isSidebarOpen ? t("common.close", "关闭") : t("common.menu", "菜单")}
           />
         )}
-        <button
-          onClick={() => navigate("/dash")}
-          className="font-bold text-blue-600 dark:text-blue-400 bg-transparent border-none p-0 cursor-pointer flex items-center gap-1"
+        <a
+          href="/dash"
+          onClick={createSpaLinkClickHandler("/dash", navigate)}
+          className="font-bold text-blue-600 dark:text-blue-400 no-underline hover:no-underline flex items-center gap-1"
         >
           <Icon icon="caret-left" />
           <span className="truncate max-w-30 md:max-w-none">
@@ -88,7 +90,7 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
                   ? selectedProfile?.name || t("common.loading")
                   : t("common.selectProfile")}
           </span>
-        </button>
+        </a>
       </Navbar.Group>
       <Navbar.Group align={Alignment.RIGHT}>
         <div className="flex items-center gap-2">

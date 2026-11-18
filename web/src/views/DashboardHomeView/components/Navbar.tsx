@@ -1,5 +1,5 @@
 import React from "react";
-import { Button, Intent, PopoverNext } from "@blueprintjs/core";
+import { AnchorButton, Button, Intent, PopoverNext } from "@blueprintjs/core";
 import { LogOut, User as UserIcon, Server } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { LanguageSwitcher } from "../../../components/LanguageSwitcher";
@@ -7,6 +7,7 @@ import { SessionLockButton } from "../../../components/SessionLockButton";
 import { MigrationStatusBadge } from "../../../components/MigrationStatusBadge";
 import type { UserInfo } from "../../../types/auth";
 import LogoIcon from "../../../assets/obex_cat_eye_logo-256.webp";
+import { createSpaLinkClickHandler } from "../../../utils/navigation";
 
 /**
  * Properties for the Navbar component on the dashboard home (select profile) page.
@@ -60,18 +61,20 @@ export const Navbar: React.FC<NavbarProps> = ({ isMobile, navigate, handleLogout
         <LanguageSwitcher />
         <div className="flex items-center gap-1">
           {currentUser?.role === "admin" && (
-            <Button
+            <AnchorButton
+              href="/system"
               variant="minimal"
               icon={<Server size={18} />}
               text={isMobile ? "" : t("common.system", "系统")}
-              onClick={() => navigate("/system")}
+              onClick={createSpaLinkClickHandler("/system", navigate)}
             />
           )}
-          <Button
+          <AnchorButton
+            href="/account"
             variant="minimal"
             icon={<UserIcon size={18} />}
             text={isMobile ? "" : t("common.account")}
-            onClick={() => navigate("/account")}
+            onClick={createSpaLinkClickHandler("/account", navigate)}
           />
           <PopoverNext
             content={

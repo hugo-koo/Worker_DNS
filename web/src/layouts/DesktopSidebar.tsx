@@ -21,6 +21,7 @@ import { clsx } from "clsx";
 import LogoIcon from "../assets/obex_cat_eye_logo-256.webp";
 import type { UserInfo } from "../types/auth";
 import { useUpstreamUpdate } from "../hooks/useUpstreamUpdate";
+import { createSpaLinkClickHandler } from "../utils/navigation";
 
 /**
  * Properties for the DesktopSidebar component.
@@ -209,20 +210,10 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
   }, [isMobile, isSidebarOpen, setIsSidebarOpen]);
 
   const showText = isMobile ? true : isSidebarOpen;
+  const closeMobileSidebar = isMobile ? () => setIsSidebarOpen(false) : undefined;
 
-  const handleNavClick = (path: string) => {
-    navigate(path);
-    if (isMobile) {
-      setIsSidebarOpen(false);
-    }
-  };
-
-  const handleProfileNavClick = (path: string) => {
-    if (!isProfileActive) {
-      handleNavClick("/dash");
-    } else {
-      handleNavClick(path);
-    }
+  const getProfileHref = (section: string, activePath: string): string => {
+    return isProfileActive ? activePath : `/dash?next=${encodeURIComponent(section)}`;
   };
 
   return (
@@ -341,54 +332,70 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
 
         <div className="flex-1 py-4 px-2 overflow-y-auto overflow-x-hidden">
           <Menu className="bg-transparent p-0">
-            {navItems.map((item) => (
-              <MenuItem
-                key={item.id}
-                icon={item.icon as any}
-                text={showText ? item.label : ""}
-                className={clsx(
-                  !isProfileActive && "opacity-50 hover:opacity-80 transition-opacity cursor-pointer"
-                )}
-                title={!isProfileActive ? t("nav.noActiveProfileHint", "未选择配置，点击前往配置列表") : undefined}
-                active={isProfileActive && location.pathname.endsWith(
-                  item.id === "stats" ? "/stats" : `/${item.id}`,
-                )}
-                onClick={() => handleProfileNavClick(item.path)}
-              />
-            ))}
-            <MenuItem
-              icon={<ListFilter size={18} />}
-              text={showText ? t("nav.filter") : ""}
-              className={clsx(
-                !isProfileActive && "opacity-50 hover:opacity-80 transition-opacity cursor-pointer"
-              )}
-              title={!isProfileActive ? t("nav.noActiveProfileHint", "未选择配置，点击前往配置列表") : undefined}
-              active={isProfileActive && location.pathname.endsWith("/filter")}
-              onClick={() => handleProfileNavClick(`/dash/${activeId}/filter`)}
-            />
-            <MenuItem
-              icon={<Settings size={18} />}
-              text={showText ? t("nav.settings") : ""}
-              className={clsx(
-                !isProfileActive && "opacity-50 hover:opacity-80 transition-opacity cursor-pointer"
-              )}
-              title={!isProfileActive ? t("nav.noActiveProfileHint", "未选择配置，点击前往配置列表") : undefined}
-              active={isProfileActive && location.pathname.endsWith("/settings")}
-              onClick={() => handleProfileNavClick(`/dash/${activeId}/settings`)}
-            />
+            {navItems.map((item) => {
+              const targetHref = getProfileHref(item.id, item.path);
+              return (
+                <MenuItem
+                  key={item.id}
+                  href={targetHref}
+                  icon={item.icon as any}
+                  text={showText ? item.label : ""}
+                  className={clsx(
+                    !isProfileActive && "opacity-50 hover:opacity-80 transition-opacity cursor-pointer"
+                  )}
+                  title={!isProfileActive ? t("nav.noActiveProfileHint", "未选择配置，点击前往配置列表") : undefined}
+                  active={isProfileActive && location.pathname.endsWith(
+                    item.id === "stats" ? "/stats" : `/${item.id}`,
+                  )}
+                  onClick={createSpaLinkClickHandler(targetHref, navigate, closeMobileSidebar)}
+                />
+              );
+            })}
+            {(() => {
+              const filterHref = getProfileHref("filter", `/dash/${activeId}/filter`);
+              const settingsHref = getProfileHref("settings", `/dash/${activeId}/settings`);
+              return (
+                <>
+                  <MenuItem
+                    href={filterHref}
+                    icon={<ListFilter size={18} />}
+                    text={showText ? t("nav.filter") : ""}
+                    className={clsx(
+                      !isProfileActive && "opacity-50 hover:opacity-80 transition-opacity cursor-pointer"
+                    )}
+                    title={!isProfileActive ? t("nav.noActiveProfileHint", "未选择配置，点击前往配置列表") : undefined}
+                    active={isProfileActive && location.pathname.endsWith("/filter")}
+                    onClick={createSpaLinkClickHandler(filterHref, navigate, closeMobileSidebar)}
+                  />
+                  <MenuItem
+                    href={settingsHref}
+                    icon={<Settings size={18} />}
+                    text={showText ? t("nav.settings") : ""}
+                    className={clsx(
+                      !isProfileActive && "opacity-50 hover:opacity-80 transition-opacity cursor-pointer"
+                    )}
+                    title={!isProfileActive ? t("nav.noActiveProfileHint", "未选择配置，点击前往配置列表") : undefined}
+                    active={isProfileActive && location.pathname.endsWith("/settings")}
+                    onClick={createSpaLinkClickHandler(settingsHref, navigate, closeMobileSidebar)}
+                  />
+                </>
+              );
+            })()}
             <li className="my-4 border-t border-gray-100 dark:border-gray-800" />
             <MenuItem
+              href="/account"
               icon={<UserIcon size={18} />}
               text={showText ? t("common.account") : ""}
               active={location.pathname === "/account"}
-              onClick={() => handleNavClick("/account")}
+              onClick={createSpaLinkClickHandler("/account", navigate, closeMobileSidebar)}
             />
             {currentUser?.role === "admin" && (
               <MenuItem
+                href="/system"
                 icon={<Server size={18} />}
                 text={showText ? t("common.system") : ""}
                 active={location.pathname === "/system"}
-                onClick={() => handleNavClick("/system")}
+                onClick={createSpaLinkClickHandler("/system", navigate, closeMobileSidebar)}
               />
             )}
             <PopoverNext

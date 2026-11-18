@@ -19,6 +19,7 @@ import { DeploymentGuideView } from "./views/DeploymentGuideView";
 import { loadLocale } from "./i18n/config";
 
 import { AuthView } from "./components/AuthView";
+import { resolveTargetProfileSection } from "./utils/navigation";
 
 const AccountView = lazyWithPreload(() =>
   import("./views/AccountView").then((m) => ({ default: m.AccountView })),
@@ -136,26 +137,30 @@ function App() {
           <Route path="/" element={<Navigate to="/dash" replace />} />
           <Route
             path="/dash"
-            element={
-              <DashboardHomeView
-                profiles={profiles}
-                onSelect={(p: Profile) => {
-                  setSelectedProfile(p);
-                  navigate(`/dash/${p.id}/setup`);
-                }}
-                onCreate={handleCreateProfile}
-                showCreate={showCreateDialog}
-                setShowCreate={setShowCreateDialog}
-                newName={newProfileName}
-                setNewName={setNewProfileName}
-                error={createError}
-                onDelete={handleDeleteProfile}
-                handleLogout={handleLogout}
-                navigate={navigate}
-                onRefresh={fetchProfiles}
-                currentUser={currentUser}
-              />
-            }
+            element={(() => {
+              const targetSection = resolveTargetProfileSection(location.search);
+              return (
+                <DashboardHomeView
+                  profiles={profiles}
+                  targetSection={targetSection}
+                  onSelect={(p: Profile) => {
+                    setSelectedProfile(p);
+                    navigate(`/dash/${p.id}/${targetSection}`);
+                  }}
+                  onCreate={handleCreateProfile}
+                  showCreate={showCreateDialog}
+                  setShowCreate={setShowCreateDialog}
+                  newName={newProfileName}
+                  setNewName={setNewProfileName}
+                  error={createError}
+                  onDelete={handleDeleteProfile}
+                  handleLogout={handleLogout}
+                  navigate={navigate}
+                  onRefresh={fetchProfiles}
+                  currentUser={currentUser}
+                />
+              );
+            })()}
           />
           <Route
             path="/dash/:profileId/*"
