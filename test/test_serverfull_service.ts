@@ -168,7 +168,7 @@ function runServiceUnitTests(): void {
   if (!Array.isArray(DEFAULT_PRESET_EXTERNAL_FILTERS) || DEFAULT_PRESET_EXTERNAL_FILTERS.length === 0) {
     throw new Error('DEFAULT_PRESET_EXTERNAL_FILTERS must be non-empty array');
   }
-  if (DEFAULT_SUBSTITUTE_DOMAIN !== 'www.okx.com' || !DEFAULT_FAIL_OPEN_UPSTREAM) {
+  if (DEFAULT_SUBSTITUTE_DOMAIN !== 'www.wto.org' || !DEFAULT_FAIL_OPEN_UPSTREAM) {
     throw new Error('DEFAULT_SUBSTITUTE_DOMAIN or DEFAULT_FAIL_OPEN_UPSTREAM invalid');
   }
   console.log('   ✓ Built-in presets constants passed.');

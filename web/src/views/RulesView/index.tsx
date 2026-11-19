@@ -47,7 +47,7 @@ export const RulesView: React.FC<RulesViewProps> = ({ profileId, prefill, onPref
   });
 
   const [editRule, setEditRule] = useState<Rule | null>(null);
-  const [substituteDomain, setSubstituteDomain] = useState<string>("www.okx.com");
+  const [substituteDomain, setSubstituteDomain] = useState<string>("www.wto.org");
   const [isPromptOpen, setIsPromptOpen] = useState(false);
 
   useEffect(() => {
@@ -79,7 +79,7 @@ export const RulesView: React.FC<RulesViewProps> = ({ profileId, prefill, onPref
       v_a: "",
       v_aaaa: "",
       v_txt: "",
-      v_cname: substituteDomain || "www.okx.com",
+      v_cname: substituteDomain || "www.wto.org",
     });
     setTimeout(() => {
       document.getElementById("rule-pattern")?.focus();

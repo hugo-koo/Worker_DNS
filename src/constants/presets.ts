@@ -46,7 +46,7 @@ export const DEFAULT_PRESET_EXTERNAL_FILTERS: readonly PresetFilter[] = [
 /**
  * Built-in default substitute domain for resolving DoH IPs.
  */
-export const DEFAULT_SUBSTITUTE_DOMAIN = 'www.okx.com';
+export const DEFAULT_SUBSTITUTE_DOMAIN = 'www.wto.org';
 
 /**
  * Built-in default fail-open upstream address.

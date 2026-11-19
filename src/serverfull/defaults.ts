@@ -139,7 +139,7 @@ FAIL_OPEN_UPSTREAM=tls://no-ads-malware-typo.freedns.controld.com
 
 # Substitute domain for resolving DoH domain names
 # 用于解析 DoH 域名 IP 的辅助域名
-SUBSTITUTE_DOMAIN=www.okx.com
+SUBSTITUTE_DOMAIN=www.wto.org
 
 # Throttle interval for updating profile "last active" status (in seconds) / 活跃状态写入节流时间间隔 (秒)
 # THROTTLE_ACTIVE_SEC=3600
