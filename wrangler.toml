@@ -220,6 +220,22 @@ PRESET_EXTERNAL_FILTERS = """
   {
     "label": "anti-AD AdGuard Home List",
     "url": "https://raw.githubusercontent.com/privacy-protection-tools/anti-AD/master/anti-ad-easylist.txt"
+  },
+  {
+    "label": "anti-AD AdGuard Home List pcdn",
+    "url": "https://raw.githubusercontent.com/privacy-protection-tools/anti-AD/refs/heads/master/discretion/pcdn.txt"
+  },
+  {
+    "label": "anti-AD AdGuard Home List dns",
+    "url": "https://raw.githubusercontent.com/privacy-protection-tools/anti-AD/refs/heads/master/discretion/dns.txt"
+  },
+  {
+    "label": "anti-AD AdGuard Home List dns",
+    "url": "https://raw.githubusercontent.com/privacy-protection-tools/anti-AD/refs/heads/master/discretion/dns.txt"
+  },
+  {
+    "label": "anti-AD AdGuard Home List anv",
+    "url": "https://raw.githubusercontent.com/privacy-protection-tools/anti-AD/refs/heads/master/discretion/anv.txt"
   }
 ]
 """
