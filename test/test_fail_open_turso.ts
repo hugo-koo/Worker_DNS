@@ -9,11 +9,12 @@
 import assert from "node:assert";
 import { SystemSettingsModel } from "../src/models/systemSettings";
 import { ensureCloudflareIpRangesLoaded, isCloudflareIp } from "../src/utils/ech";
-import { resolveProfileByKey, resolveDefaultProfile } from "../src/api/doh";
+import { resolveProfileByKey, resolveDefaultProfile, handleDoHRequest } from "../src/api/doh";
 import { pipeline } from "../src/pipeline";
+import { configCache, profileKeyMemoryMap } from "../src/pipeline/cache";
+import { isTursoQuotaError, verifyTursoConnection, TursoD1Database } from "../src/lib/turso";
 import { buildDNSQuery, parseDNSAnswer } from "../src/utils/dns";
 import { Context, Env, ExecutionContext } from "../src/types";
-import { DEFAULT_FAIL_OPEN_UPSTREAM } from "../src/constants/presets";
 
 console.log(">>> [TEST] Running Turso Read-Blocked Fail-Open Fallback Tests...");
 
@@ -117,6 +118,121 @@ async function runTests() {
   const answers = parseDNSAnswer(result.answer);
   assert.ok(answers.length > 0, "Parsed DNS answers must not be empty");
   console.log(`  PASS: Full pipeline resolved example.com -> ${answers.map(a => a.data).join(", ")} via fail-open upstream`);
+
+  // Test 7: End-to-end handleDoHRequest under blocked DB (must skip redundant DB reads and serve FAIL_OPEN_UPSTREAM)
+  profileKeyMemoryMap.clear();
+  configCache.clear();
+  // Seed stale/poisoned config under same key to ensure emergency fallback is NOT overridden by profileId === profileKey
+  configCache.set("dohkey99", {
+    settings: {
+      upstream: ["http://127.0.0.1/unreachable"],
+      default_policy: "ALLOW",
+      log_retention_days: 0,
+      ecs: { enabled: false, use_client_ip: false }
+    },
+    rules: [],
+    timestamp: Date.now()
+  });
+
+  let dbPrepareCount = 0;
+  const countingBlockedDb: any = {
+    prepare: (sql: string) => {
+      dbPrepareCount++;
+      return mockBlockedDb.prepare(sql);
+    },
+    batch: mockBlockedDb.batch
+  };
+  const dohEnv = { DB: countingBlockedDb, FAIL_OPEN_UPSTREAM: "https://1.1.1.1/dns-query" } as unknown as Env;
+  const dohReq = new Request("https://dns.example.com/dohkey99", {
+    method: "POST",
+    headers: { "Content-Type": "application/dns-message" },
+    body: rawQuery
+  });
+  const dohRes = await handleDoHRequest(dohReq, dohEnv, mockCtx, "dohkey99");
+  assert.strictEqual(dohRes.status, 200, "DoH fail-open response must be HTTP 200");
+  const dohAnswerBytes = new Uint8Array(await dohRes.arrayBuffer());
+  assert.ok(dohAnswerBytes.length > 0, "DoH fail-open response body must be non-empty");
+  assert.ok(parseDNSAnswer(dohAnswerBytes).length > 0, "DoH fail-open answer must parse cleanly");
+  assert.strictEqual(dbPrepareCount, 1, "Emergency fallback must issue only 1 DB lookup (findByKey) and bypass pipelineConfig DB reads");
+  console.log("  PASS: handleDoHRequest end-to-end fails open cleanly without redundant DB reads or configCache override");
+
+  // Test 8: handleDoHRequest fails open when cached profile upstream fails (action === 'FAIL')
+  profileKeyMemoryMap.set("brokenup", {
+    ts: Date.now(),
+    data: {
+      id: "prof_broken",
+      name: "Cached Broken Profile",
+      owner_id: "u1",
+      settings: JSON.stringify({
+        upstream: ["http://127.0.0.1/blocked-local"],
+        default_policy: "ALLOW",
+        log_retention_days: 0,
+        ecs: { enabled: false, use_client_ip: false }
+      }),
+      created_at: 1,
+      updated_at: 1
+    }
+  });
+  configCache.set("prof_broken", {
+    settings: {
+      upstream: ["http://127.0.0.1/blocked-local"],
+      default_policy: "ALLOW",
+      log_retention_days: 0,
+      ecs: { enabled: false, use_client_ip: false }
+    },
+    rules: [],
+    timestamp: Date.now()
+  });
+  const brokenReq = new Request("https://dns.example.com/brokenup", {
+    method: "POST",
+    headers: { "Content-Type": "application/dns-message" },
+    body: rawQuery
+  });
+  const brokenRes = await handleDoHRequest(brokenReq, mockEnv, mockCtx, "brokenup");
+  assert.strictEqual(brokenRes.status, 200, "DoH must fail open instead of returning empty body when upstream fails");
+  const brokenAnswer = new Uint8Array(await brokenRes.arrayBuffer());
+  assert.ok(parseDNSAnswer(brokenAnswer).length > 0, "DoH fallback answer must resolve via FAIL_OPEN_UPSTREAM");
+  console.log("  PASS: handleDoHRequest fails open to FAIL_OPEN_UPSTREAM when cached profile upstream returns FAIL");
+
+  // Test 9 & 10: isTursoQuotaError, verifyTursoConnection classification, and TursoD1Database read circuit breaker
+  assert.strictEqual(
+    isTursoQuotaError("Operation was blocked: SQL read operations are forbidden (reads are blocked, do you need to upgrade your plan?)"),
+    true,
+    "isTursoQuotaError must recognize Turso blocked-reads error"
+  );
+  assert.strictEqual(isTursoQuotaError("no such table: users"), false, "Regular SQL errors must not trigger quota error");
+
+  const originalFetch = globalThis.fetch;
+  let tursoFetchCalls = 0;
+  try {
+    globalThis.fetch = (async () => {
+      tursoFetchCalls++;
+      return new Response(JSON.stringify({
+        results: [{
+          type: "error",
+          error: { message: "Operation was blocked: SQL read operations are forbidden (reads are blocked, do you need to upgrade your plan?)" }
+        }]
+      }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }) as typeof fetch;
+
+    const health = await verifyTursoConnection({
+      TURSO_DATABASE_URL: "turso://quota-test.turso.io",
+      TURSO_AUTH_TOKEN: "test-token-12345"
+    });
+    assert.strictEqual(health.ok, false);
+    assert.strictEqual(health.errorCode, "quota_exceeded", "verifyTursoConnection must classify blocked reads as quota_exceeded");
+    assert.ok(health.message?.includes("FAIL_OPEN_UPSTREAM"), "Quota error message should mention DNS fail-open active");
+
+    const tursoDb = new TursoD1Database("turso://quota-test.turso.io", "test-token-12345");
+    tursoFetchCalls = 0;
+    await assert.rejects(() => tursoDb.prepare("SELECT * FROM profiles WHERE id = ?").bind("a").first());
+    assert.strictEqual(tursoFetchCalls, 1, "First blocked read calls Turso once");
+    await assert.rejects(() => tursoDb.prepare("SELECT * FROM rules WHERE profile_id = ?").bind("b").all());
+    assert.strictEqual(tursoFetchCalls, 1, "Subsequent reads within cooldown must fast-fail without hitting Turso HTTP API");
+    console.log("  PASS: verifyTursoConnection & TursoD1Database quota circuit breaker passed");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 
   console.log("\n======================================================");
   console.log("   ALL TURSO BLOCKED READ FAIL-OPEN TESTS PASSED!     ");

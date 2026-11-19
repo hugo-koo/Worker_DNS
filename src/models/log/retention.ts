@@ -1,6 +1,7 @@
 import { D1Database, D1PreparedStatement } from "@cloudflare/workers-types";
 import { SystemSettingsModel } from "../systemSettings";
 import { KemKeyModel } from "../kemKey";
+import { prepareBoundedLogDeleteStatement } from "./core";
 
 /**
  * Model responsible for enforcing log retention policies and purging
@@ -110,13 +111,15 @@ export class LogRetentionModel {
 
         // Delete bounded number of rows per profile per hourly cron run if budget remains
         if (canDeleteLogs && effectiveBatchLimit > 0) {
-          logDeleteStatements.push(
-            this.db.prepare(`
-              DELETE FROM logs WHERE (profile_id, timestamp, id) IN (
-                SELECT profile_id, timestamp, id FROM logs WHERE profile_id = ? AND timestamp < ? LIMIT ?
-              )
-            `).bind(profile.id, threshold, perProfileLimit)
+          const deleteStmt = await prepareBoundedLogDeleteStatement(
+            this.db,
+            profile.id,
+            threshold,
+            perProfileLimit
           );
+          if (deleteStmt) {
+            logDeleteStatements.push(deleteStmt);
+          }
         }
       }
 
@@ -128,12 +131,6 @@ export class LogRetentionModel {
           await this.db.batch(chunk);
         }
       }
-
-      // Clean up any orphaned hourly_rollups whose profile no longer exists
-      await this.db
-        .prepare("DELETE FROM hourly_rollups WHERE profile_id NOT IN (SELECT id FROM profiles)")
-        .run()
-        .catch(() => {});
 
       // Execute log deletions in chunks and track affected rows
       let newlyDeletedLogs = 0;
@@ -183,6 +180,15 @@ export class LogRetentionModel {
       }
 
       if (newlyDeletedLogs > 0 || isDailyOrphanCheckDue) {
+        if (isDailyOrphanCheckDue) {
+          // Run orphan hourly_rollups sweep at most once per day instead of every hour
+          // (ProfileModel.delete and applyInactivityPolicy already delete rollups directly).
+          await this.db
+            .prepare("DELETE FROM hourly_rollups WHERE profile_id NOT IN (SELECT id FROM profiles)")
+            .run()
+            .catch(() => {});
+        }
+
         try {
           const kemKeyModel = new KemKeyModel(this.db);
           const deletedOrphanKeys = await kemKeyModel.cleanupOrphans(86400, 100);

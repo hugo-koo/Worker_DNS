@@ -9,8 +9,7 @@ import { Env, Context, ExecutionContext } from '../types';
 import { parseDNSQueryFromRaw } from '../utils/dns';
 import { pipeline } from '../pipeline';
 import { resolveDefaultProfile, resolveProfileByKey } from '../api/doh';
-import { resolveUpstreamEndpoint, fetchFromUpstream } from '../pipeline/resolver/transport';
-import { DEFAULT_FAIL_OPEN_UPSTREAM } from '../constants/presets';
+import { hasAlreadyTriedFailOpen, resolveFailOpenFallback } from '../pipeline/resolver/transport';
 import { formatPortError } from './format';
 
 export interface UdpServerOptions {
@@ -150,7 +149,8 @@ export class UdpDnsServer {
         accessPointName: profile.access_point_name,
         startTime: Date.now(),
         env,
-        ctx
+        ctx,
+        isEmergencyFallback: Boolean(profile.isEmergencyFallback)
       };
 
       const host = rinfo.address.includes(':') ? `[${rinfo.address}]` : rinfo.address;
@@ -163,43 +163,49 @@ export class UdpDnsServer {
       });
 
       const result = await pipeline.process(request, query, context);
-      if (!result || !result.answer || result.answer.length === 0) {
+      if (!result || result.action === 'FAIL' || !result.answer || result.answer.length === 0) {
+        if (!hasAlreadyTriedFailOpen(result, env)) {
+          const fallbackRes = await resolveFailOpenFallback(env, rawBytes);
+          if (fallbackRes.answer && fallbackRes.answer.length > 0) {
+            this.sendUdpAnswer(fallbackRes.answer, rinfo);
+          }
+        }
         return;
       }
 
-      let answer = result.answer;
-
-      // RFC 1035 UDP 512 bytes limit check (if no EDNS or response > 512, truncate)
-      if (answer.length > 512) {
-        const truncated = new Uint8Array(answer);
-        // Set TC (Truncation) bit: flags byte 1 (offset 2) bit 1 (0x02)
-        truncated[2] |= 0x02;
-        answer = truncated.slice(0, 512);
-      }
-
-      this.socket?.send(answer, rinfo.port, rinfo.address, (err: Error | null) => {
-        if (err) {
-          console.warn(`[UDP DNS] Failed to send answer to ${rinfo.address}:${rinfo.port}:`, err.message);
-        }
-      });
+      this.sendUdpAnswer(result.answer, rinfo);
     } catch (err) {
       console.error('[UDP DNS] Message handling exception:', err);
       try {
-        const failOpenUpstream = this.options.env.FAIL_OPEN_UPSTREAM || DEFAULT_FAIL_OPEN_UPSTREAM;
         const rawBytes = new Uint8Array(msg.buffer, msg.byteOffset, msg.byteLength);
-        const endpoint = resolveUpstreamEndpoint(failOpenUpstream);
-        const transportRes = await fetchFromUpstream(endpoint, rawBytes);
-        let answer = transportRes.answer;
-        if (answer.length > 512) {
-          const truncated = new Uint8Array(answer);
-          truncated[2] |= 0x02;
-          answer = truncated.slice(0, 512);
+        const transportRes = await resolveFailOpenFallback(this.options.env, rawBytes);
+        if (transportRes.answer && transportRes.answer.length > 0) {
+          this.sendUdpAnswer(transportRes.answer, rinfo);
         }
-        this.socket?.send(answer, rinfo.port, rinfo.address);
       } catch (fallbackErr) {
         console.error('[UDP DNS] Fail-open upstream fallback failed:', fallbackErr);
       }
     }
+  }
+
+  /**
+   * Truncates oversized DNS responses to RFC 1035 512-byte UDP limit and transmits to client.
+   */
+  private sendUdpAnswer(rawAnswer: Uint8Array, rinfo: dgram.RemoteInfo): void {
+    let answer = rawAnswer;
+    // RFC 1035 UDP 512 bytes limit check (if no EDNS or response > 512, truncate)
+    if (answer.length > 512) {
+      const truncated = new Uint8Array(answer);
+      // Set TC (Truncation) bit: flags byte 1 (offset 2) bit 1 (0x02)
+      truncated[2] |= 0x02;
+      answer = truncated.slice(0, 512);
+    }
+
+    this.socket?.send(answer, rinfo.port, rinfo.address, (err: Error | null) => {
+      if (err) {
+        console.warn(`[UDP DNS] Failed to send answer to ${rinfo.address}:${rinfo.port}:`, err.message);
+      }
+    });
   }
 
   stop(): Promise<void> {

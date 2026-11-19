@@ -2,6 +2,8 @@ import { connectUniversal } from "../../utils/sockets";
 import { parseDnsStamp } from "../../utils/dnsStamp";
 import { http2SessionPool, isHttp2Supported } from "../../utils/http2Client";
 import { getAppUserAgent } from "../../constants/version";
+import { DEFAULT_FAIL_OPEN_UPSTREAM } from "../../constants/presets";
+import { Env, ResolutionResult } from "../../types";
 import { isSafeUrlWithDnsCheck } from "../../utils/validator";
 import { UpstreamHttpError, UpstreamTransportResult } from "./types";
 
@@ -348,4 +350,38 @@ export async function fetchFromUpstream(
 
   const latency = Date.now() - startFetch;
   return { answer, latency, diagMethod, diagTarget };
+}
+
+/**
+ * Checks whether a failed ResolutionResult already attempted the configured FAIL_OPEN_UPSTREAM.
+ * Prevents duplicate round-trips to an upstream that already failed.
+ *
+ * @param result - ResolutionResult returned by the pipeline.
+ * @param env - Environment bindings containing optional FAIL_OPEN_UPSTREAM override.
+ * @returns True if diagnostics show the query already targeted FAIL_OPEN_UPSTREAM.
+ */
+export function hasAlreadyTriedFailOpen(
+  result: ResolutionResult | null | undefined,
+  env: Partial<Env>
+): boolean {
+  const failOpenUpstream = env.FAIL_OPEN_UPSTREAM || DEFAULT_FAIL_OPEN_UPSTREAM;
+  const diagUrl = result?.diagnostics?.upstream_url;
+  if (!diagUrl) return false;
+  return diagUrl === failOpenUpstream || diagUrl.startsWith(`${failOpenUpstream} (`);
+}
+
+/**
+ * Dispatches a raw DNS wire-format query directly to FAIL_OPEN_UPSTREAM (bypassing DB/filtering).
+ *
+ * @param env - Environment bindings containing optional FAIL_OPEN_UPSTREAM override.
+ * @param queryRaw - Wire-format DNS query packet.
+ * @returns UpstreamTransportResult with raw DNS wire answer.
+ */
+export async function resolveFailOpenFallback(
+  env: Partial<Env>,
+  queryRaw: Uint8Array
+): Promise<UpstreamTransportResult> {
+  const failOpenUpstream = env.FAIL_OPEN_UPSTREAM || DEFAULT_FAIL_OPEN_UPSTREAM;
+  const endpoint = resolveUpstreamEndpoint(failOpenUpstream);
+  return fetchFromUpstream(endpoint, queryRaw);
 }

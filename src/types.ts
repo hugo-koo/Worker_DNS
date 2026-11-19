@@ -141,6 +141,8 @@ export interface Profile {
   updated_at: number;
   list_bloom?: string;
   list_updated_at?: number;
+  /** True when synthesized by fail-open recovery after a DB lookup failure. */
+  isEmergencyFallback?: boolean;
 }
 
 export interface Rule {
@@ -281,6 +283,8 @@ export interface Context {
   startTime: number;
   env: Env;
   ctx: ExecutionContext;
+  /** True when profile lookup fell back to emergency fail-open mode due to DB unavailability. */
+  isEmergencyFallback?: boolean;
 }
 
 export interface AccessPoint {

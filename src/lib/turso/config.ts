@@ -60,8 +60,28 @@ export function isTursoConfigured(env?: Partial<Env> | NodeJS.ProcessEnv | null)
 
 export interface TursoHealthResult {
   ok: boolean;
-  errorCode?: 'missing' | 'invalid_url' | 'auth_failed' | 'unreachable';
+  errorCode?: 'missing' | 'invalid_url' | 'auth_failed' | 'quota_exceeded' | 'unreachable';
   message?: string;
+}
+
+/**
+ * Checks whether a Turso error message or HTTP error body indicates a plan quota / blocked-operations state.
+ *
+ * @param message - Raw error message or response body from Turso.
+ * @returns True if Turso blocked reads/writes due to usage quota exhaustion.
+ */
+export function isTursoQuotaError(message?: string | null): boolean {
+  if (!message) return false;
+  const lower = message.toLowerCase();
+  return (
+    lower.includes('operation was blocked') ||
+    lower.includes('reads are blocked') ||
+    lower.includes('writes are blocked') ||
+    lower.includes('sql read operations are forbidden') ||
+    lower.includes('sql write operations are forbidden') ||
+    lower.includes('exceeded your usage quota') ||
+    lower.includes('upgrade your plan')
+  );
 }
 
 const tursoHealthCache = new Map<string, { result: TursoHealthResult; expiresAt: number }>();
@@ -136,27 +156,67 @@ export async function verifyTursoConnection(
       signal: controller.signal
     });
 
-    if (res.status === 401 || res.status === 403) {
+    if (res.status === 401) {
       result = {
         ok: false,
         errorCode: 'auth_failed',
         message: `Turso authentication failed (HTTP ${res.status}). Please verify TURSO_AUTH_TOKEN.`
       };
-    } else if (!res.ok) {
+    } else if (res.status === 403) {
+      const errBody = await res.text().catch(() => '');
+      if (isTursoQuotaError(errBody)) {
+        result = {
+          ok: false,
+          errorCode: 'quota_exceeded',
+          message: `Turso quota exceeded (DNS fail-open to FAIL_OPEN_UPSTREAM active): ${errBody}`
+        };
+      } else {
+        result = {
+          ok: false,
+          errorCode: 'auth_failed',
+          message: `Turso authentication failed (HTTP ${res.status}). Please verify TURSO_AUTH_TOKEN.`
+        };
+      }
+    } else if (res.status === 402) {
+      const errBody = await res.text().catch(() => '');
       result = {
         ok: false,
-        errorCode: 'unreachable',
-        message: `Turso endpoint returned HTTP ${res.status}. Please verify TURSO_DATABASE_URL.`
+        errorCode: 'quota_exceeded',
+        message: `Turso quota exceeded (DNS fail-open to FAIL_OPEN_UPSTREAM active): ${errBody || 'HTTP 402 Payment Required'}`
       };
+    } else if (!res.ok) {
+      const errBody = await res.text().catch(() => '');
+      if (isTursoQuotaError(errBody)) {
+        result = {
+          ok: false,
+          errorCode: 'quota_exceeded',
+          message: `Turso quota exceeded (DNS fail-open to FAIL_OPEN_UPSTREAM active): ${errBody}`
+        };
+      } else {
+        result = {
+          ok: false,
+          errorCode: 'unreachable',
+          message: `Turso endpoint returned HTTP ${res.status}. Please verify TURSO_DATABASE_URL.`
+        };
+      }
     } else {
       const json = (await res.json().catch(() => null)) as { results?: Array<{ type?: string; error?: { message?: string } }> } | null;
       const first = json?.results?.[0];
       if (!first || first.type === 'error' || first.error) {
-        result = {
-          ok: false,
-          errorCode: 'unreachable',
-          message: `Turso query probe failed: ${first?.error?.message || 'Unexpected response'}`
-        };
+        const probeErrMsg = first?.error?.message || 'Unexpected response';
+        if (isTursoQuotaError(probeErrMsg)) {
+          result = {
+            ok: false,
+            errorCode: 'quota_exceeded',
+            message: `Turso quota exceeded (DNS fail-open to FAIL_OPEN_UPSTREAM active): ${probeErrMsg}`
+          };
+        } else {
+          result = {
+            ok: false,
+            errorCode: 'unreachable',
+            message: `Turso query probe failed: ${probeErrMsg}`
+          };
+        }
       } else {
         result = { ok: true };
       }
@@ -178,9 +238,14 @@ export async function verifyTursoConnection(
     const firstKey = tursoHealthCache.keys().next().value;
     if (firstKey !== undefined) tursoHealthCache.delete(firstKey);
   }
+  const cacheTtlMs = result.ok
+    ? 300_000
+    : result.errorCode === 'quota_exceeded'
+      ? 60_000
+      : 5_000;
   tursoHealthCache.set(cacheKey, {
     result,
-    expiresAt: now + (result.ok ? 300_000 : 5_000)
+    expiresAt: now + cacheTtlMs
   });
   return result;
 }

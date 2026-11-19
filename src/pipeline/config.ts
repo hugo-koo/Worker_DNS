@@ -18,8 +18,8 @@ export const pipelineConfig = {
   } | null> {
     const { profileId, env, ctx } = context;
 
-    // Fast-path: Default profile for unauthenticated access points or emergency fail-open
-    if (profileId === 'default') {
+    // Fast-path: Default profile or emergency fail-open recovery after DB lookup failure
+    if (profileId === 'default' || context.isEmergencyFallback) {
       const failOpenUpstream = env.FAIL_OPEN_UPSTREAM || DEFAULT_FAIL_OPEN_UPSTREAM;
       const defaultSettings: ProfileSettings = {
         upstream: [failOpenUpstream],

@@ -38,6 +38,50 @@ export interface GetLogsOptions {
 }
 
 /**
+ * Prepares a bounded single-range DELETE statement for expired logs of a profile
+ * without using multi-column `(profile_id, timestamp, id) IN (SELECT ...)` subqueries,
+ * which can degrade to N×M full-table scans on libSQL/Turso.
+ *
+ * @param db - D1Database instance.
+ * @param profileId - Profile identifier.
+ * @param olderThanTimestamp - Cutoff timestamp (exclusive) in seconds.
+ * @param limit - Maximum number of log rows to delete in this batch (must be > 0).
+ * @returns Prepared DELETE statement when expired logs exist, or null if none exist.
+ */
+export async function prepareBoundedLogDeleteStatement(
+  db: D1Database,
+  profileId: string,
+  olderThanTimestamp: number,
+  limit: number
+): Promise<D1PreparedStatement | null> {
+  if (limit <= 0) return null;
+
+  const { results } = await db
+    .prepare(
+      "SELECT timestamp, id FROM logs WHERE profile_id = ? AND timestamp < ? ORDER BY timestamp ASC, id ASC LIMIT ?"
+    )
+    .bind(profileId, olderThanTimestamp, limit)
+    .all<{ timestamp: number; id: number }>();
+
+  if (!results || results.length === 0) {
+    return null;
+  }
+
+  if (results.length < limit) {
+    return db
+      .prepare("DELETE FROM logs WHERE profile_id = ? AND timestamp < ?")
+      .bind(profileId, olderThanTimestamp);
+  }
+
+  const boundary = results[results.length - 1];
+  return db
+    .prepare(
+      "DELETE FROM logs WHERE profile_id = ? AND timestamp <= ? AND (timestamp < ? OR id <= ?)"
+    )
+    .bind(profileId, boundary.timestamp, boundary.timestamp, boundary.id);
+}
+
+/**
  * Core model handling raw resolution log persistence, point lookups,
  * filtered pagination, and profile-scoped deletions.
  */
@@ -265,14 +309,17 @@ export class LogCoreModel {
     const batchSize = Math.min(1000, maxRows);
     while (totalDeleted < maxRows) {
       const currentBatch = Math.min(batchSize, maxRows - totalDeleted);
-      const result = await this.db.prepare(`
-        DELETE FROM logs WHERE (profile_id, timestamp, id) IN (
-          SELECT profile_id, timestamp, id FROM logs WHERE profile_id = ? AND timestamp < ? LIMIT ?
-        )
-      `)
-        .bind(profileId, olderThanTimestamp, currentBatch)
-        .run();
-      const count = result.meta.changes || 0;
+      const stmt = await prepareBoundedLogDeleteStatement(
+        this.db,
+        profileId,
+        olderThanTimestamp,
+        currentBatch
+      );
+      if (!stmt) {
+        break;
+      }
+      const result = await stmt.run();
+      const count = result.meta?.changes || 0;
       totalDeleted += count;
       if (count < currentBatch) {
         break;

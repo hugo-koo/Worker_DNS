@@ -9,7 +9,7 @@ import {
   defaultProfileMemoryCache,
   setDefaultProfileMemoryCache
 } from '../pipeline/cache';
-import { resolveUpstreamEndpoint, fetchFromUpstream } from '../pipeline/resolver/transport';
+import { hasAlreadyTriedFailOpen, resolveFailOpenFallback } from '../pipeline/resolver/transport';
 import { DEFAULT_FAIL_OPEN_UPSTREAM } from '../constants/presets';
 
 /** In-memory throttle tracker for user last DNS resolution database updates */
@@ -107,7 +107,8 @@ export async function resolveProfileByKey(
       }),
       owner_id: "system",
       created_at: Math.floor(now / 1000),
-      updated_at: Math.floor(now / 1000)
+      updated_at: Math.floor(now / 1000),
+      isEmergencyFallback: true
     } as any;
   }
 
@@ -184,7 +185,7 @@ export async function handleDoHRequest(
     );
   }
 
-  const cache = (caches as any).default;
+  const cache = typeof caches !== "undefined" ? (caches as any).default : null;
   let queryRaw: Uint8Array | null = null;
 
   try {
@@ -205,56 +206,78 @@ export async function handleDoHRequest(
       accessPointName: profile.access_point_name,
       startTime: Date.now(), 
       env, 
-      ctx 
+      ctx,
+      isEmergencyFallback: Boolean(profile.isEmergencyFallback)
     };
     const result = await pipeline.process(request, query, context);
 
     // Async task: record active connections and update active timestamps with throttling
-    ctx.waitUntil((async () => {
-      try {
-        const clientIp = request.headers.get("CF-Connecting-IP") || "127.0.0.1";
-        
-        // Record active connection (used by Debug API)
-        const activeDnsTtl = Number(env.ACTIVE_DNS_CACHE_TTL) || 60;
-        if (cache) {
-          await cacheUtils.set(cache, `active_dns:${clientIp}`, profileId, activeDnsTtl);
-        }
-
-        // Update user DNS resolution activity timestamp (throttled hourly for last_resolve_at & lifecycle inactivity)
-        const nowSec = Math.floor(Date.now() / 1000);
-        const throttleSec = Number(env.THROTTLE_ACTIVE_SEC) || 3600;
-
-        // 1. Fast L1 in-memory check (0ms, 0 subrequests)
-        const inMemThrottle = activeThrottleMemoryMap.get(profileId);
-        if (inMemThrottle && nowSec - inMemThrottle < throttleSec) {
-          return;
-        }
-
-        // 2. Check L2 Cache API (across isolates in the same datacenter)
-        const lastActiveKey = `active_throttle:${profileId}`;
-        const lastActiveThrottled = cache ? await cacheUtils.get<number>(cache, lastActiveKey) : null;
-        if (lastActiveThrottled && nowSec - lastActiveThrottled < throttleSec) {
-          activeThrottleMemoryMap.set(profileId, lastActiveThrottled);
-          return;
-        }
-
-        // Mark in-memory immediately to prevent concurrent requests in this isolate from issuing duplicate DB updates
-        activeThrottleMemoryMap.set(profileId, nowSec);
-
+    if (!profile.isEmergencyFallback) {
+      ctx.waitUntil((async () => {
         try {
-          const userModel = new UserModel(env.DB, env);
-          await userModel.updateLastActiveByProfile(profileId, nowSec);
-        } catch {
-          /* ignore DB write quota errors */
+          const clientIp = request.headers.get("CF-Connecting-IP") || "127.0.0.1";
+          
+          // Record active connection (used by Debug API)
+          const activeDnsTtl = Number(env.ACTIVE_DNS_CACHE_TTL) || 60;
+          if (cache) {
+            await cacheUtils.set(cache, `active_dns:${clientIp}`, profileId, activeDnsTtl);
+          }
+
+          // Update user DNS resolution activity timestamp (throttled hourly for last_resolve_at & lifecycle inactivity)
+          const nowSec = Math.floor(Date.now() / 1000);
+          const throttleSec = Number(env.THROTTLE_ACTIVE_SEC) || 3600;
+
+          // 1. Fast L1 in-memory check (0ms, 0 subrequests)
+          const inMemThrottle = activeThrottleMemoryMap.get(profileId);
+          if (inMemThrottle && nowSec - inMemThrottle < throttleSec) {
+            return;
+          }
+
+          // 2. Check L2 Cache API (across isolates in the same datacenter)
+          const lastActiveKey = `active_throttle:${profileId}`;
+          const lastActiveThrottled = cache ? await cacheUtils.get<number>(cache, lastActiveKey) : null;
+          if (lastActiveThrottled && nowSec - lastActiveThrottled < throttleSec) {
+            activeThrottleMemoryMap.set(profileId, lastActiveThrottled);
+            return;
+          }
+
+          // Mark in-memory immediately to prevent concurrent requests in this isolate from issuing duplicate DB updates
+          activeThrottleMemoryMap.set(profileId, nowSec);
+
+          try {
+            const userModel = new UserModel(env.DB, env);
+            await userModel.updateLastActiveByProfile(profileId, nowSec);
+          } catch {
+            /* ignore DB write quota errors */
+          }
+          
+          if (cache) {
+            await cacheUtils.set(cache, lastActiveKey, nowSec, throttleSec);
+          }
+        } catch (e) {
+          console.error(`[Background Task] Error for ${profileId}:`, e);
         }
-        
-        if (cache) {
-          await cacheUtils.set(cache, lastActiveKey, nowSec, throttleSec);
+      })());
+    }
+
+    if (!result || result.action === 'FAIL' || !result.answer || result.answer.length === 0) {
+      if (!hasAlreadyTriedFailOpen(result, env)) {
+        try {
+          const fallbackRes = await resolveFailOpenFallback(env, queryRaw);
+          if (fallbackRes.answer && fallbackRes.answer.length > 0) {
+            return new Response(fallbackRes.answer as any, {
+              headers: {
+                'Content-Type': 'application/dns-message',
+                'Cache-Control': 'max-age=60'
+              }
+            });
+          }
+        } catch (fallbackErr) {
+          console.error('[DoH Pipeline] Fail-open upstream fallback failed:', fallbackErr);
         }
-      } catch (e) {
-        console.error(`[Background Task] Error for ${profileId}:`, e);
       }
-    })());
+      return new Response('Upstream Resolution Failed', { status: 502 });
+    }
 
     return new Response(result.answer as any, {
       headers: {
@@ -271,8 +294,7 @@ export async function handleDoHRequest(
       const rawBytes = queryRaw || (await extractRawQuery(request));
 
       if (rawBytes && rawBytes.length > 0) {
-        const endpoint = resolveUpstreamEndpoint(failOpenUpstream);
-        const transportRes = await fetchFromUpstream(endpoint, rawBytes);
+        const transportRes = await resolveFailOpenFallback(env, rawBytes);
         return new Response(transportRes.answer as any, {
           headers: {
             "Content-Type": "application/dns-message",

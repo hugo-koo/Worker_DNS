@@ -10,8 +10,7 @@ import { Env, Context, ExecutionContext } from '../types';
 import { parseDNSQueryFromRaw } from '../utils/dns';
 import { pipeline } from '../pipeline';
 import { resolveProfileByKey, resolveDefaultProfile } from '../api/doh';
-import { resolveUpstreamEndpoint, fetchFromUpstream } from '../pipeline/resolver/transport';
-import { DEFAULT_FAIL_OPEN_UPSTREAM } from '../constants/presets';
+import { hasAlreadyTriedFailOpen, resolveFailOpenFallback } from '../pipeline/resolver/transport';
 import { ACCESS_KEY_REGEX } from '../utils/validator';
 import { formatDiagnostic, formatPortError } from './format';
 import { inspectTlsCertificate, getCertbotCommand } from './cert';
@@ -258,7 +257,8 @@ export class DotDnsServer {
         accessPointName: profile.access_point_name,
         startTime: Date.now(),
         env,
-        ctx
+        ctx,
+        isEmergencyFallback: Boolean(profile.isEmergencyFallback)
       };
 
       const host = remoteIp.includes(':') ? `[${remoteIp}]` : remoteIp;
@@ -271,31 +271,39 @@ export class DotDnsServer {
       });
 
       const result = await pipeline.process(request, query, context);
-      if (!result || !result.answer || result.answer.length === 0) return;
-
-      if (!socket.destroyed && socket.writable) {
-        const answer = result.answer;
-        const responseBuf = Buffer.allocUnsafe(2 + answer.length);
-        responseBuf.writeUInt16BE(answer.length, 0);
-        responseBuf.set(answer, 2);
-        socket.write(responseBuf);
+      if (!result || result.action === 'FAIL' || !result.answer || result.answer.length === 0) {
+        if (!hasAlreadyTriedFailOpen(result, env)) {
+          const fallbackRes = await resolveFailOpenFallback(env, rawMsg);
+          if (fallbackRes.answer && fallbackRes.answer.length > 0) {
+            this.sendDotAnswer(socket, fallbackRes.answer);
+          }
+        }
+        return;
       }
+
+      this.sendDotAnswer(socket, result.answer);
     } catch (err) {
       console.error('[DoT] Query processing exception:', err);
       try {
-        const failOpenUpstream = this.options.env.FAIL_OPEN_UPSTREAM || DEFAULT_FAIL_OPEN_UPSTREAM;
-        const endpoint = resolveUpstreamEndpoint(failOpenUpstream);
-        const transportRes = await fetchFromUpstream(endpoint, rawMsg);
-        if (!socket.destroyed && socket.writable) {
-          const answer = transportRes.answer;
-          const responseBuf = Buffer.allocUnsafe(2 + answer.length);
-          responseBuf.writeUInt16BE(answer.length, 0);
-          responseBuf.set(answer, 2);
-          socket.write(responseBuf);
+        const transportRes = await resolveFailOpenFallback(this.options.env, rawMsg);
+        if (transportRes.answer && transportRes.answer.length > 0) {
+          this.sendDotAnswer(socket, transportRes.answer);
         }
       } catch (fallbackErr) {
         console.error('[DoT] Fail-open upstream fallback failed:', fallbackErr);
       }
+    }
+  }
+
+  /**
+   * Frames a DNS wire answer with its 2-byte RFC 7858 length prefix and writes to the TLS socket.
+   */
+  private sendDotAnswer(socket: tls.TLSSocket, answer: Uint8Array): void {
+    if (!socket.destroyed && socket.writable) {
+      const responseBuf = Buffer.allocUnsafe(2 + answer.length);
+      responseBuf.writeUInt16BE(answer.length, 0);
+      responseBuf.set(answer, 2);
+      socket.write(responseBuf);
     }
   }
 

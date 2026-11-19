@@ -137,7 +137,14 @@ async function bootstrap(): Promise<void> {
     if (clusterInfo.isPrimary) {
       console.log(`[Database] Using Turso Database: ${maskDatabaseUrl(config.tursoDatabaseUrl)}`);
       const migrationsDir = path.join(config.packageRoot, 'migrations');
-      await runTursoMigrations(tursoDb, migrationsDir);
+      try {
+        await runTursoMigrations(tursoDb, migrationsDir);
+      } catch (err: unknown) {
+        console.warn(
+          '[Database] Turso startup migration check failed; continuing in fail-open DNS mode:',
+          err instanceof Error ? err.message : String(err)
+        );
+      }
     }
     env.DB = tursoDb;
   } else if (config.databaseService === 'D1') {

@@ -1,5 +1,7 @@
 /// <reference types="node" />
 import assert from "node:assert";
+import { DatabaseSync } from "node:sqlite";
+import { NodeD1Database } from "../src/serverfull/db";
 import { LogRetentionModel } from "../src/models/log/retention";
 import { LogAggregationModel } from "../src/models/log/aggregation";
 import { LogCoreModel } from "../src/models/log/core";
@@ -11,6 +13,7 @@ async function runTests() {
   console.log("1. Testing LogRetentionModel.cleanupGlobal batchLimit distribution...");
   {
     const executedQueries: { query: string; params: any[] }[] = [];
+    const boundLimits: number[] = [];
 
     const mockDb: any = {
       prepare(query: string) {
@@ -28,6 +31,16 @@ async function runTests() {
                   { id: "p2", settings: JSON.stringify({ log_retention_days: 7 }) },
                   { id: "p3", settings: JSON.stringify({ log_retention_days: 7 }) }
                 ]
+              };
+            }
+            if (query.includes("SELECT timestamp, id FROM logs")) {
+              const limit = Number(boundArgs[2] || 0);
+              boundLimits.push(limit);
+              return {
+                results: Array.from({ length: limit }, (_, idx) => ({
+                  timestamp: 1000 + idx,
+                  id: idx + 1
+                }))
               };
             }
             return { results: [] };
@@ -55,13 +68,14 @@ async function runTests() {
     // Expected perProfileLimit = Math.floor(900 / 3) = 300
     await retentionModel.cleanupGlobal(30, 900);
 
-    const deleteStatements = executedQueries.filter(q => q.query.includes("DELETE FROM logs WHERE (profile_id, timestamp, id) IN"));
+    assert.deepStrictEqual(boundLimits, [300, 300, 300], "Boundary lookup must bind perProfileLimit = 300");
+
+    const deleteStatements = executedQueries.filter(q => q.query.includes("DELETE FROM logs WHERE"));
     assert.strictEqual(deleteStatements.length, 3, "Should generate delete statement for each profile");
 
     for (const stmt of deleteStatements) {
-      assert(stmt.query.includes("LIMIT ?"), "Delete statement must bind LIMIT parameter");
-      const limitParam = stmt.params[2];
-      assert.strictEqual(limitParam, 300, "perProfileLimit should be 300 (900 / 3)");
+      assert(!stmt.query.includes("(profile_id, timestamp, id) IN"), "Must not use multi-column tuple IN subquery");
+      assert(stmt.query.includes("timestamp <= ?"), "Must use bounded range predicate for indexed deletion");
     }
 
     const rollupDeletes = executedQueries.filter(q => q.query.includes("DELETE FROM hourly_rollups"));
@@ -94,6 +108,9 @@ async function runTests() {
               async first() {
                 if (query.includes("FROM system_settings")) {
                   return { value: "1000000" };
+                }
+                if (query.includes("FROM logs")) {
+                  return { 1: 1 };
                 }
                 return null;
               },
@@ -142,10 +159,16 @@ async function runTests() {
       prepare(query: string) {
         return {
           bind(...args: any[]) {
-            if (query.includes("DELETE FROM logs WHERE")) {
+            if (query.includes("SELECT timestamp, id FROM logs")) {
               passedBatchLimit = args[2];
             }
             return {
+              async all() {
+                if (query.includes("SELECT timestamp, id FROM logs")) {
+                  return { results: [{ timestamp: 999, id: 1 }] };
+                }
+                return { results: [] };
+              },
               async run() {
                 return { success: true, meta: { changes: 500 } };
               }
@@ -250,6 +273,7 @@ async function runTests() {
     };
 
     const executedQueries: { query: string; params: any[] }[] = [];
+    const boundLimits: number[] = [];
     const mockDb: any = {
       prepare(query: string) {
         const createObj = (boundArgs: any[] = []) => ({
@@ -267,7 +291,20 @@ async function runTests() {
                 ]
               };
             }
+            if (query.includes("SELECT timestamp, id FROM logs")) {
+              const limit = Number(boundArgs[2] || 0);
+              boundLimits.push(limit);
+              return {
+                results: Array.from({ length: limit }, (_, idx) => ({
+                  timestamp: 1000 + idx,
+                  id: idx + 1
+                }))
+              };
+            }
             return { results: [] };
+          },
+          async first() {
+            return null;
           },
           async run() {
             return { meta: { changes: 0 } };
@@ -291,15 +328,71 @@ async function runTests() {
     // 2 profiles -> perProfileLimit = 200 / 2 = 100
     await retentionModel.cleanupGlobal(30, 1000, 20000);
 
+    assert.deepStrictEqual(boundLimits, [100, 100], "Should cap perProfileLimit to 100 based on remaining budget");
     const logDeleteStmts = executedQueries.filter(q => q.query.includes("DELETE FROM logs WHERE"));
     assert.strictEqual(logDeleteStmts.length, 2, "Should execute delete for both profiles");
-    assert.strictEqual(logDeleteStmts[0].params[2], 100, "Should cap perProfileLimit to 100 based on remaining budget");
 
     // Total deleted in batch: 2 statements * 100 changes = 200
     // Updated count in mockSettings: 19800 + 200 = 20000
     assert.strictEqual(mockSettings.log_cleanup_daily_count, "20000", "Should update daily deleted count to 20000");
 
     console.log("  Passed: Log deletions capped to remaining daily budget and counter persisted.");
+  }
+
+  // 6. Real SQLite test: bounded range deletion & E2EE plaintext-skip in aggregateHourlyRollups
+  console.log("\n6. Testing real SQLite bounded log deletion and E2EE rollup scan skip...");
+  {
+    const sqlite = new DatabaseSync(":memory:");
+    sqlite.exec(`
+      CREATE TABLE profiles (id TEXT PRIMARY KEY, settings TEXT);
+      CREATE TABLE system_settings (key TEXT PRIMARY KEY, value TEXT, updated_at INTEGER);
+      CREATE TABLE logs (
+        profile_id TEXT NOT NULL,
+        timestamp INTEGER NOT NULL,
+        id INTEGER NOT NULL,
+        domain TEXT NOT NULL,
+        record_type TEXT NOT NULL,
+        action TEXT NOT NULL,
+        client_ip TEXT,
+        geo_country TEXT,
+        dest_country_code TEXT,
+        dest_country TEXT,
+        dest_isp TEXT,
+        dest_geoip TEXT,
+        access_point_id TEXT,
+        encrypt_version INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (profile_id, timestamp, id)
+      );
+      INSERT INTO profiles (id, settings) VALUES ('p_e2ee', '{}');
+    `);
+
+    const insertLog = sqlite.prepare(
+      "INSERT INTO logs (profile_id, timestamp, id, domain, record_type, action, encrypt_version) VALUES (?, ?, ?, ?, ?, ?, ?)"
+    );
+    // Insert 5 logs in completed hour 3600..7199 (including 2 sharing same timestamp 3600)
+    insertLog.run("p_e2ee", 3600, 1, "", "A", "PASS", 2);
+    insertLog.run("p_e2ee", 3600, 2, "", "A", "BLOCK", 2);
+    insertLog.run("p_e2ee", 3700, 3, "", "A", "PASS", 2);
+    insertLog.run("p_e2ee", 3800, 4, "", "A", "PASS", 2);
+    insertLog.run("p_e2ee", 9000, 5, "", "A", "PASS", 2); // newer than cutoff
+
+    const db = new NodeD1Database(sqlite);
+    const aggModel = new LogAggregationModel(db);
+    await aggModel.ensureRollupTables();
+    await aggModel.aggregateHourlyRollups(3600, 7200, 1);
+
+    const rollupRows = sqlite.prepare("SELECT metric_type, key, count FROM hourly_rollups WHERE profile_id = 'p_e2ee'").all() as { metric_type: string; key: string; count: number }[];
+    assert(rollupRows.every((r) => r.metric_type === "action"), "Only action rollups should exist for E2EE-only hour");
+    assert.strictEqual(rollupRows.find((r) => r.key === "PASS")?.count, 3);
+    assert.strictEqual(rollupRows.find((r) => r.key === "BLOCK")?.count, 1);
+
+    const coreModel = new LogCoreModel(db);
+    const deleted = await coreModel.cleanup("p_e2ee", 7200, 2);
+    assert.strictEqual(deleted, 2, "Bounded cleanup must delete exactly maxRows=2 oldest logs");
+
+    const remainingIds = (sqlite.prepare("SELECT id FROM logs ORDER BY timestamp ASC, id ASC").all() as { id: number }[]).map((r) => r.id);
+    assert.deepStrictEqual(remainingIds, [3, 4, 5], "Oldest two logs (id 1, 2) must be deleted while newer logs remain");
+    console.log("  Passed: Bounded range deletion and E2EE rollup scan skip verified on real SQLite.");
   }
 
   console.log("\n>>> [TEST] All Log Deletion Budget & Domain Rollup Filter tests passed successfully!\n");

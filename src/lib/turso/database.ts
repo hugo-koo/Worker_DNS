@@ -18,7 +18,7 @@ import {
   toHranaValue,
   fromHranaValue
 } from './protocol';
-import { normalizeTursoUrl } from './config';
+import { normalizeTursoUrl, isTursoQuotaError } from './config';
 import { splitSqlStatements } from './sql';
 import { TursoD1PreparedStatement } from './statement';
 
@@ -31,6 +31,9 @@ export class TursoD1Database implements D1Database {
   public readonly endpoint: string;
   private selectCache = new Map<string, { result: HranaExecuteResult; expiresAt: number }>();
   private readonly maxSelectCacheEntries = 300;
+  private readQuotaBlockedUntil = 0;
+  private readQuotaBlockedMessage = '';
+  private readonly readQuotaCooldownMs = 60_000;
 
   constructor(url: string, authToken: string) {
     this.url = url;
@@ -143,6 +146,9 @@ export class TursoD1Database implements D1Database {
       if (cached && cached.expiresAt > Date.now()) {
         return cached.result;
       }
+      if (Date.now() < this.readQuotaBlockedUntil) {
+        throw new Error(`[Turso D1] Query error: ${this.readQuotaBlockedMessage}\nSQL: ${sql}`);
+      }
     } else {
       this.clearSelectCache();
     }
@@ -168,7 +174,17 @@ export class TursoD1Database implements D1Database {
     let first: HranaStepResult | undefined;
 
     for (let attempt = 0; attempt <= maxBusyRetries; attempt++) {
-      const results = await this.executePipeline(pipelineReqs);
+      let results: HranaStepResult[];
+      try {
+        results = await this.executePipeline(pipelineReqs);
+      } catch (pipelineErr: unknown) {
+        const errMsg = pipelineErr instanceof Error ? pipelineErr.message : String(pipelineErr);
+        if (isReadOnly && isTursoQuotaError(errMsg)) {
+          this.readQuotaBlockedUntil = Date.now() + this.readQuotaCooldownMs;
+          this.readQuotaBlockedMessage = errMsg;
+        }
+        throw pipelineErr;
+      }
       first = results[needsFkOn ? 1 : 0];
       if (!first) {
         throw new Error(`[Turso D1] Empty response from pipeline for SQL: ${sql}`);
@@ -182,7 +198,15 @@ export class TursoD1Database implements D1Database {
           continue;
         }
         const msg = first.error?.message || 'Unknown database error';
+        if (isReadOnly && isTursoQuotaError(msg)) {
+          this.readQuotaBlockedUntil = Date.now() + this.readQuotaCooldownMs;
+          this.readQuotaBlockedMessage = msg;
+        }
         throw new Error(`[Turso D1] Query error: ${msg}\nSQL: ${sql}`);
+      }
+      if (isReadOnly && this.readQuotaBlockedUntil > 0) {
+        this.readQuotaBlockedUntil = 0;
+        this.readQuotaBlockedMessage = '';
       }
       break;
     }
