@@ -15,7 +15,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
-import { loadEnvFiles, getPackageRoot } from '../src/serverfull/config';
+import { loadEnvFiles, loadDotEnv, getPackageRoot } from '../src/serverfull/config';
 import { createTursoClient, maskDatabaseUrl, getDatabaseService } from '../src/lib/turso';
 import { runTursoMigrations } from '../src/lib/turso/migrate';
 import { formatBanner, formatDiagnostic, formatHelpMenu } from '../src/serverfull/format';
@@ -29,17 +29,31 @@ function loadWranglerVars(rootDir: string): void {
   try {
     const content = fs.readFileSync(wranglerPath, 'utf-8');
     let inVars = false;
+    let inMultilineString = false;
     for (const rawLine of content.split('\n')) {
       const line = rawLine.trim();
+      if (inMultilineString) {
+        if (line.includes('"""')) {
+          inMultilineString = false;
+        }
+        continue;
+      }
       if (!line || line.startsWith('#')) continue;
       if (line.startsWith('[')) {
         inVars = line === '[vars]';
         continue;
       }
       if (inVars && line.includes('=')) {
-        const [k, ...v] = line.split('=');
-        const key = k.trim();
-        let val = v.join('=').trim();
+        const eqIdx = line.indexOf('=');
+        const key = line.slice(0, eqIdx).trim();
+        let val = line.slice(eqIdx + 1).trim();
+        if (val.startsWith('"""')) {
+          const rest = val.slice(3);
+          if (!rest.includes('"""')) {
+            inMultilineString = true;
+          }
+          continue;
+        }
         if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
           val = val.slice(1, -1);
         }
@@ -70,8 +84,13 @@ function isD1BoundInWrangler(rootDir: string): boolean {
 }
 
 async function main(): Promise<void> {
-  loadEnvFiles();
-  loadWranglerVars(getPackageRoot());
+  const packageRoot = getPackageRoot();
+  // Precedence: CI/shell process.env > local .dev.vars/.env > wrangler.toml [vars] > .env.serverfull defaults
+  // Loading wrangler.toml before .env.serverfull prevents `.env.serverfull` (DATABASE_SERVICE=File) from masking `wrangler.toml`.
+  loadDotEnv(path.join(packageRoot, '.dev.vars'));
+  loadDotEnv(path.join(packageRoot, '.env'));
+  loadWranglerVars(packageRoot);
+  loadEnvFiles(packageRoot);
 
   const { values } = parseArgs({
     options: {
@@ -122,7 +141,6 @@ async function main(): Promise<void> {
 
   const tursoUrl = (values['turso-url'] || values.url || process.env.TURSO_DATABASE_URL || process.env.TURSO_URL || '').trim();
   const tursoToken = (values['turso-token'] || values.token || process.env.TURSO_AUTH_TOKEN || '').trim();
-  const hasTursoCreds = Boolean(tursoUrl && tursoToken);
 
   const rootDir = getPackageRoot();
   const d1Bound = isD1BoundInWrangler(rootDir);
@@ -142,22 +160,27 @@ async function main(): Promise<void> {
     if (activeService === 'Turso') {
       runTurso = true;
       runD1 = false;
-    } else {
+    } else if (activeService === 'D1') {
       // DATABASE_SERVICE is D1: migrate D1 if bound in wrangler.toml
       runD1 = d1Bound;
       runTurso = false;
+    } else {
+      // e.g. DATABASE_SERVICE='File' must never trigger Cloudflare D1 remote migrations
+      runD1 = false;
+      runTurso = false;
     }
 
-    if (runTurso && tursoUrl && !tursoToken) {
+    if (runTurso && (!tursoUrl || !tursoToken)) {
       console.log(formatDiagnostic({
         level: 'warning',
-        title: 'Turso Migration - Runtime Secret Detected',
-        message: 'TURSO_DATABASE_URL is configured, but TURSO_AUTH_TOKEN is absent in the build environment (e.g. Worker Dash encrypted secret).',
+        title: 'Turso Migration - Runtime Credentials Detected',
+        message: 'DATABASE_SERVICE is set to Turso, but TURSO_DATABASE_URL or TURSO_AUTH_TOKEN is absent in the build environment (e.g. stored as Worker Dashboard variables/secrets).',
         solutions: [
           'Schema migrations on Turso will be automatically and safely applied at runtime upon worker start.',
-          'To migrate Turso immediately during build, add TURSO_AUTH_TOKEN to Worker Dash Build Variables, or run: npm run db:migrate:prod -- --turso'
+          'To migrate Turso immediately during build, add TURSO_DATABASE_URL and TURSO_AUTH_TOKEN to Build Variables, or run: npm run db:migrate:prod -- --turso'
         ]
       }));
+      return;
     }
   }
 
