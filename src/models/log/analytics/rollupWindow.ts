@@ -1,3 +1,5 @@
+import { D1Database } from "@cloudflare/workers-types";
+
 /**
  * Exact, non-overlapping time window split between raw `logs` and 1-hour `hourly_rollups`.
  */
@@ -73,7 +75,8 @@ export function buildRollupUnionParts(
   until: number,
   window: RollupWindow,
   buildRollupPart: (startHour: number, endHourExclusive: number) => SqlPart,
-  buildLogPart: (fromTs: number, toTsInclusive: number) => SqlPart
+  buildLogPart: (fromTs: number, toTsInclusive: number) => SqlPart,
+  options?: { skipTailLogs?: boolean }
 ): SqlPart {
   const parts: SqlPart[] = [];
 
@@ -83,7 +86,7 @@ export function buildRollupUnionParts(
 
   parts.push(buildRollupPart(window.rollupStart, window.rollupEnd));
 
-  if (window.hasTailLogs) {
+  if (window.hasTailLogs && !options?.skipTailLogs) {
     parts.push(buildLogPart(window.rollupEnd, until));
   }
 
@@ -91,4 +94,40 @@ export function buildRollupUnionParts(
     sql: parts.map((p) => p.sql).join("\nUNION ALL\n"),
     params: parts.flatMap((p) => p.params),
   };
+}
+
+/**
+ * Performs a 1-row indexed check to determine whether E2EE log encryption is currently active
+ * for a profile. Used to short-circuit raw `logs` full-table scans on plaintext-only analytics
+ * (domains, clients, destinations, ISPs) when logs are end-to-end encrypted.
+ *
+ * @param db - D1Database instance.
+ * @param profileId - Profile identifier.
+ * @returns True if the profile currently has an active E2EE public key.
+ */
+export async function hasActiveE2eeKey(
+  db: D1Database,
+  profileId: string
+): Promise<boolean> {
+  try {
+    const row = await db
+      .prepare("SELECT 1 FROM user_log_keys WHERE profile_id = ? AND (is_active IS NULL OR is_active = 1) LIMIT 1")
+      .bind(profileId)
+      .first();
+    return row !== null;
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg.includes("no such column: is_active")) {
+      try {
+        const row = await db
+          .prepare("SELECT 1 FROM user_log_keys WHERE profile_id = ? LIMIT 1")
+          .bind(profileId)
+          .first();
+        return row !== null;
+      } catch {
+        return false;
+      }
+    }
+    return false;
+  }
 }

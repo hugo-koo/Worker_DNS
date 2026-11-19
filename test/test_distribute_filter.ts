@@ -106,7 +106,7 @@ async function runDistributeFilterTests() {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (input: RequestInfo | URL) => {
     const urlStr = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
-    if (urlStr.includes("adblock_shared.txt") || urlStr.includes("user_custom.txt")) {
+    if (urlStr.includes("adblock_shared.txt") || urlStr.includes("user_custom.txt") || urlStr.includes("all_users_skip.txt") || urlStr.includes("sys_then_user.txt")) {
       return new Response("||ad-tracker.com^\n||telemetry.org^\n", {
         status: 200,
         headers: { "Content-Type": "text/plain", "ETag": '"v1"' }
@@ -317,6 +317,97 @@ async function runDistributeFilterTests() {
   assert.strictEqual(bobFinalLists[0].url, sharedUrl);
   assert.strictEqual(bobFinalLists[0].scope, "user");
   console.log("   ✓ Revocation verified: system lists removed, profile lists and user-created lists safely preserved.\n");
+
+  // 13. Testing System Filter List persists in System Filter Lists even when ALL users are skipped
+  console.log("13. Testing System Filter List registration when all users are skipped...");
+  const allSkipUrl = "http://93.184.216.34/all_users_skip.txt";
+  for (const u of [adminUser, aliceUser, bobUser, charlieUser, daveUser]) {
+    await listModel.addUserList(u.id, allSkipUrl, false);
+  }
+  const distAllSkipReq = new Request("http://localhost/api/admin/distribute-filter", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url: allSkipUrl })
+  });
+  const distAllSkipRes = await handleAccountRequest(distAllSkipReq, env, adminUser, ctx);
+  assert.strictEqual(distAllSkipRes.status, 200);
+  const distAllSkipData = await distAllSkipRes.json() as any;
+  assert.strictEqual(distAllSkipData.addedCount, 0, "All 5 users should be skipped");
+  assert.strictEqual(distAllSkipData.skippedCount, 5, "Skipped count must equal total users");
+
+  const getDistRes = await handleAccountRequest(new Request("http://localhost/api/admin/distribute-filter", { method: "GET" }), env, adminUser, ctx);
+  assert.strictEqual(getDistRes.status, 200);
+  const distList = await getDistRes.json() as any[];
+  const recordedSystemEntry = distList.find((item) => item.url === allSkipUrl);
+  assert.ok(recordedSystemEntry, "URL must be written to System Filter Lists even when all users are skipped");
+  assert.strictEqual(recordedSystemEntry.userCount, 0, "userCount reflects 0 system-distributed copies when all skipped");
+
+  // Revoke it cleanly while keeping every user's own is_system = 0 list intact
+  const revokeSkipRes = await handleAccountRequest(
+    new Request("http://localhost/api/admin/distribute-filter", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: allSkipUrl })
+    }),
+    env,
+    adminUser,
+    ctx
+  );
+  assert.strictEqual(revokeSkipRes.status, 200);
+  const getDistAfterRevoke = await (await handleAccountRequest(new Request("http://localhost/api/admin/distribute-filter", { method: "GET" }), env, adminUser, ctx)).json() as any[];
+  assert.strictEqual(getDistAfterRevoke.some((item) => item.url === allSkipUrl), false, "Revoked entry must be removed from System Filter Lists");
+  const aliceHasOwnCopy = await listModel.getUserListByUrl(allSkipUrl, aliceUser.id, false);
+  assert.ok(aliceHasOwnCopy, "User-level copy must remain intact after system revoke");
+  console.log("   ✓ System Filter List persisted when all users skipped and revoked cleanly.\n");
+
+  // 14. Testing User-Level Filter List still writes when System Filter List already exists for the user
+  console.log("14. Testing User-Level Filter List addition when already present as System Filter List...");
+  const sysThenUserUrl = "http://93.184.216.34/sys_then_user.txt";
+  const distSysFirstRes = await handleAccountRequest(
+    new Request("http://localhost/api/admin/distribute-filter", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: sysThenUserUrl })
+    }),
+    env,
+    adminUser,
+    ctx
+  );
+  assert.strictEqual(distSysFirstRes.status, 200);
+
+  const addUserAfterSysRes = await handleAccountRequest(
+    new Request("http://localhost/api/account/user-lists", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: sysThenUserUrl })
+    }),
+    env,
+    aliceUser,
+    ctx
+  );
+  assert.strictEqual(addUserAfterSysRes.status, 201, "Adding to User-Level Filter Lists must succeed even when system list exists");
+
+  const aliceUserListsAfter = await (await handleAccountRequest(new Request("http://localhost/api/account/user-lists", { method: "GET" }), env, aliceUser, ctx)).json() as any[];
+  const sysCopy = aliceUserListsAfter.find((l) => l.url === sysThenUserUrl && l.is_system === 1);
+  const userCopy = aliceUserListsAfter.find((l) => l.url === sysThenUserUrl && l.is_system === 0);
+  assert.ok(sysCopy, "System copy exists in Alice's user_lists");
+  assert.ok(userCopy, "User-created copy written to Alice's user_lists");
+
+  // Revoking system list must leave Alice's user-created copy active
+  await handleAccountRequest(
+    new Request("http://localhost/api/admin/distribute-filter", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: sysThenUserUrl })
+    }),
+    env,
+    adminUser,
+    ctx
+  );
+  const aliceUserListsAfterRevoke = await (await handleAccountRequest(new Request("http://localhost/api/account/user-lists", { method: "GET" }), env, aliceUser, ctx)).json() as any[];
+  assert.strictEqual(aliceUserListsAfterRevoke.some((l) => l.url === sysThenUserUrl && l.is_system === 1), false, "System copy revoked");
+  assert.strictEqual(aliceUserListsAfterRevoke.some((l) => l.url === sysThenUserUrl && l.is_system === 0), true, "User copy preserved after system revoke");
+  console.log("   ✓ User-Level Filter List written alongside System Filter List and preserved across system revoke.\n");
 
   // Cleanup
   globalThis.fetch = originalFetch;

@@ -1,7 +1,7 @@
 import { D1Database } from "@cloudflare/workers-types";
 import { LogAggregationModel } from "../aggregation";
 import { DomainCountResult } from "./types";
-import { computeRollupWindow, buildRollupUnionParts } from "./rollupWindow";
+import { computeRollupWindow, buildRollupUnionParts, hasActiveE2eeKey } from "./rollupWindow";
 
 /**
  * Handles top allowed and top blocked domain analytics.
@@ -77,13 +77,18 @@ export class LogDomainAnalytics {
     };
 
     if (!this.aggregation) {
+      if (await hasActiveE2eeKey(this.db, profileId)) return [];
       return queryRawDomains(since, until);
     }
 
-    const latestRollupHour = await this.aggregation.getLatestDomainRollupHour(profileId);
+    const [latestRollupHour, isE2eeActive] = await Promise.all([
+      this.aggregation.getLatestDomainRollupHour(profileId),
+      hasActiveE2eeKey(this.db, profileId)
+    ]);
     const window = computeRollupWindow(since, until, latestRollupHour);
 
     if (!window.useRollups) {
+      if (isE2eeActive) return [];
       return queryRawDomains(since, until);
     }
 
@@ -114,7 +119,8 @@ export class LogDomainAnalytics {
           sql: `SELECT domain, COUNT(*) as count FROM logs WHERE ${where} GROUP BY domain`,
           params
         };
-      }
+      },
+      { skipTailLogs: isE2eeActive }
     );
 
     const { results } = await this.db

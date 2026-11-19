@@ -168,18 +168,21 @@ export async function handleAdminRequest(
           });
         }
         try {
-          const appliedCount = await runTursoMigrations(env.DB as any);
+          // Cap per-request migrations to stay safely within Cloudflare Workers Free Plan 50-subrequest limit.
+          const appliedCount = await runTursoMigrations(env.DB as any, undefined, { maxMigrations: 15 });
           const stats = await getTursoMigrationStats(env.DB as any);
           return new Response(JSON.stringify({
             success: true,
             appliedCount,
+            hasMore: !stats.completed,
             stats
           }), { headers: { 'Content-Type': 'application/json' } });
         } catch (err: any) {
+          const errMsg = err instanceof Error ? err.message : String(err || '');
           console.error('[Admin Database Migrate] Migration execution failed:', err);
           return new Response(JSON.stringify({
             success: false,
-            error: 'Database migration failed'
+            error: errMsg ? `Database migration failed: ${errMsg}` : 'Database migration failed'
           }), {
             status: 500,
             headers: { 'Content-Type': 'application/json' }

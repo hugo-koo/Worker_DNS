@@ -151,10 +151,10 @@ export class ListModel {
   }
 
   /**
-   * Fetches a user list by URL.
+   * Fetches a user list by URL, optionally filtered by is_system scope.
    */
-  async getUserListByUrl(url: string, userId: string): Promise<UserList | null> {
-    return this.user.getUserListByUrl(url, userId);
+  async getUserListByUrl(url: string, userId: string, isSystem?: boolean): Promise<UserList | null> {
+    return this.user.getUserListByUrl(url, userId, isSystem);
   }
 
   /**
@@ -179,10 +179,10 @@ export class ListModel {
   }
 
   /**
-   * Checks if a user already has a list URL in user_lists.
+   * Checks if a user already has a list URL in user_lists, optionally filtered by is_system scope.
    */
-  async hasListForUser(userId: string, url: string): Promise<boolean> {
-    return this.user.hasListForUser(userId, url);
+  async hasListForUser(userId: string, url: string, isSystem?: boolean): Promise<boolean> {
+    return this.user.hasListForUser(userId, url, isSystem);
   }
 
   // --- System Distribution Delegation ---

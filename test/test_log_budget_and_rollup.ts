@@ -5,6 +5,8 @@ import { NodeD1Database } from "../src/serverfull/db";
 import { LogRetentionModel } from "../src/models/log/retention";
 import { LogAggregationModel } from "../src/models/log/aggregation";
 import { LogCoreModel } from "../src/models/log/core";
+import { LogAnalyticsModel } from "../src/models/log/analytics";
+import { SystemSettingsModel } from "../src/models/systemSettings";
 
 async function runTests() {
   console.log(">>> [TEST] Running Log Deletion Budget & Domain Rollup Filter Tests...\n");
@@ -393,6 +395,141 @@ async function runTests() {
     const remainingIds = (sqlite.prepare("SELECT id FROM logs ORDER BY timestamp ASC, id ASC").all() as { id: number }[]).map((r) => r.id);
     assert.deepStrictEqual(remainingIds, [3, 4, 5], "Oldest two logs (id 1, 2) must be deleted while newer logs remain");
     console.log("  Passed: Bounded range deletion and E2EE rollup scan skip verified on real SQLite.");
+  }
+
+  // 7. Orphan hourly_rollups keyset cleanup (no NOT IN full-table scan)
+  console.log("\n7. Testing orphan hourly_rollups keyset cleanup...");
+  {
+    const sqlite = new DatabaseSync(":memory:");
+    sqlite.exec(`
+      CREATE TABLE profiles (id TEXT PRIMARY KEY, settings TEXT);
+      CREATE TABLE system_settings (key TEXT PRIMARY KEY, value TEXT, updated_at INTEGER);
+      CREATE TABLE logs (
+        profile_id TEXT NOT NULL,
+        timestamp INTEGER NOT NULL,
+        id INTEGER NOT NULL,
+        domain TEXT NOT NULL,
+        record_type TEXT NOT NULL,
+        action TEXT NOT NULL,
+        PRIMARY KEY (profile_id, timestamp, id)
+      );
+      CREATE TABLE kem_keys (id TEXT PRIMARY KEY, profile_id TEXT, kem_ct TEXT, created_at INTEGER, expires_at INTEGER);
+      INSERT INTO profiles (id, settings) VALUES ('active_prof', '{"log_retention_days":7}');
+    `);
+    const db = new NodeD1Database(sqlite);
+    const aggModel = new LogAggregationModel(db);
+    await aggModel.ensureRollupTables();
+    const recentHour = Math.floor(Date.now() / 1000 / 3600) * 3600 - 3600;
+    sqlite.prepare(
+      "INSERT INTO hourly_rollups (profile_id, metric_type, hour_timestamp, key, sub_key, access_point_id, count) VALUES (?, 'action', ?, 'PASS', '', '', 5)"
+    ).run("active_prof", recentHour);
+    sqlite.prepare(
+      "INSERT INTO hourly_rollups (profile_id, metric_type, hour_timestamp, key, sub_key, access_point_id, count) VALUES (?, 'action', ?, 'PASS', '', '', 9)"
+    ).run("orphan_prof", recentHour);
+
+    const queriesExecuted: string[] = [];
+    const trackedDb = {
+      prepare(sql: string) {
+        queriesExecuted.push(sql);
+        return db.prepare(sql);
+      },
+      batch(stmts: any[]) {
+        return db.batch(stmts);
+      }
+    } as any;
+
+    const retentionModel = new LogRetentionModel(trackedDb);
+    SystemSettingsModel.clearMemoryCache();
+    await retentionModel.cleanupGlobal(30, 100, 20000);
+
+    assert(
+      !queriesExecuted.some((q) => q.includes("NOT IN (SELECT id FROM profiles)")),
+      "Orphan cleanup must NOT use full-table NOT IN subquery"
+    );
+    assert(
+      queriesExecuted.some((q) => q.includes("profile_id > ? ORDER BY profile_id ASC LIMIT 1")),
+      "Orphan cleanup must step by clustered profile_id keyset cursor"
+    );
+    const remainingRollups = sqlite.prepare("SELECT profile_id FROM hourly_rollups").all() as { profile_id: string }[];
+    assert.deepStrictEqual(remainingRollups.map((r) => r.profile_id), ["active_prof"]);
+    console.log("  Passed: Orphan hourly_rollups deleted via keyset seeks without full-table scan.");
+  }
+
+  // 8. accessPointId uses hourly_rollups & E2EE short-circuits plaintext-only raw log scans
+  console.log("\n8. Testing accessPointId rollup usage and E2EE raw scan short-circuit...");
+  {
+    const sqlite = new DatabaseSync(":memory:");
+    sqlite.exec(`
+      CREATE TABLE user_log_keys (profile_id TEXT PRIMARY KEY, public_key TEXT, is_active INTEGER DEFAULT 1);
+      CREATE TABLE logs (
+        profile_id TEXT NOT NULL,
+        timestamp INTEGER NOT NULL,
+        id INTEGER NOT NULL,
+        domain TEXT NOT NULL,
+        record_type TEXT NOT NULL,
+        action TEXT NOT NULL,
+        client_ip TEXT,
+        geo_country TEXT,
+        dest_country_code TEXT,
+        dest_country TEXT,
+        dest_isp TEXT,
+        dest_geoip TEXT,
+        access_point_id TEXT,
+        encrypt_version INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (profile_id, timestamp, id)
+      );
+      INSERT INTO user_log_keys (profile_id, public_key, is_active) VALUES ('e2ee_prof', '{}', 1);
+    `);
+    const db = new NodeD1Database(sqlite);
+    const aggModel = new LogAggregationModel(db);
+    await aggModel.ensureRollupTables();
+
+    const nowSec = Math.floor(Date.now() / 1000);
+    const prevHour = Math.floor(nowSec / 3600) * 3600 - 3600;
+    const prev2Hour = prevHour - 3600;
+    sqlite.prepare(
+      "INSERT INTO hourly_rollups (profile_id, metric_type, hour_timestamp, key, sub_key, access_point_id, count) VALUES ('e2ee_prof', 'action', ?, 'PASS', '', 'ap_1', 42)"
+    ).run(prevHour);
+    sqlite.prepare(
+      "INSERT INTO hourly_rollups (profile_id, metric_type, hour_timestamp, key, sub_key, access_point_id, count) VALUES ('e2ee_prof', 'action', ?, 'PASS', '', 'ap_2', 10)"
+    ).run(prevHour);
+    // Deliberately leave raw logs encrypted so any raw scan would show in query log
+    sqlite.prepare(
+      "INSERT INTO logs (profile_id, timestamp, id, domain, record_type, action, client_ip, access_point_id, encrypt_version) VALUES ('e2ee_prof', ?, 1, '[Encrypted]', 'A', 'PASS', '[Encrypted]', 'ap_1', 2)"
+    ).run(prevHour + 10);
+
+    const executedSqls: string[] = [];
+    const spyingDb = {
+      prepare(sql: string) {
+        executedSqls.push(sql);
+        return db.prepare(sql);
+      }
+    } as any;
+
+    const analytics = new LogAnalyticsModel(spyingDb, aggModel);
+    const summary = await analytics.getSummary("e2ee_prof", prev2Hour, prevHour + 3599, undefined, "ap_1");
+    assert.strictEqual(summary.find((s) => s.action === "PASS")?.count, 42, "Summary for ap_1 must come accurately from hourly_rollups");
+    const trend = await analytics.getTrend("e2ee_prof", prev2Hour, prevHour + 3599, "(timestamp/3600)*3600", "ap_1");
+    assert.strictEqual(trend.find((t) => t.timestamp === prevHour)?.count, 42, "Trend for ap_1 must read from hourly_rollups");
+    assert(
+      !executedSqls.some((s) => s.includes("FROM logs")),
+      "getSummary and getTrend with accessPointId inside rolled-up window must not touch raw logs"
+    );
+
+    executedSqls.length = 0;
+    const [topAllowed, topBlocked, clients, destinations, isps] = await Promise.all([
+      analytics.getTopAllowed("e2ee_prof", prev2Hour, nowSec),
+      analytics.getTopBlocked("e2ee_prof", prev2Hour, nowSec),
+      analytics.getClients("e2ee_prof", prev2Hour, nowSec),
+      analytics.getDestinations("e2ee_prof", prev2Hour, nowSec),
+      analytics.getISPByCountry("e2ee_prof", undefined, prev2Hour, nowSec)
+    ]);
+    assert.deepStrictEqual([topAllowed, topBlocked, clients, destinations, isps], [[], [], [], [], []]);
+    assert(
+      !executedSqls.some((s) => s.includes("FROM logs")),
+      "E2EE active profile must short-circuit plaintext-only analytics without scanning raw logs"
+    );
+    console.log("  Passed: accessPointId reads rollups and E2EE skips raw plaintext-only log scans.");
   }
 
   console.log("\n>>> [TEST] All Log Deletion Budget & Domain Rollup Filter tests passed successfully!\n");

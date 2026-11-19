@@ -77,7 +77,7 @@ Because Cloudflare Workers runs on an edge serverless runtime while Serverfull m
 | **Web UI & DoH (HTTPS)** | N/A (Managed by Cloudflare CDN 443) | `SERVERFULL_HTTPS_PORT=10443` | Direct HTTPS port when TLS certificates are mounted. |
 | **DoT Base Domain** | N/A | `SERVERFULL_DOT_DOMAIN=dns.example.com` | Required in Serverfull for Android Private DNS and SNI matching. |
 | **ECH Mode** | `PRESET_ECH_FRONTING_DOMAINS` (JSON array) | `SERVERFULL_ECH_ENABLED=true` | Serverfull synthesizes RFC 9460 HTTPS/SVCB ECH responses dynamically. |
-| **Emergency Fail-Open** | `FAIL_OPEN_UPSTREAM` | `FAIL_OPEN_UPSTREAM` | Identical default (`https://freedns.controld.com/no-ads-malware-typo`). |
+| **Emergency Fail-Open** | `FAIL_OPEN_UPSTREAM` | `FAIL_OPEN_UPSTREAM` | Identical default (`tls://no-ads-malware-typo.freedns.controld.com`). |
 
 ---
 
@@ -87,8 +87,8 @@ Because Cloudflare Workers runs on an edge serverless runtime while Serverfull m
 
 #### `FAIL_OPEN_UPSTREAM`
 - **Supported in**: Serverless & Serverfull
-- **Default (`wrangler.toml`)**: `https://freedns.controld.com/no-ads-malware-typo`
-- **Default (`.env.serverfull`)**: `https://freedns.controld.com/no-ads-malware-typo`
+- **Default (`wrangler.toml`)**: `tls://no-ads-malware-typo.freedns.controld.com`
+- **Default (`.env.serverfull`)**: `tls://no-ads-malware-typo.freedns.controld.com`
 - **Description**: Emergency upstream resolver invoked when all upstream pools timeout or encounter fatal transport failures. Supports HTTPS (DoH), DoT (`tls://`), TCP (`tcp://`), and DNS Stamps (`sdns://`).
 
 #### `PRESET_UPSTREAMS`

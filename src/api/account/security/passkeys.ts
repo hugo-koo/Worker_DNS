@@ -300,9 +300,11 @@ export async function handlePasskeysRequest(
         aaguid: parsed.aaguid
       });
 
-      // Only keep existing passwordless setting; do not silently downgrade password requirement
-      // without explicit user opt-in via /api/account/mfa/settings (which enforces reauth).
-      await userModel.updateTOTPSettings(user.id, !!dbUserBefore.totp_skip_password);
+      // Automatically enable passwordless login upon initial Passkey configuration
+      // (matching initial TOTP enrollment), while preserving explicit user preference
+      // when adding subsequent backup Passkeys.
+      const enablePasswordless = existingPasskeysBefore.length === 0 ? true : !!dbUserBefore.totp_skip_password;
+      await userModel.updateTOTPSettings(user.id, enablePasswordless);
 
       const dbUser = await userModel.getById(user.id);
       let recoveryKeys: string[] = [];

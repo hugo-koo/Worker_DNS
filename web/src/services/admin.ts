@@ -62,6 +62,7 @@ export interface DatabaseStatusResponse {
 export interface RunMigrationsResponse {
   success: boolean;
   appliedCount: number;
+  hasMore?: boolean;
   message?: string;
   stats?: DatabaseMigrationStats;
 }
@@ -73,11 +74,30 @@ export async function getDatabaseStatus(): Promise<DatabaseStatusResponse> {
 }
 
 export async function runDatabaseMigrations(): Promise<RunMigrationsResponse> {
-  const res = await fetch("/api/admin/database/migrate", {
-    method: "POST"
-  });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
+  let totalApplied = 0;
+  let lastRes: RunMigrationsResponse | null = null;
+  const maxBatches = 15;
+
+  for (let i = 0; i < maxBatches; i++) {
+    const res = await fetch("/api/admin/database/migrate", {
+      method: "POST"
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const data = (await res.json()) as RunMigrationsResponse;
+    totalApplied += data.appliedCount || 0;
+    lastRes = data;
+    if (!data.hasMore || !data.appliedCount) {
+      break;
+    }
+  }
+
+  return {
+    success: lastRes?.success ?? true,
+    appliedCount: totalApplied,
+    hasMore: lastRes?.hasMore ?? false,
+    message: lastRes?.message,
+    stats: lastRes?.stats
+  };
 }
 
 export interface DistributeFilterResponse {

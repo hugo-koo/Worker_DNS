@@ -15,7 +15,7 @@ export class ListSystemModel {
 
   /**
    * Distributes a system-level filter list to all users in the system as a user-level list with is_system = 1.
-   * If a user already has this list URL in user_lists, they are skipped.
+   * Always persists the canonical URL into system_lists even if all existing users already have it and are skipped.
    * Users with 0 profiles are also successfully added so future profiles inherit it.
    *
    * @param url - Filter list URL to distribute.
@@ -24,6 +24,12 @@ export class ListSystemModel {
   async distributeListToAllUsers(url: string): Promise<DistributeListResult> {
     const canonicalUrl = normalizeListUrl(url);
     const now = Math.floor(Date.now() / 1000);
+
+    await this.db
+      .prepare("INSERT OR IGNORE INTO system_lists (url, created_at) VALUES (?, ?)")
+      .bind(canonicalUrl, now)
+      .run();
+
     const { results: users } = await this.db
       .prepare("SELECT id, username FROM users ORDER BY created_at ASC")
       .all<{ id: string; username: string }>();
@@ -77,8 +83,8 @@ export class ListSystemModel {
   }
 
   /**
-   * Returns all filter list URLs currently active with is_system = 1 in user_lists,
-   * along with the counts of affected profiles and users.
+   * Returns all filter list URLs registered in system_lists along with the counts
+   * of active system-distributed profiles and users.
    *
    * @returns Array of distributed system list details.
    */
@@ -86,16 +92,16 @@ export class ListSystemModel {
     const { results } = await this.db
       .prepare(
         `SELECT 
-          ul.url,
+          sl.url,
           COUNT(DISTINCT p.id) AS profile_count,
           COUNT(DISTINCT ul.user_id) AS user_count,
           GROUP_CONCAT(DISTINCT u.username) AS usernames
-        FROM user_lists ul
-        JOIN users u ON ul.user_id = u.id
+        FROM system_lists sl
+        LEFT JOIN user_lists ul ON ul.url = sl.url AND ul.is_system = 1
+        LEFT JOIN users u ON ul.user_id = u.id
         LEFT JOIN profiles p ON p.owner_id = ul.user_id
-        WHERE ul.is_system = 1
-        GROUP BY ul.url
-        ORDER BY ul.url ASC`
+        GROUP BY sl.url
+        ORDER BY sl.url ASC`
       )
       .all<{
         url: string;
@@ -113,7 +119,7 @@ export class ListSystemModel {
   }
 
   /**
-   * Revokes a system-distributed filter list across all users where is_system = 1.
+   * Revokes a system-distributed filter list from system_lists and across all users where is_system = 1.
    * Does NOT touch lists where is_system = 0 (user-created lists).
    *
    * @param url - Filter list URL to revoke.
@@ -143,7 +149,12 @@ export class ListSystemModel {
     );
     const affectedUsernames = Array.from(new Set((results || []).map((r) => r.username)));
 
-    // 2. Delete the system-distributed list records (strictly where is_system = 1)
+    // 2. Remove from authoritative system_lists registry and delete per-user system records (strictly where is_system = 1)
+    await this.db
+      .prepare("DELETE FROM system_lists WHERE url = ?")
+      .bind(canonicalUrl)
+      .run();
+
     const deleteResult = await this.db
       .prepare("DELETE FROM user_lists WHERE url = ? AND is_system = 1")
       .bind(canonicalUrl)

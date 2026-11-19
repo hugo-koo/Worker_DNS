@@ -94,14 +94,19 @@ export class ListUserModel {
   }
 
   /**
-   * Fetches a user list by URL and user ID.
+   * Fetches a user list by URL and user ID, optionally scoped by is_system flag.
    *
    * @param url - Filter list URL.
    * @param userId - User identifier.
+   * @param isSystem - Optional scope filter (true for system lists, false for user-created lists).
    * @returns UserList record or null.
    */
-  async getUserListByUrl(url: string, userId: string): Promise<UserList | null> {
+  async getUserListByUrl(url: string, userId: string, isSystem?: boolean): Promise<UserList | null> {
     const canonicalUrl = normalizeListUrl(url);
+    const scopeClause = isSystem !== undefined ? " AND ul.is_system = ?" : "";
+    const params: unknown[] = isSystem !== undefined
+      ? [userId, canonicalUrl, isSystem ? 1 : 0]
+      : [userId, canonicalUrl];
     const row = await this.db
       .prepare(
         `SELECT 
@@ -117,10 +122,11 @@ export class ListUserModel {
           gm.last_modified
         FROM user_lists ul
         LEFT JOIN global_list_metadata gm ON ul.url = gm.url
-        WHERE ul.user_id = ? AND ul.url = ?
+        WHERE ul.user_id = ? AND ul.url = ?${scopeClause}
+        ORDER BY ul.is_system DESC, ul.id ASC
         LIMIT 1`
       )
-      .bind(userId, canonicalUrl)
+      .bind(...params)
       .first<{
         id: number;
         user_id: string;
@@ -237,17 +243,22 @@ export class ListUserModel {
   }
 
   /**
-   * Checks if a user already has a specific list URL in user_lists.
+   * Checks if a user already has a specific list URL in user_lists, optionally scoped by is_system.
    *
    * @param userId - User identifier.
    * @param url - Filter list URL.
+   * @param isSystem - Optional scope filter.
    * @returns Boolean indicating existence.
    */
-  async hasListForUser(userId: string, url: string): Promise<boolean> {
+  async hasListForUser(userId: string, url: string, isSystem?: boolean): Promise<boolean> {
     const canonicalUrl = normalizeListUrl(url);
+    const scopeClause = isSystem !== undefined ? " AND is_system = ?" : "";
+    const params: unknown[] = isSystem !== undefined
+      ? [userId, canonicalUrl, isSystem ? 1 : 0]
+      : [userId, canonicalUrl];
     const row = await this.db
-      .prepare("SELECT 1 FROM user_lists WHERE user_id = ? AND url = ? LIMIT 1")
-      .bind(userId, canonicalUrl)
+      .prepare(`SELECT 1 FROM user_lists WHERE user_id = ? AND url = ?${scopeClause} LIMIT 1`)
+      .bind(...params)
       .first<{ 1: number }>();
     return row !== null;
   }

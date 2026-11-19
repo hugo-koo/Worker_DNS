@@ -154,6 +154,7 @@ async function runTestSuite(): Promise<void> {
   // Setup an in-memory SQLite backend inside an in-process fetch mock
   const originalFetch = globalThis.fetch;
   const mockDb = new DatabaseSync(':memory:');
+  let activeMockDb = mockDb;
   const TEST_TOKEN = 'secret-turso-token-12345';
   const mockServerUrl = 'https://mock-turso.example.com';
 
@@ -190,7 +191,7 @@ async function runTestSuite(): Promise<void> {
           try {
             const trimmed = sql.trim().toUpperCase();
             if (trimmed.startsWith('SELECT') || trimmed.startsWith('PRAGMA')) {
-              const stmt = mockDb.prepare(sql);
+              const stmt = activeMockDb.prepare(sql);
               const rows = stmt.all(...args) as Record<string, any>[];
               const cols = rows.length > 0
                 ? Object.keys(rows[0]).map(name => ({ name }))
@@ -209,7 +210,7 @@ async function runTestSuite(): Promise<void> {
                 }
               });
             } else {
-              const stmt = mockDb.prepare(sql);
+              const stmt = activeMockDb.prepare(sql);
               const result = stmt.run(...args);
               stepResults.push({
                 type: 'ok',
@@ -339,6 +340,41 @@ async function runTestSuite(): Promise<void> {
     // Cleanup temp dir
     fs.rmSync(tempMigDir, { recursive: true, force: true });
 
+    console.log('\n--- Test Suite 4: Chunked Real Migrations (0000-0072) & Interrupted 0048 Recovery ---');
+    const fullMockDb = new DatabaseSync(':memory:');
+    activeMockDb = fullMockDb;
+    const fullTursoClient = createTursoClient(mockServerUrl, TEST_TOKEN);
+    const repoMigDir = path.join(process.cwd(), 'migrations');
+    const diskMigrationCount = fs.readdirSync(repoMigDir).filter(f => f.endsWith('.sql')).length;
+
+    let totalApplied = 0;
+    let batches = 0;
+    while (batches < 10) {
+      batches++;
+      const batchApplied = await runTursoMigrations(fullTursoClient, repoMigDir, { maxMigrations: 15 });
+      totalApplied += batchApplied;
+      const currentStats = await getTursoMigrationStats(fullTursoClient, repoMigDir);
+      if (currentStats.completed) break;
+      assert(batchApplied > 0, `Batch ${batches} made forward progress`);
+    }
+    const finalStats = await getTursoMigrationStats(fullTursoClient, repoMigDir);
+    assert(finalStats.completed === true, 'Chunked runTursoMigrations completed all repo migrations');
+    assert(totalApplied === diskMigrationCount, `Applied all ${diskMigrationCount} migrations via Hrana pipeline (got ${totalApplied})`);
+
+    // Simulate an interrupted 0048 rebuild where user_activity_log_new already exists with conflicting row
+    await fullTursoClient.prepare("INSERT INTO users (id, username, role, hashed_password, created_at) VALUES ('u1', 'tester', 'user', 'h', 100)").run();
+    await fullTursoClient.prepare("INSERT INTO user_activity_log (id, user_id, action, timestamp) VALUES (1, 'u1', 'login_success', 100)").run();
+    await fullTursoClient.prepare("CREATE TABLE user_activity_log_new (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL, action TEXT NOT NULL, ip_address TEXT, user_agent TEXT, timestamp INTEGER NOT NULL, extra TEXT, session_id_hash TEXT)").run();
+    await fullTursoClient.prepare("INSERT INTO user_activity_log_new (id, user_id, action, timestamp) VALUES (1, 'u1', 'login_success', 100)").run();
+    await fullTursoClient.prepare("DELETE FROM d1_migrations WHERE name = '0048_add_recovery_key_rotated_to_activity_log.sql'").run();
+
+    const recoveredCount = await runTursoMigrations(fullTursoClient, repoMigDir, { maxMigrations: 15 });
+    assert(recoveredCount === 1, `Recovered interrupted 0048 migration cleanly (got ${recoveredCount})`);
+    await fullTursoClient.prepare("INSERT INTO user_activity_log (user_id, action, timestamp) VALUES ('u1', 'recovery_key_rotated', 101)").run();
+    const activityCount = await fullTursoClient.prepare("SELECT COUNT(*) as cnt FROM user_activity_log WHERE user_id = 'u1'").first<{ cnt: number }>();
+    assert(activityCount?.cnt === 2, 'Both preserved row and new recovery_key_rotated row exist after 0048 recovery');
+
+    fullMockDb.close();
   } finally {
     globalThis.fetch = originalFetch;
     mockDb.close();

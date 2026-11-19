@@ -39,8 +39,8 @@ export class LogTrafficAnalytics {
     status?: string,
     exact?: boolean
   ): Promise<ActionCountResult[]> {
-    // If granular search, device, country, isp, status filters, or exact flag are applied, query raw logs directly
-    if (exact || search || accessPointId || destCountry || isp || status || !this.aggregation) {
+    // Only fall back to raw logs when filters cannot be served by hourly_rollups (`action`, `access_point_id`).
+    if (exact || search || destCountry || isp || !this.aggregation) {
       let queryStr =
         "SELECT action, COUNT(*) as count FROM logs WHERE profile_id = ? AND timestamp >= ? AND timestamp <= ?";
       const params: (string | number)[] = [profileId, since, until];
@@ -84,11 +84,21 @@ export class LogTrafficAnalytics {
     const window = computeRollupWindow(since, until, latestRollupHour);
 
     if (!window.useRollups) {
+      let queryStr =
+        "SELECT action, COUNT(*) as count FROM logs WHERE profile_id = ? AND timestamp >= ? AND timestamp <= ?";
+      const params: (string | number)[] = [profileId, since, until];
+      if (accessPointId) {
+        queryStr += " AND access_point_id = ?";
+        params.push(accessPointId);
+      }
+      if (status) {
+        queryStr += " AND action = ?";
+        params.push(status);
+      }
+      queryStr += " GROUP BY action";
       const { results } = await this.db
-        .prepare(
-          "SELECT action, COUNT(*) as count FROM logs WHERE profile_id = ? AND timestamp >= ? AND timestamp <= ? GROUP BY action"
-        )
-        .bind(profileId, since, until)
+        .prepare(queryStr)
+        .bind(...params)
         .all<ActionCountResult>();
       return results;
     }
@@ -97,14 +107,38 @@ export class LogTrafficAnalytics {
       since,
       until,
       window,
-      (startHour, endHour) => ({
-        sql: "SELECT key as action, count FROM hourly_rollups WHERE profile_id = ? AND metric_type = 'action' AND hour_timestamp >= ? AND hour_timestamp < ?",
-        params: [profileId, startHour, endHour]
-      }),
-      (fromTs, toTs) => ({
-        sql: "SELECT action, COUNT(*) as count FROM logs WHERE profile_id = ? AND timestamp >= ? AND timestamp <= ? GROUP BY action",
-        params: [profileId, fromTs, toTs]
-      })
+      (startHour, endHour) => {
+        let where = "profile_id = ? AND metric_type = 'action' AND hour_timestamp >= ? AND hour_timestamp < ?";
+        const params: (string | number)[] = [profileId, startHour, endHour];
+        if (accessPointId) {
+          where += " AND access_point_id = ?";
+          params.push(accessPointId);
+        }
+        if (status) {
+          where += " AND key = ?";
+          params.push(status);
+        }
+        return {
+          sql: `SELECT key as action, count FROM hourly_rollups WHERE ${where}`,
+          params
+        };
+      },
+      (fromTs, toTs) => {
+        let where = "profile_id = ? AND timestamp >= ? AND timestamp <= ?";
+        const params: (string | number)[] = [profileId, fromTs, toTs];
+        if (accessPointId) {
+          where += " AND access_point_id = ?";
+          params.push(accessPointId);
+        }
+        if (status) {
+          where += " AND action = ?";
+          params.push(status);
+        }
+        return {
+          sql: `SELECT action, COUNT(*) as count FROM logs WHERE ${where} GROUP BY action`,
+          params
+        };
+      }
     );
 
     const { results } = await this.db
@@ -135,8 +169,9 @@ export class LogTrafficAnalytics {
     const isHourly = interval.includes("3600");
     const isDaily = interval.includes("86400");
 
-    // If device-specific, non-standard interval, or rollups disabled, query raw logs directly
-    if (accessPointId || (!isHourly && !isDaily) || !this.aggregation) {
+    // If sub-hour interval or rollups disabled, query raw logs directly;
+    // hourly/daily intervals with accessPointId are supported directly by hourly_rollups.
+    if ((!isHourly && !isDaily) || !this.aggregation) {
       const SAFE_INTERVALS = new Set([
         "(timestamp/60)*60",
         "(timestamp/300)*300",
@@ -166,10 +201,16 @@ export class LogTrafficAnalytics {
     const logsInterval = isDaily ? "(timestamp / 86400) * 86400" : "(timestamp / 3600) * 3600";
 
     if (!window.useRollups) {
-      const queryStr = `SELECT ${logsInterval} as timestamp, action, COUNT(*) as count FROM logs WHERE profile_id = ? AND timestamp >= ? AND timestamp <= ? GROUP BY ${logsInterval}, action ORDER BY timestamp ASC`;
+      let queryStr = `SELECT ${logsInterval} as timestamp, action, COUNT(*) as count FROM logs WHERE profile_id = ? AND timestamp >= ? AND timestamp <= ?`;
+      const params: (string | number)[] = [profileId, since, until];
+      if (accessPointId) {
+        queryStr += " AND access_point_id = ?";
+        params.push(accessPointId);
+      }
+      queryStr += ` GROUP BY ${logsInterval}, action ORDER BY timestamp ASC`;
       const { results } = await this.db
         .prepare(queryStr)
-        .bind(profileId, since, until)
+        .bind(...params)
         .all<TimeSeriesTrendPoint>();
       return results;
     }
@@ -178,14 +219,30 @@ export class LogTrafficAnalytics {
       since,
       until,
       window,
-      (startHour, endHour) => ({
-        sql: `SELECT ${rollupInterval} as timestamp, key as action, count FROM hourly_rollups WHERE profile_id = ? AND metric_type = 'action' AND hour_timestamp >= ? AND hour_timestamp < ?`,
-        params: [profileId, startHour, endHour]
-      }),
-      (fromTs, toTs) => ({
-        sql: `SELECT ${logsInterval} as timestamp, action, COUNT(*) as count FROM logs WHERE profile_id = ? AND timestamp >= ? AND timestamp <= ? GROUP BY ${logsInterval}, action`,
-        params: [profileId, fromTs, toTs]
-      })
+      (startHour, endHour) => {
+        let where = "profile_id = ? AND metric_type = 'action' AND hour_timestamp >= ? AND hour_timestamp < ?";
+        const params: (string | number)[] = [profileId, startHour, endHour];
+        if (accessPointId) {
+          where += " AND access_point_id = ?";
+          params.push(accessPointId);
+        }
+        return {
+          sql: `SELECT ${rollupInterval} as timestamp, key as action, count FROM hourly_rollups WHERE ${where}`,
+          params
+        };
+      },
+      (fromTs, toTs) => {
+        let where = "profile_id = ? AND timestamp >= ? AND timestamp <= ?";
+        const params: (string | number)[] = [profileId, fromTs, toTs];
+        if (accessPointId) {
+          where += " AND access_point_id = ?";
+          params.push(accessPointId);
+        }
+        return {
+          sql: `SELECT ${logsInterval} as timestamp, action, COUNT(*) as count FROM logs WHERE ${where} GROUP BY ${logsInterval}, action`,
+          params
+        };
+      }
     );
 
     const { results } = await this.db

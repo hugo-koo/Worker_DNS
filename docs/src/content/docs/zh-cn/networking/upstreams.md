@@ -77,7 +77,7 @@ DNS Worker 原生集成 **RFC 9460 / RFC 8484 加密客户端 Hello (ECH)** 技�
 | **Web 仪表盘 / DoH (HTTPS)** | 不适用（由 Cloudflare CDN 443 托管） | `SERVERFULL_HTTPS_PORT=10443` | 载入 TLS 证书后直连暴露的加密 HTTPS 端口。 |
 | **DoT 对外基准域名** | 不适用 | `SERVERFULL_DOT_DOMAIN=dns.example.com` | Serverfull 用于 Android 私密 DNS 与 SNI 路由匹配。 |
 | **ECH 混淆模式** | `PRESET_ECH_FRONTING_DOMAINS`（JSON 数组） | `SERVERFULL_ECH_ENABLED=true` | Serverfull 动态合成 RFC 9460 HTTPS/SVCB ECH 响应。 |
-| **紧急兜底上游** | `FAIL_OPEN_UPSTREAM` | `FAIL_OPEN_UPSTREAM` | 两者一致（`https://freedns.controld.com/no-ads-malware-typo`）。 |
+| **紧急兜底上游** | `FAIL_OPEN_UPSTREAM` | `FAIL_OPEN_UPSTREAM` | 两者一致（`tls://no-ads-malware-typo.freedns.controld.com`）。 |
 
 ---
 
@@ -87,8 +87,8 @@ DNS Worker 原生集成 **RFC 9460 / RFC 8484 加密客户端 Hello (ECH)** 技�
 
 #### `FAIL_OPEN_UPSTREAM`
 - **支持模式**：Serverless 与 Serverfull
-- **默认值 (`wrangler.toml`)**：`https://freedns.controld.com/no-ads-malware-typo`
-- **默认值 (`.env.serverfull`)**：`https://freedns.controld.com/no-ads-malware-typo`
+- **默认值 (`wrangler.toml`)**：`tls://no-ads-malware-typo.freedns.controld.com`
+- **默认值 (`.env.serverfull`)**：`tls://no-ads-malware-typo.freedns.controld.com`
 - **说明**：当所有常规上游解析池超时或遭遇致命故障时的紧急回退解析器。支持 HTTPS (DoH)、DoT (`tls://`)、TCP (`tcp://`) 及 DNS Stamps (`sdns://`)。
 
 #### `PRESET_UPSTREAMS`

@@ -74,16 +74,22 @@ export class KemKeyModel {
   }
 
   /**
-   * Checks whether a specific kem_key is referenced by any logs.
+   * Checks whether a specific kem_key is referenced by any logs using clustered PK bounds.
    *
    * @param id The kem_key unique identifier.
    * @returns True if at least one log references this key.
    */
   async hasDependents(id: string): Promise<boolean> {
     try {
+      const key = await this.getById(id);
+      if (!key) {
+        return false;
+      }
       const row = await this.db
-        .prepare("SELECT 1 FROM logs WHERE kem_key_id = ? AND kem_key_id IS NOT NULL LIMIT 1")
-        .bind(id)
+        .prepare(
+          "SELECT 1 FROM logs WHERE profile_id = ? AND timestamp >= ? AND timestamp <= ? AND kem_key_id = ? LIMIT 1"
+        )
+        .bind(key.profile_id, key.created_at - 300, key.expires_at + 3600, id)
         .first<{ 1: number } | null>();
       return row !== null;
     } catch (err) {

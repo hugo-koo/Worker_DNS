@@ -53,10 +53,18 @@ export default {
     const dbService = getDatabaseService(env, false);
     if (dbService === 'Turso' && isTursoConfigured(env)) {
       env.DB = getTursoDatabase(env);
-      try {
-        await ensureTursoMigrations(env.DB as any);
-      } catch (err: any) {
-        console.warn('[Turso] Scheduled migration check notice:', err.message || err);
+      const cache = typeof caches !== 'undefined' ? (caches as any).default : null;
+      const migCacheKey = 'cron:turso_migrations_checked_v1';
+      const checkedRecently = cache ? await cacheUtils.get<number>(cache, migCacheKey).catch(() => null) : null;
+      if (!checkedRecently) {
+        try {
+          await ensureTursoMigrations(env.DB as any);
+          if (cache) {
+            await cacheUtils.set(cache, migCacheKey, Math.floor(Date.now() / 1000), 3600).catch(() => {});
+          }
+        } catch (err: any) {
+          console.warn('[Turso] Scheduled migration check notice:', err.message || err);
+        }
       }
     }
     await handleScheduled(event, env, ctx);

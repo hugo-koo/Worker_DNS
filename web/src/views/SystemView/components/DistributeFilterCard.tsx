@@ -107,31 +107,29 @@ export const DistributeFilterCard: React.FC<DistributeFilterCardProps> = ({
         intent: res.failedCount > 0 && res.addedCount === 0 ? Intent.DANGER : (res.failedCount > 0 ? Intent.WARNING : Intent.SUCCESS),
         icon: res.failedCount > 0 && res.addedCount === 0 ? "error" : "tick",
       });
-      if (res.addedCount > 0) {
-        setDistributed((prev) => {
-          const exists = prev.some((item) => item.url === res.url);
-          if (exists) {
-            return prev.map((item) =>
-              item.url === res.url
-                ? {
-                    ...item,
-                    userCount: item.userCount + res.addedCount,
-                    usernames: Array.from(new Set([...item.usernames, ...res.addedUsernames])),
-                  }
-                : item
-            );
-          }
-          return [
-            ...prev,
-            {
-              url: res.url,
-              profileCount: res.affectedProfilesCount,
-              userCount: res.addedCount,
-              usernames: res.addedUsernames,
-            },
-          ].sort((a, b) => a.url.localeCompare(b.url));
-        });
-      }
+      setDistributed((prev) => {
+        const exists = prev.some((item) => item.url === res.url);
+        if (exists) {
+          return prev.map((item) =>
+            item.url === res.url
+              ? {
+                  ...item,
+                  userCount: item.userCount + res.addedCount,
+                  usernames: Array.from(new Set([...item.usernames, ...res.addedUsernames])),
+                }
+              : item
+          );
+        }
+        return [
+          ...prev,
+          {
+            url: res.url,
+            profileCount: res.affectedProfilesCount,
+            userCount: res.addedCount,
+            usernames: res.addedUsernames,
+          },
+        ].sort((a, b) => a.url.localeCompare(b.url));
+      });
       await fetchDistributed();
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);

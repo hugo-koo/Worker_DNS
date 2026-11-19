@@ -1,5 +1,6 @@
 import { D1Database } from "@cloudflare/workers-types";
 import { InactivityPolicyResult } from "./types";
+import { prepareBoundedLogDeleteStatement } from "../log/core";
 
 /**
  * Handles account activity timestamp tracking and automated data retention / inactivity cleanup policies.
@@ -44,7 +45,7 @@ export class UserLifecycleModel {
    */
   async applyInactivityPolicy(
     now: number,
-    options?: { inactivityDays?: number; inactiveLogPurgeDays?: number }
+    options?: { inactivityDays?: number; inactiveLogPurgeDays?: number; maxLogDeleteRows?: number }
   ): Promise<InactivityPolicyResult> {
     const envObj = (this.env || {}) as Record<string, unknown>;
 
@@ -66,37 +67,51 @@ export class UserLifecycleModel {
       ? parsedPurgeDays
       : 30;
 
+    const maxLogDeleteRows = options?.maxLogDeleteRows && options.maxLogDeleteRows > 0
+      ? options.maxLogDeleteRows
+      : 5000;
+
     const purgeCutoff = now - inactiveLogPurgeDays * 24 * 3600;
     const abandonCutoff = now - inactivityDays * 24 * 3600;
     // Ensure all logs from accounts eligible for either log purge or abandonment are cleaned
     const logPurgeCutoff = Math.max(purgeCutoff, abandonCutoff);
 
-    // 1. 清理闲置账号的历史查询日志与预聚合时序 (配置与规则完整保留)
-    const deleteRollupsStmt = this.db.prepare(`
-      DELETE FROM hourly_rollups
-      WHERE profile_id IN (
-        SELECT id FROM profiles
-        WHERE owner_id IN (
-          SELECT id FROM users
-          WHERE role = 'user'
-            AND (last_active_at < ? OR (last_active_at IS NULL AND created_at < ?))
-        )
-      )
-    `).bind(logPurgeCutoff, logPurgeCutoff);
+    // 1. 清理闲置账号的历史查询日志与预聚合时序（使用有界批量删除，防止单一高流量废弃账号击穿写配额）
+    const { results: logPurgeProfiles } = await this.db.prepare(`
+      SELECT p.id
+      FROM profiles p
+      JOIN users u ON p.owner_id = u.id
+      WHERE u.role = 'user'
+        AND (u.last_active_at < ? OR (u.last_active_at IS NULL AND u.created_at < ?))
+    `).bind(logPurgeCutoff, logPurgeCutoff).all<{ id: string }>();
 
-    const deleteLogsStmt = this.db.prepare(`
-      DELETE FROM logs
-      WHERE profile_id IN (
-        SELECT id FROM profiles
-        WHERE owner_id IN (
-          SELECT id FROM users
-          WHERE role = 'user'
-            AND (last_active_at < ? OR (last_active_at IS NULL AND created_at < ?))
-        )
-      )
-    `).bind(logPurgeCutoff, logPurgeCutoff);
+    let purgedLogsCount = 0;
+    const METRIC_TYPES = ['action', 'client', 'dest', 'domain', 'isp'] as const;
 
-    // 2. 判定长期废弃休眠账号 (根据解析活动判断，而非登录时间)：删除废弃账号的 Profile 及用户主体 (级联清理元数据)
+    if (logPurgeProfiles && logPurgeProfiles.length > 0) {
+      const rollupDeleteStmts = logPurgeProfiles.flatMap((p) =>
+        METRIC_TYPES.map((metric) =>
+          this.db.prepare("DELETE FROM hourly_rollups WHERE profile_id = ? AND metric_type = ?").bind(p.id, metric)
+        )
+      );
+      for (let i = 0; i < rollupDeleteStmts.length; i += 50) {
+        await this.db.batch(rollupDeleteStmts.slice(i, i + 50));
+      }
+
+      let remainingBudget = maxLogDeleteRows;
+      for (const p of logPurgeProfiles) {
+        if (remainingBudget <= 0) break;
+        const stmt = await prepareBoundedLogDeleteStatement(this.db, p.id, now + 86400, remainingBudget);
+        if (!stmt) continue;
+        const res = await stmt.run();
+        const deleted = res.meta?.changes ?? res.meta?.rows_written ?? 0;
+        purgedLogsCount += deleted;
+        remainingBudget -= deleted;
+      }
+    }
+
+    // 2. 判定长期废弃休眠账号 (根据解析活动判断，而非登录时间)：
+    //    仅当名下所有 Profile 的 logs 已清空时再删除 Profile 与 User，避免孤儿日志残留或大事务锁表。
     const deleteAbandonedProfilesStmt = this.db.prepare(`
       DELETE FROM profiles 
       WHERE owner_id IN (
@@ -104,25 +119,23 @@ export class UserLifecycleModel {
         WHERE role = 'user' 
           AND (last_active_at < ? OR (last_active_at IS NULL AND created_at < ?))
       )
+      AND NOT EXISTS (SELECT 1 FROM logs l WHERE l.profile_id = profiles.id LIMIT 1)
     `).bind(abandonCutoff, abandonCutoff);
 
     const deleteAbandonedUsersStmt = this.db.prepare(`
       DELETE FROM users
       WHERE role = 'user'
         AND (last_active_at < ? OR (last_active_at IS NULL AND created_at < ?))
+        AND NOT EXISTS (SELECT 1 FROM profiles p WHERE p.owner_id = users.id LIMIT 1)
     `).bind(abandonCutoff, abandonCutoff);
 
-    const results = await this.db.batch([
-      deleteRollupsStmt,
-      deleteLogsStmt,
-      deleteAbandonedProfilesStmt,
-      deleteAbandonedUsersStmt
-    ]);
+    const profRes = await deleteAbandonedProfilesStmt.run();
+    const userRes = await deleteAbandonedUsersStmt.run();
 
     return {
-      clearedProfiles: results[2].meta.changes || 0,
-      deletedUsers: results[3].meta.changes || 0,
-      purgedLogsCount: results[1].meta.changes || 0
+      clearedProfiles: profRes.meta?.changes || 0,
+      deletedUsers: userRes.meta?.changes || 0,
+      purgedLogsCount
     };
   }
 }

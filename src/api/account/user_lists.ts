@@ -61,13 +61,10 @@ export async function handleUserListsRequest(
 
     const canonicalUrl = ListModel.normalizeUrl(rawUrl);
 
-    // Check if list already exists for user
-    const existing = await listModel.getUserListByUrl(canonicalUrl, user.id);
+    // Check if list already exists as a user-created list for this user (system lists do not block user-level addition)
+    const existing = await listModel.getUserListByUrl(canonicalUrl, user.id, false);
     if (existing) {
-      const msg = existing.is_system === 1
-        ? "This filter list is already active as a system-distributed list"
-        : "This filter list already exists in your user-level lists";
-      return new Response(JSON.stringify({ error: msg }), {
+      return new Response(JSON.stringify({ error: "This filter list already exists in your user-level lists" }), {
         status: 400,
         headers: { "Content-Type": "application/json" }
       });

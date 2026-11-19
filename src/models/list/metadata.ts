@@ -104,6 +104,8 @@ export class ListMetadataModel {
         SELECT url FROM lists WHERE enabled = 1
         UNION
         SELECT url FROM user_lists WHERE enabled = 1
+        UNION
+        SELECT url FROM system_lists
       ) active_urls
       LEFT JOIN global_list_metadata gm ON active_urls.url = gm.url
     `;

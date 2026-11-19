@@ -2,7 +2,6 @@ import { ScheduledEvent } from '@cloudflare/workers-types';
 import { Env, ExecutionContext } from './types';
 import { LogModel } from './models/log';
 import { UserModel } from './models/user';
-import { ProfileModel } from './models/profile';
 import { syncNextGlobalList } from './utils/sync';
 import { syncCloudflareIpRanges } from './utils/ech';
 import { cacheUtils } from './utils/cache';
@@ -11,6 +10,8 @@ import { SystemSettingsModel } from './models/systemSettings';
 
 /** In-memory throttle tracker for cron cleanup phase across executions in the same isolate */
 let lastCleanupMemoryTs = 0;
+/** In-memory throttle tracker for daily Cloudflare IP sync */
+let lastCfIpsSyncMemoryTs = 0;
 
 /**
  * Handles cron-scheduled events to run background cleanup and list synchronization.
@@ -133,10 +134,28 @@ export async function handleScheduled(
       console.log("[Cron] Cleanup phase completed at", new Date().toISOString());
     }
 
-    // ── CLOUDFLARE IPS SYNC ───────────────────────────────────────────────────
-    // Syncs official Cloudflare IP ranges daily from https://www.cloudflare.com/ips-v4 / v6
+    // ── CLOUDFLARE IPS SYNC (Daily Throttled) ─────────────────────────────────
+    // Syncs official Cloudflare IP ranges once per day using L1 + L2 Cache throttling
+    // so minute-level cron isolate rebuilds do not query system_settings every trigger.
     try {
-      await syncCloudflareIpRanges(env.DB);
+      const cfSyncCacheKey = "cron:cf_ips_synced_v1";
+      let shouldSyncCfIps = !lastCfIpsSyncMemoryTs || (now - lastCfIpsSyncMemoryTs >= 86400);
+      if (shouldSyncCfIps && cache) {
+        const cachedCfSync = await cacheUtils.get<number>(cache, cfSyncCacheKey).catch(() => null);
+        if (cachedCfSync && now - cachedCfSync < 86400) {
+          lastCfIpsSyncMemoryTs = cachedCfSync;
+          shouldSyncCfIps = false;
+        }
+      }
+      if (shouldSyncCfIps) {
+        const syncRes = await syncCloudflareIpRanges(env.DB);
+        if (syncRes.success) {
+          lastCfIpsSyncMemoryTs = now;
+          if (cache) {
+            await cacheUtils.set(cache, cfSyncCacheKey, now, 86400).catch(() => {});
+          }
+        }
+      }
     } catch (e) {
       console.error("[Cron] Cloudflare IP range sync failed:", e);
     }

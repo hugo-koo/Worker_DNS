@@ -1,7 +1,7 @@
 import { D1Database } from "@cloudflare/workers-types";
 import { LogAggregationModel } from "../aggregation";
 import { DestinationCountResult, ISPCountResult } from "./types";
-import { computeRollupWindow, buildRollupUnionParts } from "./rollupWindow";
+import { computeRollupWindow, buildRollupUnionParts, hasActiveE2eeKey } from "./rollupWindow";
 
 /**
  * Handles geographic destination country and ISP distribution analytics.
@@ -67,13 +67,18 @@ export class LogDestinationAnalytics {
     };
 
     if (!this.aggregation) {
+      if (await hasActiveE2eeKey(this.db, profileId)) return [];
       return queryRawDestinations(since, until);
     }
 
-    const latestRollupHour = await this.aggregation.getLatestDestinationRollupHour(profileId);
+    const [latestRollupHour, isE2eeActive] = await Promise.all([
+      this.aggregation.getLatestDestinationRollupHour(profileId),
+      hasActiveE2eeKey(this.db, profileId)
+    ]);
     const window = computeRollupWindow(since, until, latestRollupHour);
 
     if (!window.useRollups) {
+      if (isE2eeActive) return [];
       return queryRawDestinations(since, until);
     }
 
@@ -127,7 +132,8 @@ export class LogDestinationAnalytics {
           `,
           params
         };
-      }
+      },
+      { skipTailLogs: isE2eeActive }
     );
 
     const { results } = await this.db
@@ -208,13 +214,18 @@ export class LogDestinationAnalytics {
     };
 
     if (!this.aggregation) {
+      if (await hasActiveE2eeKey(this.db, profileId)) return [];
       return rawLogsQuery(since, until);
     }
 
-    const latestRollupHour = await this.aggregation.getLatestISPRollupHour(profileId);
+    const [latestRollupHour, isE2eeActive] = await Promise.all([
+      this.aggregation.getLatestISPRollupHour(profileId),
+      hasActiveE2eeKey(this.db, profileId)
+    ]);
     const window = computeRollupWindow(since, until, latestRollupHour);
 
     if (!window.useRollups) {
+      if (isE2eeActive) return [];
       return rawLogsQuery(since, until);
     }
 
@@ -279,7 +290,8 @@ export class LogDestinationAnalytics {
           `,
           params
         };
-      }
+      },
+      { skipTailLogs: isE2eeActive }
     );
 
     const { results } = await this.db

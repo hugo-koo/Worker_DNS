@@ -180,7 +180,7 @@ export class UserModel {
    */
   async applyInactivityPolicy(
     now: number,
-    options?: { inactivityDays?: number; inactiveLogPurgeDays?: number }
+    options?: { inactivityDays?: number; inactiveLogPurgeDays?: number; maxLogDeleteRows?: number }
   ): Promise<InactivityPolicyResult> {
     return this.lifecycle.applyInactivityPolicy(now, options);
   }

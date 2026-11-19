@@ -232,6 +232,24 @@ async function runInactivityPolicyTests() {
   assert.ok(profileStillExists, "Profile itself must NOT be deleted when clearing profile logs");
   console.log("   ✓ Profile log clearing endpoint deleted logs & rollups while preserving profile.\n");
 
+  console.log("11. Verifying bounded maxLogDeleteRows draining on large abandoned accounts...");
+  insertUser("user_big_old", "user_big_old", "user", now - 300 * daySec, now - 200 * daySec);
+  insertProfile("prof_big_old", "user_big_old", "Big Old Profile");
+  insertLog(201, "prof_big_old", now - 200 * daySec);
+  insertLog(202, "prof_big_old", now - 200 * daySec + 1);
+  insertLog(203, "prof_big_old", now - 200 * daySec + 2);
+
+  const boundedPass1 = await userModel.applyInactivityPolicy(now, { maxLogDeleteRows: 2 });
+  assert.strictEqual(boundedPass1.purgedLogsCount, 2, "Pass 1 must respect maxLogDeleteRows=2");
+  assert.strictEqual(boundedPass1.clearedProfiles, 0, "Profile must stay while 1 log remains");
+  assert.strictEqual(boundedPass1.deletedUsers, 0, "User must stay while profile/log remains");
+
+  const boundedPass2 = await userModel.applyInactivityPolicy(now, { maxLogDeleteRows: 2 });
+  assert.strictEqual(boundedPass2.purgedLogsCount, 1, "Pass 2 drains final remaining log");
+  assert.strictEqual(boundedPass2.clearedProfiles, 1, "Profile deleted once all logs are drained");
+  assert.strictEqual(boundedPass2.deletedUsers, 1, "User deleted once profile is removed");
+  console.log("   ✓ Bounded inactivity draining avoids write spikes and cleans up cleanly.\n");
+
   console.log("================================================================");
   console.log("   All Inactivity Retention Policy tests passed successfully!   ");
   console.log("================================================================\n");

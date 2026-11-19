@@ -8,6 +8,13 @@
  */
 
 import assert from "node:assert";
+import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
+import { NodeD1Database, runMigrations } from "../src/serverfull/db";
+import { handlePasskeysRequest } from "../src/api/account/security/passkeys";
+import { UserModel } from "../src/models/user";
+import { hashPassword } from "../src/utils/crypto";
+import type { Env, ExecutionContext, User } from "../src/types";
 import { isSafeUrl, isSafeUrlWithDnsCheck } from "../src/utils/validator";
 import { verifyAuthenticationResponse, base64UrlEncode } from "../src/lib/webauthn";
 import { buildDNSQuery } from "../src/utils/dns/encoder";
@@ -224,6 +231,215 @@ async function testDnsRebindingAndCsprng(): Promise<void> {
   console.log("  Passed: DNS rebinding defenses and CSPRNG query IDs validated.");
 }
 
+async function buildMockWebAuthnRegistration(
+  challenge: string,
+  origin: string,
+  rpId: string,
+  credIdSeed: Uint8Array
+): Promise<{ clientDataJSON: string; attestationObject: string }> {
+  const kp = (await crypto.subtle.generateKey(
+    { name: "ECDSA", namedCurve: "P-256" },
+    true,
+    ["sign", "verify"]
+  )) as CryptoKeyPair;
+  const jwk = (await crypto.subtle.exportKey("jwk", kp.publicKey)) as JsonWebKey;
+  const xBytes = Uint8Array.from(Buffer.from(jwk.x!, "base64url"));
+  const yBytes = Uint8Array.from(Buffer.from(jwk.y!, "base64url"));
+
+  // Encode minimal CBOR COSE ES256 key: {1: 2, 3: -7, -1: 1, -2: x(32), -3: y(32)}
+  const cborBytes = (n: number): number[] => (n < 24 ? [0x40 + n] : [0x58, n]);
+  const coseKey = new Uint8Array([
+    0xa5, // map(5)
+    0x01, 0x02, // 1: 2 (EC2)
+    0x03, 0x26, // 3: -7 (ES256)
+    0x20, 0x01, // -1: 1 (P-256)
+    0x21, ...cborBytes(32), ...xBytes, // -2: x
+    0x22, ...cborBytes(32), ...yBytes  // -3: y
+  ]);
+
+  const rpIdHash = new Uint8Array(
+    await crypto.subtle.digest("SHA-256", new TextEncoder().encode(rpId))
+  );
+  const flags = 0x45; // UP | UV | AT
+  const aaguid = new Uint8Array(16);
+  const credLen = new Uint8Array([(credIdSeed.length >> 8) & 0xff, credIdSeed.length & 0xff]);
+
+  const authData = new Uint8Array(32 + 1 + 4 + 16 + 2 + credIdSeed.length + coseKey.length);
+  let offset = 0;
+  authData.set(rpIdHash, offset); offset += 32;
+  authData[offset++] = flags;
+  offset += 4; // signCount = 0
+  authData.set(aaguid, offset); offset += 16;
+  authData.set(credLen, offset); offset += 2;
+  authData.set(credIdSeed, offset); offset += credIdSeed.length;
+  authData.set(coseKey, offset);
+
+  // Encode CBOR map {"authData": bstr}
+  const authDataKey = new TextEncoder().encode("authData");
+  const authDataLenHdr =
+    authData.length < 24
+      ? [0x40 + authData.length]
+      : authData.length < 256
+      ? [0x58, authData.length]
+      : [0x59, (authData.length >> 8) & 0xff, authData.length & 0xff];
+
+  const attestationObj = new Uint8Array([
+    0xa1,
+    0x60 + authDataKey.length,
+    ...authDataKey,
+    ...authDataLenHdr,
+    ...authData
+  ]);
+
+  const clientDataJSON = base64UrlEncode(
+    new TextEncoder().encode(
+      JSON.stringify({
+        type: "webauthn.create",
+        challenge,
+        origin
+      })
+    )
+  );
+
+  return {
+    clientDataJSON,
+    attestationObject: base64UrlEncode(attestationObj)
+  };
+}
+
+async function testPasskeyRegistrationEnablesPasswordless(): Promise<void> {
+  console.log("6. Testing Passkey Registration Enables Passwordless Login...");
+
+  const rawDb = new DatabaseSync(":memory:");
+  runMigrations(rawDb, path.resolve(__dirname, "../migrations"));
+  const db = new NodeD1Database(rawDb);
+
+  const memoryCacheStore = new Map<string, Response>();
+  const globalWithCaches = globalThis as unknown as { caches?: unknown };
+  const originalCaches = globalWithCaches.caches;
+  globalWithCaches.caches = {
+    default: {
+      async match(req: Request | string) {
+        const key = typeof req === "string" ? req : req.url;
+        const cached = memoryCacheStore.get(key);
+        return cached ? cached.clone() : undefined;
+      },
+      async put(req: Request | string, res: Response) {
+        const key = typeof req === "string" ? req : req.url;
+        memoryCacheStore.set(key, res.clone());
+      },
+      async delete(req: Request | string) {
+        const key = typeof req === "string" ? req : req.url;
+        return memoryCacheStore.delete(key);
+      }
+    }
+  };
+
+  try {
+    const env = { DB: db, JWT_SECRET: "testsecret1234567890123456789012" } as unknown as Env;
+    const userModel = new UserModel(db, env);
+    const password = "TestPassword123!";
+    const hashed = await hashPassword(password, 1);
+    await db
+      .prepare(
+        "INSERT INTO users (id, username, hashed_password, role, created_at, password_version, totp_enabled, totp_skip_password) VALUES (?, ?, ?, 'user', ?, 1, 0, 0)"
+      )
+      .bind("user_passkey_1", "passkey_user", hashed, Math.floor(Date.now() / 1000))
+      .run();
+
+    const user: User = { id: "user_passkey_1", username: "passkey_user", role: "user" };
+    const ctx = { waitUntil() {}, passThroughOnException() {} } as unknown as ExecutionContext;
+    const baseOrigin = "https://dns.example.com";
+
+    // Step 1: Register initial Passkey
+    const optRes1 = await handlePasskeysRequest(
+      new Request(`${baseOrigin}/api/account/passkeys/register/options`, { method: "POST" }),
+      env,
+      user,
+      ["api", "account", "passkeys", "register", "options"],
+      ctx
+    );
+    assert.strictEqual(optRes1.status, 200, "Options generation must succeed");
+    const opt1 = (await optRes1.json()) as { challenge: string };
+
+    const cred1 = await buildMockWebAuthnRegistration(
+      opt1.challenge,
+      baseOrigin,
+      "dns.example.com",
+      new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8])
+    );
+    const verifyRes1 = await handlePasskeysRequest(
+      new Request(`${baseOrigin}/api/account/passkeys/register/verify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "primary_key",
+          credential: { response: cred1 }
+        })
+      }),
+      env,
+      user,
+      ["api", "account", "passkeys", "register", "verify"],
+      ctx
+    );
+    assert.strictEqual(verifyRes1.status, 201, "Initial passkey registration must return 201");
+    const verify1Data = (await verifyRes1.json()) as { recovery_keys?: string[] };
+    assert.ok(verify1Data.recovery_keys && verify1Data.recovery_keys.length > 0, "Recovery keys generated");
+
+    const dbUserAfterFirst = await userModel.getById(user.id);
+    assert.strictEqual(
+      dbUserAfterFirst?.totp_skip_password,
+      1,
+      "Passwordless Login must be enabled automatically after configuring initial Passkey"
+    );
+
+    // Step 2: Explicitly disable Passwordless Login, then add a 2nd backup Passkey -> preference preserved
+    await userModel.updateTOTPSettings(user.id, false);
+    const optRes2 = await handlePasskeysRequest(
+      new Request(`${baseOrigin}/api/account/passkeys/register/options`, { method: "POST" }),
+      env,
+      user,
+      ["api", "account", "passkeys", "register", "options"],
+      ctx
+    );
+    assert.strictEqual(optRes2.status, 200);
+    const opt2 = (await optRes2.json()) as { challenge: string };
+    const cred2 = await buildMockWebAuthnRegistration(
+      opt2.challenge,
+      baseOrigin,
+      "dns.example.com",
+      new Uint8Array([9, 10, 11, 12, 13, 14, 15, 16])
+    );
+    const verifyRes2 = await handlePasskeysRequest(
+      new Request(`${baseOrigin}/api/account/passkeys/register/verify`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: "backup_key",
+          recoveryKey: verify1Data.recovery_keys[0],
+          credential: { response: cred2 }
+        })
+      }),
+      env,
+      user,
+      ["api", "account", "passkeys", "register", "verify"],
+      ctx
+    );
+    assert.strictEqual(verifyRes2.status, 201, "Backup passkey registration must return 201");
+
+    const dbUserAfterSecond = await userModel.getById(user.id);
+    assert.strictEqual(
+      dbUserAfterSecond?.totp_skip_password,
+      0,
+      "Explicit password requirement opt-out must be preserved when adding a backup passkey"
+    );
+  } finally {
+    globalWithCaches.caches = originalCaches;
+  }
+
+  console.log("  Passed: Passkey registration automatically enables Passwordless Login.");
+}
+
 async function runAllTests(): Promise<void> {
   console.log("================================================================");
   console.log("       DNS Worker Security Audit Round 3 Verification Suite        ");
@@ -234,6 +450,7 @@ async function runAllTests(): Promise<void> {
   await testFetchListContentSSRFBlocking();
   await testRecoveryKeyPreservationLogic();
   await testDnsRebindingAndCsprng();
+  await testPasskeyRegistrationEnablesPasswordless();
 
   console.log("\n>>> [TEST] All Round 3 Security Audit tests passed successfully!\n");
 }

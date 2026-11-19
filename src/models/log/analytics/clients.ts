@@ -1,7 +1,7 @@
 import { D1Database } from "@cloudflare/workers-types";
 import { LogAggregationModel } from "../aggregation";
 import { ClientCountResult } from "./types";
-import { computeRollupWindow, buildRollupUnionParts } from "./rollupWindow";
+import { computeRollupWindow, buildRollupUnionParts, hasActiveE2eeKey } from "./rollupWindow";
 
 /**
  * Handles client device and IP-level analytics.
@@ -46,13 +46,18 @@ export class LogClientAnalytics {
     };
 
     if (!this.aggregation) {
+      if (await hasActiveE2eeKey(this.db, profileId)) return [];
       return queryRawClients(since, until);
     }
 
-    const latestRollupHour = await this.aggregation.getLatestClientRollupHour(profileId);
+    const [latestRollupHour, isE2eeActive] = await Promise.all([
+      this.aggregation.getLatestClientRollupHour(profileId),
+      hasActiveE2eeKey(this.db, profileId)
+    ]);
     const window = computeRollupWindow(since, until, latestRollupHour);
 
     if (!window.useRollups) {
+      if (isE2eeActive) return [];
       return queryRawClients(since, until);
     }
 
@@ -83,7 +88,8 @@ export class LogClientAnalytics {
           sql: `SELECT client_ip, COALESCE(geo_country, '') as geo_country, COUNT(*) as count FROM logs WHERE ${where} GROUP BY client_ip, COALESCE(geo_country, '')`,
           params
         };
-      }
+      },
+      { skipTailLogs: isE2eeActive }
     );
 
     const { results } = await this.db

@@ -181,12 +181,33 @@ export class LogRetentionModel {
 
       if (newlyDeletedLogs > 0 || isDailyOrphanCheckDue) {
         if (isDailyOrphanCheckDue) {
-          // Run orphan hourly_rollups sweep at most once per day instead of every hour
-          // (ProfileModel.delete and applyInactivityPolicy already delete rollups directly).
-          await this.db
-            .prepare("DELETE FROM hourly_rollups WHERE profile_id NOT IN (SELECT id FROM profiles)")
-            .run()
-            .catch(() => {});
+          // Walk hourly_rollups distinct profile_ids via clustered PK seeks (O(distinct profiles))
+          // instead of `profile_id NOT IN (SELECT id FROM profiles)` which forces a full-table scan.
+          try {
+            const validProfileIds = new Set(profiles.map((p) => p.id));
+            const orphanRollupDeletes: D1PreparedStatement[] = [];
+            let cursor = "";
+            for (let step = 0; step < 200; step++) {
+              const next = await this.db
+                .prepare("SELECT profile_id FROM hourly_rollups WHERE profile_id > ? ORDER BY profile_id ASC LIMIT 1")
+                .bind(cursor)
+                .first<{ profile_id: string } | null>();
+              if (!next?.profile_id) break;
+              cursor = next.profile_id;
+              if (!validProfileIds.has(cursor)) {
+                orphanRollupDeletes.push(
+                  this.db.prepare("DELETE FROM hourly_rollups WHERE profile_id = ?").bind(cursor)
+                );
+              }
+            }
+            if (orphanRollupDeletes.length > 0) {
+              for (let i = 0; i < orphanRollupDeletes.length; i += CHUNK_SIZE) {
+                await this.db.batch(orphanRollupDeletes.slice(i, i + CHUNK_SIZE));
+              }
+            }
+          } catch {
+            // Non-critical orphan rollup cleanup error
+          }
         }
 
         try {

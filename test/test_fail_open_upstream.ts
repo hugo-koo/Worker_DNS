@@ -39,6 +39,20 @@ async function runTestSuite(): Promise<void> {
   assert.strictEqual(tlsEndpoint.diagTarget, "tls://1.1.1.1:853");
   console.log(`    ✓ Resolved TLS endpoint: method=${tlsEndpoint.diagMethod}, target=${tlsEndpoint.diagTarget}`);
 
+  // Test Case 2b: ControlD FreeDNS DoT preset resolution
+  console.log("\n[2b] Testing ControlD FreeDNS DoT endpoint resolution...");
+  const controlDFreeDot = "tls://no-ads-malware-typo.freedns.controld.com";
+  const controlDUncensoredDot = "tls://uncensored.freedns.controld.com";
+  assert.strictEqual(isSafeUrl(controlDFreeDot), true, "ControlD Free DoT must be safe");
+  assert.strictEqual(isSafeUrl(controlDUncensoredDot), true, "ControlD Uncensored DoT must be safe");
+  const controlDFreeEndpoint = resolveUpstreamEndpoint(controlDFreeDot);
+  assert.strictEqual(controlDFreeEndpoint.diagMethod, "DoT");
+  assert.strictEqual(controlDFreeEndpoint.diagTarget, "tls://no-ads-malware-typo.freedns.controld.com:853");
+  const controlDUncensoredEndpoint = resolveUpstreamEndpoint(controlDUncensoredDot);
+  assert.strictEqual(controlDUncensoredEndpoint.diagMethod, "DoT");
+  assert.strictEqual(controlDUncensoredEndpoint.diagTarget, "tls://uncensored.freedns.controld.com:853");
+  console.log(`    ✓ Resolved ControlD DoT endpoints: ${controlDFreeEndpoint.diagTarget}, ${controlDUncensoredEndpoint.diagTarget}`);
+
   // Test Case 3: TLS (DoT) Upstream URL with dot://
   console.log("\n[3] Testing TLS (DoT) upstream endpoint resolution (dot://)...");
   const dotUrl = "dot://dns.google:853";
@@ -82,6 +96,17 @@ async function runTestSuite(): Promise<void> {
     const resTls = await fetchFromUpstream(tlsEndpoint, sampleQueryRaw);
     assert.ok(resTls.answer.length > 0, "DoT must return wire answer");
     console.log(`    ✓ DoT query succeeded (${resTls.latency} ms, answer: ${resTls.answer.length} bytes)`);
+  } catch (err: any) {
+    console.warn(`    ⚠ Live network test skipped or failed (network dependency):`, err.message);
+  }
+
+  // Test Case 7b: Live query over ControlD FreeDNS DoT
+  console.log("\n[7b] Testing live query against ControlD DoT (tls://no-ads-malware-typo.freedns.controld.com)...");
+  try {
+    const resControlD = await fetchFromUpstream(controlDFreeEndpoint, sampleQueryRaw);
+    assert.ok(resControlD.answer.length > 0, "ControlD DoT must return wire answer");
+    assert.strictEqual(resControlD.diagMethod, "DoT");
+    console.log(`    ✓ ControlD DoT query succeeded (${resControlD.latency} ms, answer: ${resControlD.answer.length} bytes)`);
   } catch (err: any) {
     console.warn(`    ⚠ Live network test skipped or failed (network dependency):`, err.message);
   }
