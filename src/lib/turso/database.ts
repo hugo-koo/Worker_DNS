@@ -198,7 +198,7 @@ export class TursoD1Database implements D1Database {
           continue;
         }
         const msg = first.error?.message || 'Unknown database error';
-        if (isReadOnly && isTursoQuotaError(msg)) {
+        if (isReadOnly && (first.error?.code === 'BLOCKED' || isTursoQuotaError(msg))) {
           this.readQuotaBlockedUntil = Date.now() + this.readQuotaCooldownMs;
           this.readQuotaBlockedMessage = msg;
         }

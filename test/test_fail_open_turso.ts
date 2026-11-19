@@ -13,6 +13,7 @@ import { resolveProfileByKey, resolveDefaultProfile, handleDoHRequest } from "..
 import { pipeline } from "../src/pipeline";
 import { configCache, profileKeyMemoryMap } from "../src/pipeline/cache";
 import { isTursoQuotaError, verifyTursoConnection, TursoD1Database } from "../src/lib/turso";
+import { resolveDbConfigStatus } from "../src/router/runtimeConfig";
 import { buildDNSQuery, parseDNSAnswer } from "../src/utils/dns";
 import { Context, Env, ExecutionContext } from "../src/types";
 
@@ -210,18 +211,29 @@ async function runTests() {
       return new Response(JSON.stringify({
         results: [{
           type: "error",
-          error: { message: "Operation was blocked: SQL read operations are forbidden (reads are blocked, do you need to upgrade your plan?)" }
+          error: {
+            code: "BLOCKED",
+            message: "Operation was blocked: SQL read operations are forbidden (reads are blocked, do you need to upgrade your plan?)"
+          }
         }]
       }), { status: 200, headers: { "Content-Type": "application/json" } });
     }) as typeof fetch;
 
-    const health = await verifyTursoConnection({
+    const quotaEnv = {
+      DB: mockBlockedDb,
+      DATABASE_SERVICE: "Turso",
       TURSO_DATABASE_URL: "turso://quota-test.turso.io",
       TURSO_AUTH_TOKEN: "test-token-12345"
-    });
+    } as unknown as Env;
+    const health = await verifyTursoConnection(quotaEnv);
     assert.strictEqual(health.ok, false);
     assert.strictEqual(health.errorCode, "quota_exceeded", "verifyTursoConnection must classify blocked reads as quota_exceeded");
     assert.ok(health.message?.includes("FAIL_OPEN_UPSTREAM"), "Quota error message should mention DNS fail-open active");
+
+    const dbStatus = await resolveDbConfigStatus(quotaEnv, false, "Turso");
+    assert.strictEqual(dbStatus.isDbMissing, false, "Quota exhaustion must NOT mark DB as missing/unconfigured");
+    assert.strictEqual(dbStatus.isDbQuotaExceeded, true, "Quota exhaustion must set isDbQuotaExceeded=true");
+    assert.strictEqual(dbStatus.dbErrorCode, "quota_exceeded");
 
     const tursoDb = new TursoD1Database("turso://quota-test.turso.io", "test-token-12345");
     tursoFetchCalls = 0;

@@ -200,11 +200,13 @@ export async function verifyTursoConnection(
         };
       }
     } else {
-      const json = (await res.json().catch(() => null)) as { results?: Array<{ type?: string; error?: { message?: string } }> } | null;
+      const json = (await res.json().catch(() => null)) as {
+        results?: Array<{ type?: string; error?: { message?: string; code?: string } }>;
+      } | null;
       const first = json?.results?.[0];
       if (!first || first.type === 'error' || first.error) {
         const probeErrMsg = first?.error?.message || 'Unexpected response';
-        if (isTursoQuotaError(probeErrMsg)) {
+        if (first?.error?.code === 'BLOCKED' || isTursoQuotaError(probeErrMsg)) {
           result = {
             ok: false,
             errorCode: 'quota_exceeded',

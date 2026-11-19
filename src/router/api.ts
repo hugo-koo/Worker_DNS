@@ -52,7 +52,7 @@ export async function handleApiRouter(
   ctx: ExecutionContext,
   runtimeCtx: RouterRuntimeContext
 ): Promise<{ response: Response; currentUser: User | null }> {
-  const { isDbMissing, dbErrorMessage } = await resolveDbConfigStatus(
+  const { isDbMissing, isDbQuotaExceeded, dbErrorCode, dbErrorMessage } = await resolveDbConfigStatus(
     env,
     runtimeCtx.isServerfull,
     runtimeCtx.dbService
@@ -68,6 +68,26 @@ export async function handleApiRouter(
         isJwtSecretMissing,
         databaseService: runtimeCtx.dbService,
         message: dbErrorMessage || 'DNS Worker is not fully configured. Please configure the database and JWT_SECRET secret variable.'
+      }), {
+        status: 503,
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        }
+      })
+    };
+  }
+
+  if (isDbQuotaExceeded) {
+    return {
+      currentUser: null,
+      response: new Response(JSON.stringify({
+        error: 'database_quota_exceeded',
+        isDbMissing: false,
+        isDbQuotaExceeded: true,
+        dbErrorCode,
+        databaseService: runtimeCtx.dbService,
+        message: dbErrorMessage || 'Database usage quota exceeded. Management API is temporarily paused while DNS fail-open remains active.'
       }), {
         status: 503,
         headers: {

@@ -20,9 +20,11 @@ export const DeploymentGuideView: React.FC = () => {
 
   // Read status injected from HTMLRewriter
   const isDbMissing = (window as any).DNS_WORKER_CONFIG?.isDbMissing ?? true;
+  const isDbQuotaExceeded = Boolean((window as any).DNS_WORKER_CONFIG?.isDbQuotaExceeded);
   const dbError: string | undefined = (window as any).DNS_WORKER_CONFIG?.dbError;
   const isJwtSecretMissing = (window as any).DNS_WORKER_CONFIG?.isJwtSecretMissing ?? true;
   const isTurso = Boolean((window as any).DNS_WORKER_CONFIG?.isTurso);
+  const isPureQuotaBlocked = isDbQuotaExceeded && !isDbMissing && !isJwtSecretMissing;
 
   const handleRefresh = () => {
     window.location.reload();
@@ -97,10 +99,21 @@ export const DeploymentGuideView: React.FC = () => {
               {/* Content Title */}
               <div>
                 <h2 className="text-lg md:text-xl font-bold text-gray-900 dark:text-zinc-50 mb-1 mt-0">
-                  {isServerfull ? t("deploymentGuide.serverfullTitle") : t("deploymentGuide.title")}
+                  {isPureQuotaBlocked
+                    ? t("deploymentGuide.tursoQuotaTitle", "Turso 用量配额已达上限")
+                    : isServerfull
+                      ? t("deploymentGuide.serverfullTitle")
+                      : t("deploymentGuide.title")}
                 </h2>
                 <p className="text-gray-600 dark:text-zinc-400 text-xs md:text-sm leading-relaxed m-0">
-                  {isServerfull ? t("deploymentGuide.serverfullSubtitle") : t("deploymentGuide.subtitle")}
+                  {isPureQuotaBlocked
+                    ? t(
+                        "deploymentGuide.tursoQuotaSubtitle",
+                        "数据库 URL 与鉴权凭证有效（非配置或 API 错误），当前因 Turso 套餐读取配额耗尽而暂停后台读取。DoH / DNS 解析已自动回退至 FAIL_OPEN_UPSTREAM 继续服务，待配额重置或升级套餐后刷新即可恢复管理面板。"
+                      )
+                    : isServerfull
+                      ? t("deploymentGuide.serverfullSubtitle")
+                      : t("deploymentGuide.subtitle")}
                 </p>
               </div>
 
@@ -108,19 +121,21 @@ export const DeploymentGuideView: React.FC = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* DB Status Callout */}
                 <Callout
-                  intent={isDbMissing ? Intent.DANGER : Intent.SUCCESS}
-                  icon={isDbMissing ? "warning-sign" : "tick"}
+                  intent={isDbQuotaExceeded ? Intent.WARNING : isDbMissing ? Intent.DANGER : Intent.SUCCESS}
+                  icon={isDbQuotaExceeded ? "warning-sign" : isDbMissing ? "warning-sign" : "tick"}
                   title={isTurso ? t("deploymentGuide.tursoDbStatus") : (isServerfull ? t("deploymentGuide.serverfullDbStatus") : t("deploymentGuide.dbStatus"))}
                   className="flex-1"
                 >
                   <span className="font-semibold text-xs">
-                    {isTurso
-                      ? (isDbMissing ? t("deploymentGuide.tursoDbMissing") : t("deploymentGuide.configured"))
-                      : isServerfull
-                        ? (isDbMissing ? t("deploymentGuide.serverfullDbMissing") : t("deploymentGuide.serverfullDbConfigured"))
-                        : (isDbMissing ? t("deploymentGuide.missing") : t("deploymentGuide.configured"))}
+                    {isDbQuotaExceeded
+                      ? t("deploymentGuide.tursoQuotaStatus", "配额已超限 (DNS Fail-Open 运行中)")
+                      : isTurso
+                        ? (isDbMissing ? t("deploymentGuide.tursoDbMissing") : t("deploymentGuide.configured"))
+                        : isServerfull
+                          ? (isDbMissing ? t("deploymentGuide.serverfullDbMissing") : t("deploymentGuide.serverfullDbConfigured"))
+                          : (isDbMissing ? t("deploymentGuide.missing") : t("deploymentGuide.configured"))}
                   </span>
-                  {isDbMissing && dbError ? (
+                  {(isDbMissing || isDbQuotaExceeded) && dbError ? (
                     <p className="text-xs mt-1.5 opacity-90 leading-normal break-words">
                       {dbError}
                     </p>
@@ -156,8 +171,8 @@ export const DeploymentGuideView: React.FC = () => {
               {/* JWT Secret Generator (only shown when JWT_SECRET is not yet configured) */}
               {isJwtSecretMissing && <JwtGenerator />}
 
-              {/* Guides */}
-              {isServerfull ? (
+              {/* Guides (hidden when credentials are valid and only Turso quota is exceeded) */}
+              {!isPureQuotaBlocked && (isServerfull ? (
                 <div className="pt-2">
                   <ServerfullGuide isDbMissing={isDbMissing} isJwtSecretMissing={isJwtSecretMissing} isTurso={isTurso} />
                 </div>
@@ -197,7 +212,7 @@ export const DeploymentGuideView: React.FC = () => {
                     {activeTab === "cli" ? <CliGuide isTurso={isTurso} /> : <DashboardGuide isTurso={isTurso} />}
                   </div>
                 </>
-              )}
+              ))}
             </div>
 
             {/* Footer Actions (Fixed Bottom) */}

@@ -80,10 +80,11 @@ function App() {
     );
   }
 
-  // Check for configuration errors (missing DB or JWT_SECRET)
+  // Check for configuration errors (missing DB / JWT_SECRET) or DB quota block
   const isDbMissing = (window as any).DNS_WORKER_CONFIG?.isDbMissing;
+  const isDbQuotaExceeded = (window as any).DNS_WORKER_CONFIG?.isDbQuotaExceeded;
   const isJwtSecretMissing = (window as any).DNS_WORKER_CONFIG?.isJwtSecretMissing;
-  if (isDbMissing || isJwtSecretMissing) {
+  if (isDbMissing || isJwtSecretMissing || isDbQuotaExceeded) {
     return <DeploymentGuideView />;
   }
 
