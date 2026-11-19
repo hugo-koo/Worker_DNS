@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Card,
   Elevation,
@@ -26,6 +26,14 @@ import {
   type UserList,
 } from "../../../services";
 import { formatDateTime } from "../../../utils/date";
+
+interface MergedUserListRow {
+  url: string;
+  userItem?: UserList;
+  systemItem?: UserList;
+  enabled: boolean;
+  last_synced_at: number | null;
+}
 
 export interface UserFilterListsCardProps {
   toasterRef?: React.RefObject<OverlayToaster | null>;
@@ -102,10 +110,37 @@ export const UserFilterListsCard: React.FC<UserFilterListsCardProps> = ({
     }
   };
 
-  const handleToggle = async (id: number, enabled: boolean) => {
+  const mergedLists = useMemo<MergedUserListRow[]>(() => {
+    const byUrl = new Map<string, MergedUserListRow>();
+    for (const item of lists) {
+      const existing = byUrl.get(item.url);
+      if (!existing) {
+        byUrl.set(item.url, {
+          url: item.url,
+          userItem: item.is_system === 0 ? item : undefined,
+          systemItem: item.is_system === 1 ? item : undefined,
+          enabled: Boolean(item.enabled),
+          last_synced_at: item.last_synced_at ?? null,
+        });
+      } else {
+        if (item.is_system === 0) existing.userItem = item;
+        if (item.is_system === 1) existing.systemItem = item;
+        existing.enabled = existing.enabled || Boolean(item.enabled);
+        existing.last_synced_at = existing.last_synced_at ?? item.last_synced_at ?? null;
+      }
+    }
+    return Array.from(byUrl.values());
+  }, [lists]);
+
+  const handleToggle = async (row: MergedUserListRow, enabled: boolean) => {
+    const targetIds = [row.userItem?.id, row.systemItem?.id].filter(
+      (id): id is number => typeof id === "number"
+    );
+    if (targetIds.length === 0) return;
     try {
-      await toggleUserList(id, enabled);
-      setLists((prev) => prev.map((l) => (l.id === id ? { ...l, enabled } : l)));
+      await Promise.all(targetIds.map((id) => toggleUserList(id, enabled)));
+      const idSet = new Set(targetIds);
+      setLists((prev) => prev.map((l) => (idSet.has(l.id) ? { ...l, enabled } : l)));
       toasterRef?.current?.show({
         message: enabled
           ? t("account.userFilterLists.enabledToast", "规则已在账号全局启用")
@@ -244,7 +279,7 @@ export const UserFilterListsCard: React.FC<UserFilterListsCardProps> = ({
             <Spinner size={16} />
             <span className="text-sm">{t("common.loading", "加载中...")}</span>
           </div>
-        ) : lists.length === 0 ? (
+        ) : mergedLists.length === 0 ? (
           <div className="text-center py-8 text-gray-400 text-sm border border-dashed border-gray-200 dark:border-gray-800 rounded-lg">
             {t("account.userFilterLists.empty", "暂无用户级与系统级过滤列表。您可在上方添加自建列表。")}
           </div>
@@ -261,39 +296,42 @@ export const UserFilterListsCard: React.FC<UserFilterListsCardProps> = ({
                 </tr>
               </thead>
               <tbody>
-                {lists.map((l) => (
-                  <tr key={l.id}>
-                    <td className="py-2 px-3 font-mono text-xs max-w-xs sm:max-w-md truncate" title={l.url}>
-                      {l.url}
+                {mergedLists.map((row) => (
+                  <tr key={row.url}>
+                    <td className="py-2 px-3 font-mono text-xs max-w-xs sm:max-w-md truncate" title={row.url}>
+                      {row.url}
                     </td>
                     <td className="py-2 px-3 whitespace-nowrap">
-                      {l.is_system === 1 ? (
-                        <Tag intent={Intent.PRIMARY} minimal round className="text-xs font-sans whitespace-nowrap">
-                          {t("filtering.tagSystem", "系统")}
-                        </Tag>
-                      ) : (
-                        <Tag intent={Intent.SUCCESS} minimal round className="text-xs font-sans whitespace-nowrap">
-                          {t("filtering.tagUser", "用户")}
-                        </Tag>
-                      )}
+                      <div className="inline-flex items-center gap-1.5">
+                        {row.userItem && (
+                          <Tag intent={Intent.SUCCESS} minimal round className="text-xs font-sans whitespace-nowrap">
+                            {t("filtering.tagUser", "用户")}
+                          </Tag>
+                        )}
+                        {row.systemItem && (
+                          <Tag intent={Intent.PRIMARY} minimal round className="text-xs font-sans whitespace-nowrap">
+                            {t("filtering.tagSystem", "系统")}
+                          </Tag>
+                        )}
+                      </div>
                     </td>
                     <td className="py-2 px-3 text-xs opacity-70 whitespace-nowrap">
-                      {l.last_synced_at ? formatDateTime(new Date(l.last_synced_at * 1000)) : t("filtering.neverSynced", "未同步")}
+                      {row.last_synced_at ? formatDateTime(new Date(row.last_synced_at * 1000)) : t("filtering.neverSynced", "未同步")}
                     </td>
                     <td className="py-2 px-3 text-center whitespace-nowrap">
                       <Switch
-                        checked={l.enabled}
-                        onChange={(e) => void handleToggle(l.id, (e.target as HTMLInputElement).checked)}
+                        checked={row.enabled}
+                        onChange={(e) => void handleToggle(row, (e.target as HTMLInputElement).checked)}
                         className="mb-0 inline-block"
                         innerLabelChecked={t("common.yes", "开")}
                         innerLabel={t("common.no", "关")}
                       />
                     </td>
                     <td className="py-2 px-3 text-right whitespace-nowrap">
-                      {l.is_system === 0 ? (
+                      {row.userItem ? (
                         <PopoverNext
-                          isOpen={deleteConfirmId === l.id}
-                          onInteraction={(open) => setDeleteConfirmId(open ? l.id : null)}
+                          isOpen={deleteConfirmId === row.userItem.id}
+                          onInteraction={(open) => setDeleteConfirmId(open ? row.userItem!.id : null)}
                           placement="top-end"
                           content={
                             <div className="p-3 space-y-3 max-w-xs">
@@ -311,7 +349,7 @@ export const UserFilterListsCard: React.FC<UserFilterListsCardProps> = ({
                                   small
                                   intent={Intent.DANGER}
                                   text={t("common.confirm", "确认删除")}
-                                  onClick={() => void handleDelete(l.id)}
+                                  onClick={() => void handleDelete(row.userItem!.id)}
                                 />
                               </div>
                             </div>

@@ -42,6 +42,8 @@ export function useE2eeActions({
           intent: Intent.SUCCESS,
           icon: "tick"
         });
+        await loadStatus();
+        onRefresh?.();
       }
     } catch (err: unknown) {
       console.error("[useE2eeActions] Failed to unlock private key:", err);

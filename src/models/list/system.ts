@@ -41,8 +41,10 @@ export class ListSystemModel {
     const affectedProfileIds: string[] = [];
 
     for (const user of users || []) {
-      const alreadyHas = await this.userModel.hasListForUser(user.id, canonicalUrl);
-      if (alreadyHas) {
+      // Only skip if the user already has this URL as a system-distributed list (is_system = 1).
+      // Users who only have a user-created copy (is_system = 0) still receive the system copy.
+      const alreadyHasSystem = await this.userModel.hasListForUser(user.id, canonicalUrl, true);
+      if (alreadyHasSystem) {
         skippedCount++;
         skippedUsernames.push(user.username);
         continue;

@@ -34,21 +34,24 @@ export const ListsTable: React.FC<ListsTableProps> = ({
       key: "url",
       header: t("filtering.tableUrl"),
       cellClassName: "font-mono text-sm max-w-md truncate",
-      render: (list: FilterList): React.ReactNode => (
-        <div className="flex items-center space-x-2 truncate">
-          <span className="truncate">{list.url}</span>
-          {list.scope === "system" && (
-            <Tag intent={Intent.PRIMARY} minimal className="shrink-0 text-xs font-sans">
-              {t("filtering.tagSystem", "系统")}
-            </Tag>
-          )}
-          {list.scope === "user" && (
-            <Tag intent={Intent.SUCCESS} minimal className="shrink-0 text-xs font-sans">
-              {t("filtering.tagUser", "用户")}
-            </Tag>
-          )}
-        </div>
-      ),
+      render: (list: FilterList): React.ReactNode => {
+        const scopes = list.scopes || (list.scope ? [list.scope] : []);
+        return (
+          <div className="flex items-center space-x-2 truncate">
+            <span className="truncate">{list.url}</span>
+            {scopes.includes("user") && (
+              <Tag intent={Intent.SUCCESS} minimal className="shrink-0 text-xs font-sans">
+                {t("filtering.tagUser", "用户")}
+              </Tag>
+            )}
+            {scopes.includes("system") && (
+              <Tag intent={Intent.PRIMARY} minimal className="shrink-0 text-xs font-sans">
+                {t("filtering.tagSystem", "系统")}
+              </Tag>
+            )}
+          </div>
+        );
+      },
     },
     {
       key: "lastSync",

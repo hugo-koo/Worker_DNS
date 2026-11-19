@@ -167,14 +167,14 @@ export const ListDetailsDialog: React.FC<ListDetailsDialogProps> = ({
             <span className="break-all min-w-0">{selectedList?.url}</span>
           )}
           <div className="flex items-center gap-1.5 shrink-0">
-            {selectedList?.scope === "system" && (
-              <Tag intent={Intent.PRIMARY} minimal className="font-sans">
-                {t("filtering.tagSystem", "系统")}
-              </Tag>
-            )}
-            {selectedList?.scope === "user" && (
+            {(selectedList?.scopes?.includes("user") || selectedList?.scope === "user") && (
               <Tag intent={Intent.SUCCESS} minimal className="font-sans">
                 {t("filtering.tagUser", "用户")}
+              </Tag>
+            )}
+            {(selectedList?.scopes?.includes("system") || selectedList?.scope === "system") && (
+              <Tag intent={Intent.PRIMARY} minimal className="font-sans">
+                {t("filtering.tagSystem", "系统")}
               </Tag>
             )}
             <Button
@@ -188,7 +188,7 @@ export const ListDetailsDialog: React.FC<ListDetailsDialogProps> = ({
           </div>
         </div>
 
-        {selectedList?.scope === "system" && (
+        {(selectedList?.scopes?.includes("system") || selectedList?.scope === "system") && (
           <Callout intent={Intent.PRIMARY} icon="info-sign" className="text-xs">
             {t(
               "filtering.systemListNotice",
@@ -197,7 +197,7 @@ export const ListDetailsDialog: React.FC<ListDetailsDialogProps> = ({
           </Callout>
         )}
 
-        {selectedList?.scope === "user" && (
+        {(selectedList?.scopes?.includes("user") || selectedList?.scope === "user") && (
           <Callout intent={Intent.SUCCESS} icon="info-sign" className="text-xs">
             {t(
               "filtering.userListNotice",

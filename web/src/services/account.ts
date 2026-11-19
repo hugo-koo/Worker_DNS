@@ -189,9 +189,9 @@ export async function getPasskeyRegistrationOptions(): Promise<any> {
   return res.json();
 }
 
-export interface VerifyPasskeyResponse {
-  success: boolean;
-  passkey: Passkey;
+export interface VerifyPasskeyResponse extends Passkey {
+  success?: boolean;
+  passkey?: Passkey;
   recovery_keys?: string[];
 }
 

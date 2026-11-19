@@ -181,11 +181,17 @@ export const usePasskeys = ({ onRefresh, toasterRef, user }: UsePasskeysProps): 
       ...reauthPayload
     });
 
-    const passkeyId = res?.passkey?.id;
+    const passkeyId = res?.passkey?.id || res?.id;
     if (passkeyId) {
       if (e2ee.isUnlocked()) {
         try {
           await e2ee.wrapCurrentKeyForPasskey(passkeyId);
+          toasterRef?.current?.show({
+            message: t("account.e2ee.enrollPasskeySuccess", "已成功将通行密钥关联至端到端加密！"),
+            intent: Intent.SUCCESS,
+            icon: "tick"
+          });
+          window.dispatchEvent(new CustomEvent("dns-worker:e2ee-updated"));
         } catch (wrapErr: unknown) {
           console.warn("[Passkeys] Failed to wrap existing E2EE key for new passkey:", wrapErr);
           const wrapMsg = wrapErr instanceof Error ? wrapErr.message : String(wrapErr);

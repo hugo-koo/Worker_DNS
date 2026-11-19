@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Button, Intent, Callout, ButtonGroup } from "@blueprintjs/core";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
@@ -11,6 +11,43 @@ import { ListsTable } from "./components/ListsTable";
 import { ListDetailsDialog } from "./components/ListDetailsDialog";
 import { SyncProgressButton } from "./components/SyncProgressButton";
 import { getProfileLists, addCustomProfileList, deleteCustomProfileList, syncProfileLists, syncSingleProfileList, getProfileSyncStatus, toggleProfileList, addProfileRule } from "../../services";
+
+/**
+ * Merges duplicate user-level and system-level filter list entries sharing the same URL
+ * into a single row annotated with combined scopes (e.g. ["user", "system"]).
+ */
+function mergeUserAndSystemLists(rawLists: FilterList[]): FilterList[] {
+  const byUrl = new Map<string, FilterList>();
+  for (const item of rawLists) {
+    if (item.scope === "profile") continue;
+    const itemScope: "user" | "system" = item.scope === "system" || item.is_system ? "system" : "user";
+    const existing = byUrl.get(item.url);
+    if (!existing) {
+      byUrl.set(item.url, {
+        ...item,
+        scope: itemScope,
+        scopes: [itemScope],
+      });
+    } else {
+      const mergedScopes = new Set<"profile" | "user" | "system">([
+        ...(existing.scopes || []),
+        itemScope,
+      ]);
+      const orderedScopes: Array<"user" | "system"> = [];
+      if (mergedScopes.has("user")) orderedScopes.push("user");
+      if (mergedScopes.has("system")) orderedScopes.push("system");
+      byUrl.set(item.url, {
+        ...existing,
+        enabled: existing.enabled || item.enabled,
+        last_synced_at: existing.last_synced_at ?? item.last_synced_at,
+        sync_error: existing.sync_error ?? item.sync_error,
+        metadata: existing.metadata ?? item.metadata,
+        scopes: orderedScopes,
+      });
+    }
+  }
+  return Array.from(byUrl.values());
+}
 
 export const FilteringView: React.FC<FilteringViewProps> = ({ profileId, toasterRef }) => {
   const navigate = useNavigate();
@@ -26,6 +63,8 @@ export const FilteringView: React.FC<FilteringViewProps> = ({ profileId, toaster
   const { t } = useTranslation();
 
   const [selectedList, setSelectedList] = useState<FilterList | null>(null);
+  const profileLists = useMemo(() => lists.filter((l) => l.scope === "profile"), [lists]);
+  const userAndSystemLists = useMemo(() => mergeUserAndSystemLists(lists), [lists]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -124,7 +163,13 @@ export const FilteringView: React.FC<FilteringViewProps> = ({ profileId, toaster
         if (timestampUpdated || (serverDone && current?.last_synced_at)) {
           setSyncSingleProgress(100);
           setLists(newLists);
-          if (current) setSelectedList(current);
+          if (current) {
+            const refreshed =
+              current.scope === "profile"
+                ? current
+                : mergeUserAndSystemLists(newLists).find((l) => l.url === current.url) || current;
+            setSelectedList(refreshed);
+          }
           await new Promise((resolve) => setTimeout(resolve, 300));
           return true;
         }
@@ -246,7 +291,10 @@ export const FilteringView: React.FC<FilteringViewProps> = ({ profileId, toaster
       const fresh = await getProfileLists(profileId);
       setLists(fresh);
       if (selectedList) {
-        const updatedCurrent = fresh.find((l) => l.id === id || l.url === selectedList.url);
+        const pool = selectedList.scope === "profile"
+          ? fresh.filter((l) => l.scope === "profile")
+          : mergeUserAndSystemLists(fresh);
+        const updatedCurrent = pool.find((l) => l.id === id || l.url === selectedList.url);
         if (updatedCurrent) setSelectedList(updatedCurrent);
       }
     } catch (e) {
@@ -383,7 +431,7 @@ export const FilteringView: React.FC<FilteringViewProps> = ({ profileId, toaster
 
       <div className="mb-6">
         <ListsTable
-          lists={lists.filter((l) => l.scope === "profile")}
+          lists={profileLists}
           onSelect={setSelectedList}
           loading={loading}
           emptyTitle={t("filtering.noProfileListsTitle", "尚未添加配置级列表")}
@@ -397,7 +445,7 @@ export const FilteringView: React.FC<FilteringViewProps> = ({ profileId, toaster
           <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
             <span>{t("filtering.userAndSystemListsTitle", "用户级与系统级列表")}</span>
             <span className="text-xs font-normal text-gray-400">
-              ({lists.filter((l) => l.scope !== "profile").length})
+              ({userAndSystemLists.length})
             </span>
           </h3>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
@@ -409,7 +457,7 @@ export const FilteringView: React.FC<FilteringViewProps> = ({ profileId, toaster
         </div>
 
         <ListsTable
-          lists={lists.filter((l) => l.scope !== "profile")}
+          lists={userAndSystemLists}
           onSelect={setSelectedList}
           loading={loading}
           emptyTitle={t("filtering.noUserSystemListsTitle", "暂无用户级与系统级列表")}

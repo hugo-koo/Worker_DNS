@@ -29,6 +29,7 @@ export interface FilterList {
   enabled: boolean;
   is_system?: boolean | number;
   scope?: "profile" | "user" | "system";
+  scopes?: Array<"profile" | "user" | "system">;
   user_list_id?: number;
   sync_error?: string | null;
   metadata?: ListMetadataStats | null;
