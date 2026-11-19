@@ -29,35 +29,44 @@ export const RenameAccessPointDialog: React.FC<RenameAccessPointDialogProps> = (
 
   return (
     <Dialog isOpen={isOpen} onClose={onClose} title={t("setup.renameAccessPoint")}>
-      <div className={Classes.DIALOG_BODY}>
-        <Tooltip
-          content={t("setup.accessPointNameFormatTip", "1-30 characters, letters, numbers, hyphens and underscores allowed")}
-          isOpen={renameApNameFocused}
-          position={Position.TOP}
-          intent={Intent.PRIMARY}
-          className="w-full"
-        >
-          <div className="w-full block">
-            <InputGroup
-              autoFocus
-              large
-              placeholder={t("setup.accessPointName")}
-              value={renameApName}
-              onChange={(e) => setRenameApName(e.target.value)}
-              onFocus={() => setRenameApNameFocused(true)}
-              onBlur={() => setRenameApNameFocused(false)}
-            />
-          </div>
-        </Tooltip>
-      </div>
-      <div className={Classes.DIALOG_FOOTER}>
-        <div className={Classes.DIALOG_FOOTER_ACTIONS}>
-          <Button onClick={onClose}>{t("common.cancel", "Cancel")}</Button>
-          <Button intent={Intent.PRIMARY} onClick={handleRename} loading={isRenaming} disabled={!isValidApName(renameApName)}>
-            {t("common.save")}
-          </Button>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!isRenaming && isValidApName(renameApName)) {
+            handleRename();
+          }
+        }}
+      >
+        <div className={Classes.DIALOG_BODY}>
+          <Tooltip
+            content={t("setup.accessPointNameFormatTip", "1-30 characters, letters, numbers, hyphens and underscores allowed")}
+            isOpen={renameApNameFocused}
+            position={Position.TOP}
+            intent={Intent.PRIMARY}
+            className="w-full"
+          >
+            <div className="w-full block">
+              <InputGroup
+                autoFocus
+                large
+                placeholder={t("setup.accessPointName")}
+                value={renameApName}
+                onChange={(e) => setRenameApName(e.target.value)}
+                onFocus={() => setRenameApNameFocused(true)}
+                onBlur={() => setRenameApNameFocused(false)}
+              />
+            </div>
+          </Tooltip>
         </div>
-      </div>
+        <div className={Classes.DIALOG_FOOTER}>
+          <div className={Classes.DIALOG_FOOTER_ACTIONS}>
+            <Button type="button" onClick={onClose}>{t("common.cancel", "Cancel")}</Button>
+            <Button type="submit" intent={Intent.PRIMARY} loading={isRenaming} disabled={!isValidApName(renameApName)}>
+              {t("common.save")}
+            </Button>
+          </div>
+        </div>
+      </form>
     </Dialog>
   );
 };

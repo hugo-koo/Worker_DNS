@@ -91,4 +91,32 @@ export class RuleModel {
     const result = await this.db.prepare("DELETE FROM rules WHERE id = ? AND profile_id = ?").bind(id, profileId).run();
     return result.success;
   }
+
+  /**
+   * Batch deletes multiple rules belonging to a profile inside D1 batch chunks (max 100 per batch).
+   *
+   * @param ids - Rule IDs to delete.
+   * @param profileId - Owner profile identifier.
+   * @returns Total number of rows deleted.
+   */
+  async deleteRulesBulk(ids: number[], profileId: string): Promise<number> {
+    const uniqueIds = Array.from(new Set(ids.filter((id) => Number.isInteger(id) && id > 0)));
+    if (uniqueIds.length === 0) return 0;
+
+    const statements = uniqueIds.map((id) =>
+      this.db.prepare("DELETE FROM rules WHERE id = ? AND profile_id = ?").bind(id, profileId)
+    );
+
+    let deleted = 0;
+    for (let i = 0; i < statements.length; i += 100) {
+      const chunk = statements.slice(i, i + 100);
+      const results = await this.db.batch(chunk);
+      for (const res of results) {
+        if (res.success) {
+          deleted += res.meta.changes ?? 0;
+        }
+      }
+    }
+    return deleted;
+  }
 }

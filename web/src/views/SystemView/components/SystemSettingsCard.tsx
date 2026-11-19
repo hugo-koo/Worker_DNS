@@ -81,6 +81,14 @@ export const SystemSettingsCard: React.FC<SystemSettingsCardProps> = ({
         <H4 style={{ margin: 0 }}>{t("account.systemSettings", "System Settings")}</H4>
       </div>
       <Card elevation={Elevation.ONE}>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!sysLoading) {
+              void handleSaveSysSettings();
+            }
+          }}
+        >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
           <div className="space-y-4">
             <H4 className="text-sm font-bold opacity-70 text-blue-500">Cloudflare Turnstile</H4>
@@ -99,6 +107,7 @@ export const SystemSettingsCard: React.FC<SystemSettingsCardProps> = ({
                 placeholder="0x000..."
                 rightElement={
                   <Button
+                    type="button"
                     minimal={true}
                     icon={showTurnstileSecretKey ? "eye-open" : "eye-off"}
                     onClick={() => setShowTurnstileSecretKey(!showTurnstileSecretKey)}
@@ -147,13 +156,14 @@ export const SystemSettingsCard: React.FC<SystemSettingsCardProps> = ({
         <Divider className="my-4" />
         <div className="flex justify-end">
           <Button
+            type="submit"
             intent={Intent.PRIMARY}
             icon="floppy-disk"
             text={t("common.save", "Save")}
             loading={sysLoading}
-            onClick={handleSaveSysSettings}
           />
         </div>
+        </form>
       </Card>
     </>
   );

@@ -119,8 +119,40 @@ export async function handleProfileRulesRequest(
   }
 
   if (request.method === 'DELETE') {
-    const { id } = await request.json() as any;
-    await ruleModel.deleteRule(id, profileId);
+    let body: { id?: unknown; ids?: unknown };
+    try {
+      body = (await request.json()) as { id?: unknown; ids?: unknown };
+    } catch {
+      return new Response("Invalid JSON payload", { status: 400 });
+    }
+
+    if (Array.isArray(body?.ids)) {
+      const MAX_BULK_DELETE = 2000;
+      if (body.ids.length === 0) {
+        return new Response("Rule ids cannot be empty", { status: 400 });
+      }
+      if (body.ids.length > MAX_BULK_DELETE) {
+        return new Response(`Bulk delete exceeds maximum of ${MAX_BULK_DELETE} rules`, { status: 400 });
+      }
+      const validIds = body.ids
+        .map((val) => Number(val))
+        .filter((val) => Number.isInteger(val) && val > 0);
+      if (validIds.length === 0) {
+        return new Response("No valid rule ids provided", { status: 400 });
+      }
+      const deletedCount = await ruleModel.deleteRulesBulk(validIds, profileId);
+      ctx.waitUntil(pipeline.clearCache(profileId, false, env));
+      return new Response(JSON.stringify({ success: true, count: deletedCount }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    const ruleId = Number(body?.id);
+    if (!Number.isInteger(ruleId) || ruleId <= 0) {
+      return new Response("Invalid rule id", { status: 400 });
+    }
+    await ruleModel.deleteRule(ruleId, profileId);
     ctx.waitUntil(pipeline.clearCache(profileId, false, env));
     return new Response(null, { status: 204 });
   }

@@ -2,6 +2,7 @@ import { Env, ProfileSettings, Rule } from "../types";
 import { BloomFilter } from "../utils/bloom";
 import { cacheUtils } from "../utils/cache";
 import { AdGuardProfileEngine, AdGuardPayload } from "../lib/adguard";
+import { detectServerfullMode } from "../router/runtimeConfig";
 
 export interface ConfigCacheEntry {
   settings: ProfileSettings;
@@ -74,16 +75,35 @@ export const DEFAULT_DNS_CACHE_SIZE = 20000;
 export const dnsCache = new SizeCappedMap<string, any>(DEFAULT_DNS_CACHE_SIZE);
 
 /**
- * 动态同步 DNS 缓存容量。支持在 Serverless (Cloudflare Workers) 与 Serverfull (Node.js/Bun) 模式下统一生效。
+ * 动态同步 DNS 缓存容量与运行时缓存上限。支持在 Serverless (Cloudflare Workers) 与 Serverfull (Node.js/Bun) 模式下统一生效。
  *
- * @param env 包含可选 DNS_CACHE_SIZE 配置项的环境变量集合
+ * @param env 包含可选 DNS_CACHE_SIZE / BLOOM_CACHE_SIZE 配置项的环境变量集合
  */
 export function syncDnsCacheSize(env?: Env): void {
   const configured = env?.DNS_CACHE_SIZE ?? (typeof process !== "undefined" ? process.env?.DNS_CACHE_SIZE : undefined);
-  if (configured === undefined || configured === null || configured === "") return;
-  const parsed = typeof configured === "number" ? configured : parseInt(String(configured), 10);
-  if (!isNaN(parsed) && parsed > 0 && parsed !== dnsCache.getMaxEntries()) {
-    dnsCache.setMaxEntries(parsed);
+  if (configured !== undefined && configured !== null && configured !== "") {
+    const parsed = typeof configured === "number" ? configured : parseInt(String(configured), 10);
+    if (!isNaN(parsed) && parsed > 0 && parsed !== dnsCache.getMaxEntries()) {
+      dnsCache.setMaxEntries(parsed);
+    }
+  }
+
+  const isServerfull = env ? detectServerfullMode(env) : false;
+  const configuredBloom = env?.BLOOM_CACHE_SIZE ?? env?.SERVERFULL_BLOOM_CACHE_SIZE;
+  let targetBloomMax = isServerfull ? 32 : 3;
+  if (configuredBloom !== undefined && configuredBloom !== null && configuredBloom !== "") {
+    const parsedBloom = typeof configuredBloom === "number" ? configuredBloom : parseInt(String(configuredBloom), 10);
+    if (!isNaN(parsedBloom) && parsedBloom > 0) {
+      targetBloomMax = parsedBloom;
+    }
+  }
+  if (bloomMemoryMap.getMaxEntries() !== targetBloomMax) {
+    bloomMemoryMap.setMaxEntries(targetBloomMax);
+  }
+
+  const targetConfigMax = isServerfull ? 500 : 200;
+  if (configCache.getMaxEntries() !== targetConfigMax) {
+    configCache.setMaxEntries(targetConfigMax);
   }
 }
 

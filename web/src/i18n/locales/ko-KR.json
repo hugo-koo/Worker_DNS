@@ -259,7 +259,7 @@
     "copyUrl": "URL 복사",
     "browsers": "브라우저",
     "browserTitle": "브라우저 설정 (Chrome/Edge)",
-    "browserSteps": "설정 > 개인정보 보호 및 보안 > 보안 > 보안 DNS 사용 > 사용자 지정 > URL 붙여넣기.",
+    "browserSteps": "설정 > 개인정보 보호 및 보안 > 보안 > 보안 DNS 사용 > 사용자 지정 > URL ({{dohUrl}}) 붙여넣기.",
     "browserTips": "또는 이 주소를 주소창에 복사하십시오:",
     "apple": "Apple",
     "appleTitle": "macOS / iOS / iPadOS / tvOS",
@@ -272,7 +272,7 @@
     "windowsStep0": "설정 > 네트워크 및 인터넷",
     "windowsStep1": "속성 > DNS 서버 할당 > 편집 > 수동.",
     "windowsStep2": "다음 DNS IP를 선택하고 입력합니다:",
-    "windowsStep3": "DoH(수동 템플릿)를 켜고 URL을 붙여넣습니다.",
+    "windowsStep3": "DoH(수동 템플릿)를 켜고 URL ({{dohUrl}})을 붙여넣습니다.",
     "windowsStep4": "「암호화되지 않은 연결로의 대체」를 끕니다.",
     "android": "Android",
     "androidTitle": "Android / 개인 DNS (DoT & DoQ)",
@@ -368,7 +368,11 @@
     "includeSubdomains": "서브도메인 포함",
     "includeSubdomainsDesc": "예: example.com일 때 *.example.com도 일치합니다 (기본값 꺼짐, 정확한 일치만)",
     "subdomainsBadge": "+서브도메인",
-    "wildcardDisclaimer": "서브도메인을 매칭하려면 와일드카드 *.example.com 을 사용해야 합니다. example.com 은 서브도메인과 매칭되지 않습니다."
+    "wildcardDisclaimer": "서브도메인을 매칭하려면 와일드카드 *.example.com 을 사용해야 합니다. example.com 은 서브도메인과 매칭되지 않습니다.",
+    "exportList": "목록 내보내기",
+    "exportSelected": "내보내기 ({{count}})",
+    "exportSuccess": "AdGuard Home 호환 규칙 {{count}}개를 내보냈습니다",
+    "exportEmpty": "내보낼 수 있는 규칙이 없습니다"
   },
   "analytics": {
     "customRange": "사용자 지정 범위",

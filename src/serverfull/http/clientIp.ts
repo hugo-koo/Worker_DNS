@@ -3,7 +3,7 @@
  * @description Client IP address sanitization, extraction, and proxy header validation.
  */
 
-import { isIPv4, isIPv6 } from '../../utils/cidr';
+import { ipInCidr, isIPv4, isIPv6 } from '../../utils/cidr';
 import { isPublicInternetIP } from '../../utils/validator';
 
 /**
@@ -41,14 +41,36 @@ export function sanitizeClientIp(candidate?: string | null): string | null {
 }
 
 /**
- * Checks whether an IP matches the optional trusted proxies configuration.
+ * Checks whether an IP matches the optional trusted proxies configuration (exact IP or CIDR range).
+ *
+ * @param ip - Sanitized proxy IP address.
+ * @param trustedProxies - Optional list or comma-separated string of trusted proxy IPs/CIDRs.
+ * @returns True if the IP matches any configured trusted proxy entry.
  */
 export function isTrustedProxyIp(ip: string, trustedProxies?: string | string[]): boolean {
   if (!trustedProxies) return false;
   const list = Array.isArray(trustedProxies)
     ? trustedProxies
     : trustedProxies.split(',').map((p) => p.trim()).filter(Boolean);
-  return list.includes(ip);
+  return list.some((entry) => (entry.includes('/') ? ipInCidr(ip, entry) : entry === ip));
+}
+
+/**
+ * Checks whether an inbound TCP socket remote address belongs to a trusted reverse proxy hop
+ * (loopback, private/local network, or explicitly configured `TRUSTED_PROXIES` IP/CIDR).
+ *
+ * @param socketRemoteAddress - Raw Node.js socket remote address.
+ * @param trustedProxies - Optional list or comma-separated string of trusted proxy IPs/CIDRs.
+ * @returns True when proxy-forwarded headers from this socket may be trusted.
+ */
+export function isTrustedProxySocket(
+  socketRemoteAddress?: string,
+  trustedProxies?: string | string[]
+): boolean {
+  const socketIp = sanitizeClientIp(socketRemoteAddress);
+  if (!socketIp) return false;
+  if (!isPublicInternetIP(socketIp)) return true;
+  return isTrustedProxyIp(socketIp, trustedProxies);
 }
 
 /**

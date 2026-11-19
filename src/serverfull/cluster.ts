@@ -56,6 +56,23 @@ export function forkClusterWorkers(count: number): void {
     cluster.fork();
   }
 
+  cluster.on('message', (senderWorker, message: unknown) => {
+    if (
+      !message ||
+      typeof message !== 'object' ||
+      (message as { type?: string }).type !== 'ACTIVE_DNS_SYNC' ||
+      !cluster.workers
+    ) {
+      return;
+    }
+
+    for (const worker of Object.values(cluster.workers)) {
+      if (worker && worker.id !== senderWorker.id && worker.isConnected()) {
+        worker.send(message);
+      }
+    }
+  });
+
   cluster.on('exit', (worker, code, signal) => {
     if (!worker.exitedAfterDisconnect) {
       console.warn(`[Cluster] Worker #${worker.id} exited (code: ${code}, signal: ${signal}). Respawning...`);

@@ -44,7 +44,14 @@ export const TimeRangeSelector: React.FC<TimeRangeSelectorProps> = ({
         ))}
         <PopoverNext
           content={
-            <div className="p-4 space-y-2 w-64">
+            <form
+              className="p-4 space-y-2 w-64"
+              onSubmit={(e) => {
+                e.preventDefault();
+                setRange("custom");
+                fetchLogs("custom", true);
+              }}
+            >
               <H5>{t("analytics.customRange")}</H5>
               <FormGroup label={t("analytics.startTime")}>
                 <InputGroup
@@ -64,15 +71,12 @@ export const TimeRangeSelector: React.FC<TimeRangeSelectorProps> = ({
                 />
               </FormGroup>
               <Button
+                type="submit"
                 fill
                 intent={Intent.PRIMARY}
                 text={t("analytics.apply")}
-                onClick={() => {
-                  setRange("custom");
-                  fetchLogs("custom", true);
-                }}
               />
-            </div>
+            </form>
           }
         >
           <Button active={range === "custom"} icon={<Calendar size={14} />} text={isMobile ? "" : t("analytics.custom")} small={isMobile} />

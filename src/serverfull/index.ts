@@ -17,14 +17,71 @@ import { HttpServer, HttpsServer } from './http';
 import { inspectTlsCertificate, getCertbotDiagnosticOptions } from './cert';
 import { flushLogBatch } from '../pipeline/logBatcher';
 import worker from '../app';
-import { ExecutionContext } from '../types';
+import { Env, ExecutionContext } from '../types';
 import { isUsableJwtSecret, isStrongJwtSecret } from '../lib/jwt';
 import { formatBanner, formatDiagnostic, formatKeyValueSection } from './format';
 import { checkNodeVersion, parseCli, getActiveRuntimeDescription } from './cli';
 import { tuneV8Engine } from './v8';
 import { getClusterInfo, forkClusterWorkers, shutdownClusterWorkers } from './cluster';
+import { registerActiveDnsSyncPublisher, applySyncedActiveDnsConnection } from '../lib/activeDns';
 
 export * from './cli';
+
+interface SqliteMaintenanceHandle {
+  rawDb: { close(): void };
+  checkpoint?(mode?: 'PASSIVE' | 'FULL' | 'RESTART' | 'TRUNCATE'): void;
+  optimize?(): void;
+}
+
+/**
+ * Starts the 60-second background cron scheduler with a re-entrancy lock so long-running
+ * list syncs or SQLite maintenance tasks never overlap across ticks and spike CPU.
+ */
+function startServerfullCronLoop(
+  env: Env,
+  localSqliteDb: SqliteMaintenanceHandle | null
+): NodeJS.Timeout {
+  let cronCounter = 0;
+  let isCronRunning = false;
+
+  return setInterval(async () => {
+    if (isCronRunning) {
+      console.warn('[Cron Scheduler] Previous scheduled run is still in progress; skipping overlapping tick.');
+      return;
+    }
+    isCronRunning = true;
+    try {
+      cronCounter++;
+      // Periodic non-blocking WAL checkpoint every 10 minutes
+      if (localSqliteDb?.checkpoint && cronCounter % 10 === 0) {
+        localSqliteDb.checkpoint('PASSIVE');
+      }
+      // Periodic PRAGMA optimize every 6 hours
+      if (localSqliteDb?.optimize && cronCounter % 360 === 0) {
+        localSqliteDb.optimize();
+      }
+
+      const scheduledEvent = {
+        cron: '* * * * *',
+        scheduledTime: Date.now(),
+        type: 'scheduled' as const,
+        noRetry() {}
+      };
+      const ctx: ExecutionContext = {
+        waitUntil(promise: Promise<any>) {
+          promise.catch((err) => console.error('[Cron Task Error]:', err));
+        },
+        passThroughOnException() {}
+      } as any;
+
+      await worker.scheduled(scheduledEvent as any, env, ctx);
+    } catch (err) {
+      console.error('[Cron Scheduler Error]:', err);
+    } finally {
+      isCronRunning = false;
+    }
+  }, 60000);
+}
 
 async function bootstrap(): Promise<void> {
   // 1. Optimize V8 engine (Fast API calls) and validate active engine requirements
@@ -201,38 +258,8 @@ async function bootstrap(): Promise<void> {
       ]
     }));
 
-    // Start background cron on Primary process (every 60s)
-    let cronCounter = 0;
-    const cronTimer = setInterval(async () => {
-      try {
-        cronCounter++;
-        // Periodic non-blocking WAL checkpoint every 10 minutes
-        if (localSqliteDb?.checkpoint && cronCounter % 10 === 0) {
-          localSqliteDb.checkpoint('PASSIVE');
-        }
-        // Periodic PRAGMA optimize every 6 hours
-        if (localSqliteDb?.optimize && cronCounter % 360 === 0) {
-          localSqliteDb.optimize();
-        }
-
-        const scheduledEvent = {
-          cron: '* * * * *',
-          scheduledTime: Date.now(),
-          type: 'scheduled' as const,
-          noRetry() {}
-        };
-        const ctx: ExecutionContext = {
-          waitUntil(promise: Promise<any>) {
-            promise.catch((err) => console.error('[Cron Task Error]:', err));
-          },
-          passThroughOnException() {}
-        } as any;
-
-        await worker.scheduled(scheduledEvent as any, env, ctx);
-      } catch (err) {
-        console.error('[Cron Scheduler Error]:', err);
-      }
-    }, 60000);
+    // Start background cron on Primary process (every 60s, non-overlapping)
+    const cronTimer = startServerfullCronLoop(env, localSqliteDb);
 
     // Fork worker processes
     forkClusterWorkers(clusterInfo.workersCount);
@@ -264,6 +291,33 @@ async function bootstrap(): Promise<void> {
   }
 
   // 7. Worker Process (or Single Process Mode): Initialize and start network servers
+  if (clusterInfo.isWorker) {
+    registerActiveDnsSyncPublisher((ip, profileId, expiresAt) => {
+      try {
+        process.send?.({ type: 'ACTIVE_DNS_SYNC', ip, profileId, expiresAt });
+      } catch {
+        // Ignore IPC send errors during worker shutdown
+      }
+    });
+
+    process.on('message', (message: unknown) => {
+      if (
+        message &&
+        typeof message === 'object' &&
+        (message as { type?: string }).type === 'ACTIVE_DNS_SYNC'
+      ) {
+        const payload = message as { ip?: unknown; profileId?: unknown; expiresAt?: unknown };
+        if (
+          typeof payload.ip === 'string' &&
+          typeof payload.profileId === 'string' &&
+          typeof payload.expiresAt === 'number'
+        ) {
+          applySyncedActiveDnsConnection(payload.ip, payload.profileId, payload.expiresAt);
+        }
+      }
+    });
+  }
+
   const certInfo = inspectTlsCertificate(config.tlsCertPath, config.tlsKeyPath);
   const canStartHttps = certInfo.configured && certInfo.filesExist && !config.disableHttps;
   const canStartDot = !config.disableDot && certInfo.configured && certInfo.filesExist && certInfo.isWildcard;
@@ -312,37 +366,7 @@ async function bootstrap(): Promise<void> {
   // If running in single-process mode (workers === 1), start background cron
   let cronTimer: NodeJS.Timeout | null = null;
   if (clusterInfo.workersCount === 1) {
-    let cronCounter = 0;
-    cronTimer = setInterval(async () => {
-      try {
-        cronCounter++;
-        // Periodic non-blocking WAL checkpoint every 10 minutes
-        if (localSqliteDb?.checkpoint && cronCounter % 10 === 0) {
-          localSqliteDb.checkpoint('PASSIVE');
-        }
-        // Periodic PRAGMA optimize every 6 hours
-        if (localSqliteDb?.optimize && cronCounter % 360 === 0) {
-          localSqliteDb.optimize();
-        }
-
-        const scheduledEvent = {
-          cron: '* * * * *',
-          scheduledTime: Date.now(),
-          type: 'scheduled' as const,
-          noRetry() {}
-        };
-        const ctx: ExecutionContext = {
-          waitUntil(promise: Promise<any>) {
-            promise.catch((err) => console.error('[Cron Task Error]:', err));
-          },
-          passThroughOnException() {}
-        } as any;
-
-        await worker.scheduled(scheduledEvent as any, env, ctx);
-      } catch (err) {
-        console.error('[Cron Scheduler Error]:', err);
-      }
-    }, 60000);
+    cronTimer = startServerfullCronLoop(env, localSqliteDb);
 
     const hasTls = !!(certInfo.configured && certInfo.filesExist);
     console.log(formatBanner({

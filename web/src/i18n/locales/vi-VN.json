@@ -259,7 +259,7 @@
     "copyUrl": "Sao chép URL",
     "browsers": "Trình duyệt",
     "browserTitle": "Cấu hình trình duyệt (Chrome/Edge)",
-    "browserSteps": "Cài đặt > Quyền riêng tư và bảo mật > Bảo mật > Sử dụng DNS bảo mật > Tùy chỉnh > Dán URL.",
+    "browserSteps": "Cài đặt > Quyền riêng tư và bảo mật > Bảo mật > Sử dụng DNS bảo mật > Tùy chỉnh > Dán URL ({{dohUrl}}).",
     "browserTips": "Hoặc sao chép địa chỉ này vào thanh địa chỉ:",
     "apple": "Apple",
     "appleTitle": "macOS / iOS / iPadOS / tvOS",
@@ -272,7 +272,7 @@
     "windowsStep0": "Cài đặt > Mạng & Internet",
     "windowsStep1": "Thuộc tính > Máy chủ DNS > Chỉnh sửa > Thủ công.",
     "windowsStep2": "Chọn và nhập DNS IP:",
-    "windowsStep3": "Bật DoH (Mẫu thủ công) và dán URL.",
+    "windowsStep3": "Bật DoH (Mẫu thủ công) và dán URL ({{dohUrl}}).",
     "windowsStep4": "Tắt \"Dự phòng sang bản rõ\" (Fallback to plaintext).",
     "android": "Android",
     "androidTitle": "Android / DNS riêng tư (DoT & DoQ)",
@@ -368,7 +368,11 @@
     "includeSubdomains": "Bao gồm tên miền phụ",
     "includeSubdomainsDesc": "Ví dụ: example.com cũng khớp với *.example.com; mặc định tắt (chỉ khớp chính xác)",
     "subdomainsBadge": "+Tên miền phụ",
-    "wildcardDisclaimer": "Để khớp với các miền phụ, hãy sử dụng ký tự đại diện *.example.com; example.com sẽ không khớp với các miền phụ."
+    "wildcardDisclaimer": "Để khớp với các miền phụ, hãy sử dụng ký tự đại diện *.example.com; example.com sẽ không khớp với các miền phụ.",
+    "exportList": "Xuất danh sách",
+    "exportSelected": "Xuất ({{count}})",
+    "exportSuccess": "Đã xuất {{count}} quy tắc tương thích AdGuard Home",
+    "exportEmpty": "Không có quy tắc nào để xuất"
   },
   "analytics": {
     "customRange": "Khoảng thời gian tùy chỉnh",

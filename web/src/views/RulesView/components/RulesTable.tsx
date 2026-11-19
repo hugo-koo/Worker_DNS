@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { HTMLTable, Tag, Intent } from "@blueprintjs/core";
+import { HTMLTable, Tag, Intent, Checkbox } from "@blueprintjs/core";
 import { ShieldX, CheckCircle, ArrowRightLeft, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { clsx } from "clsx";
@@ -10,6 +10,9 @@ export interface RulesTableProps {
   rules: Rule[];
   startEdit: (rule: Rule) => void;
   getBlockDetail: () => string;
+  selectedIds: number[];
+  onToggleSelect: (id: number) => void;
+  onToggleSelectAll: (checked: boolean) => void;
 }
 
 type SortField = "action" | "pattern" | "details" | "created_at";
@@ -23,10 +26,20 @@ interface ColumnConfig {
   render: (rule: Rule) => React.ReactNode;
 }
 
-export const RulesTable: React.FC<RulesTableProps> = ({ rules, startEdit, getBlockDetail }) => {
+export const RulesTable: React.FC<RulesTableProps> = ({
+  rules,
+  startEdit,
+  getBlockDetail,
+  selectedIds,
+  onToggleSelect,
+  onToggleSelectAll,
+}) => {
   const { t } = useTranslation();
   const [sortField, setSortField] = useState<SortField>("created_at");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
+  const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const allSelected = rules.length > 0 && selectedIdSet.size === rules.length;
+  const partiallySelected = selectedIdSet.size > 0 && selectedIdSet.size < rules.length;
 
   const handleHeaderClick = (field: SortField) => {
     if (sortField === field) {
@@ -166,6 +179,20 @@ export const RulesTable: React.FC<RulesTableProps> = ({ rules, startEdit, getBlo
       <HTMLTable interactive striped className="w-full min-w-max whitespace-nowrap">
         <thead>
           <tr>
+            <th
+              className="w-10 align-middle"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-center">
+                <Checkbox
+                  checked={allSelected}
+                  indeterminate={partiallySelected}
+                  aria-label={t("rules.selectAll", "全选")}
+                  className="mb-0!"
+                  onChange={(e) => onToggleSelectAll(e.currentTarget.checked)}
+                />
+              </div>
+            </th>
             {columns.map((col) => (
               <th
                 key={col.key}
@@ -193,15 +220,38 @@ export const RulesTable: React.FC<RulesTableProps> = ({ rules, startEdit, getBlo
           </tr>
         </thead>
         <tbody>
-          {sortedRules.map((rule) => (
-            <tr key={rule.id} onClick={() => startEdit(rule)} className="cursor-pointer">
-              {columns.map((col) => (
-                <td key={col.key} className={col.cellClassName}>
-                  {col.render(rule)}
+          {sortedRules.map((rule) => {
+            const isSelected = selectedIdSet.has(rule.id);
+            return (
+              <tr
+                key={rule.id}
+                onClick={() => startEdit(rule)}
+                className={clsx(
+                  "cursor-pointer transition-colors",
+                  isSelected && "bg-blue-50/70! dark:bg-blue-950/35!"
+                )}
+              >
+                <td
+                  className="w-10 align-middle"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-center justify-center">
+                    <Checkbox
+                      checked={isSelected}
+                      aria-label={`${t("rules.selectRow", "选择规则")} ${rule.pattern}`}
+                      className="mb-0!"
+                      onChange={() => onToggleSelect(rule.id)}
+                    />
+                  </div>
                 </td>
-              ))}
-            </tr>
-          ))}
+                {columns.map((col) => (
+                  <td key={col.key} className={col.cellClassName}>
+                    {col.render(rule)}
+                  </td>
+                ))}
+              </tr>
+            );
+          })}
         </tbody>
       </HTMLTable>
     </div>

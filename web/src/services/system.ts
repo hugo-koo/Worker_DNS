@@ -1,4 +1,5 @@
 import type { ClientInfo } from "./types";
+import { syncDeploymentModeFromClientInfo } from "../hooks/useDeploymentMode";
 
 export interface SubstituteInfo {
   ip: string | null;
@@ -13,7 +14,9 @@ export interface TraceInfo {
 export async function getClientInfo(): Promise<ClientInfo> {
   const res = await fetch("/api/clientinfo");
   if (!res.ok) throw new Error("Failed to fetch client info");
-  return res.json();
+  const data = (await res.json()) as ClientInfo;
+  syncDeploymentModeFromClientInfo(data.isServerfull, data.mode);
+  return data;
 }
 
 export async function getSubstituteInfo(): Promise<SubstituteInfo> {
@@ -26,7 +29,11 @@ export async function getTraceInfo(): Promise<TraceInfo | null> {
   try {
     const res = await fetch("/cdn-cgi/trace");
     if (!res.ok) return null;
+    const contentType = res.headers.get("Content-Type") || "";
+    if (contentType.includes("text/html")) return null;
     const text = await res.text();
+    // Ignore SPA index.html fallback when not proxied through Cloudflare edge.
+    if (text.trimStart().startsWith("<")) return null;
     const traceLines = text.split("\n");
     const data: Record<string, string> = {};
     for (const line of traceLines) {

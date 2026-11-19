@@ -71,9 +71,16 @@ export const PersonalInfoCard: React.FC<PersonalInfoCardProps> = ({
       </div>
       <div className="space-y-4">
         <FormGroup label={t("account.username")}>
-          <div className="flex gap-2">
-            {isEditingUsername ? (
-              <>
+          {isEditingUsername ? (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!usernameLoading) {
+                  onUpdateUsername();
+                }
+              }}
+            >
+              <div className="flex gap-2">
                 <Tooltip
                   content={t("account.formatTipUsername")}
                   isOpen={usernameFocused}
@@ -90,18 +97,25 @@ export const PersonalInfoCard: React.FC<PersonalInfoCardProps> = ({
                       }
                       onFocus={() => setUsernameFocused(true)}
                       onBlur={() => setUsernameFocused(false)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Escape") {
+                          setIsEditingUsername(false);
+                          setEditUsername(me?.username || "");
+                        }
+                      }}
                       autoFocus
                     />
                   </div>
                 </Tooltip>
                 <ButtonGroup>
                   <Button
+                    type="submit"
                     icon={<Check size={16} />}
                     intent={Intent.SUCCESS}
                     loading={usernameLoading}
-                    onClick={onUpdateUsername}
                   />
                   <Button
+                    type="button"
                     icon={<X size={16} />}
                     onClick={() => {
                       setIsEditingUsername(false);
@@ -109,17 +123,17 @@ export const PersonalInfoCard: React.FC<PersonalInfoCardProps> = ({
                     }}
                   />
                 </ButtonGroup>
-              </>
-            ) : (
-              <>
-                <InputGroup fill value={me?.username} readOnly />
-                <Button
-                  icon={<Edit2 size={16} />}
-                  onClick={() => setIsEditingUsername(true)}
-                />
-              </>
-            )}
-          </div>
+              </div>
+            </form>
+          ) : (
+            <div className="flex gap-2">
+              <InputGroup fill value={me?.username} readOnly />
+              <Button
+                icon={<Edit2 size={16} />}
+                onClick={() => setIsEditingUsername(true)}
+              />
+            </div>
+          )}
         </FormGroup>
         <FormGroup label={t("account.userId")}>
           <InputGroup leftIcon="id-number" value={me?.id} disabled />

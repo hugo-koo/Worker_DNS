@@ -42,39 +42,49 @@ export const CreateProfileCard: React.FC<CreateProfileCardProps> = ({
       elevation={Elevation.TWO}
       className="mb-6 p-4 dark:bg-gray-900 dark:border-gray-800 rounded-xl"
     >
-      <div className="flex items-center gap-2">
-        <Tooltip
-          content={t("common.profileNameFormatTip", "Profile Name tip: 1-30 characters, duplicates not allowed")}
-          isOpen={nameFocused}
-          position={Position.TOP}
-          intent={Intent.PRIMARY}
-          className="flex-1"
-        >
-          <div className="w-full block">
-            <InputGroup
-              fill
-              placeholder={t("common.newProfileName")}
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              onFocus={() => setNameFocused(true)}
-              onBlur={() => setNameFocused(false)}
-              autoFocus
-            />
-          </div>
-        </Tooltip>
-        <Button
-          intent={Intent.SUCCESS}
-          onClick={onCreate}
-          text={t("common.create")}
-          className="whitespace-nowrap"
-          disabled={!PROFILE_NAME_REGEX.test(newName)}
-        />
-        <Button
-          variant="minimal"
-          onClick={() => setShowCreate(false)}
-          icon="cross"
-        />
-      </div>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (PROFILE_NAME_REGEX.test(newName)) {
+            onCreate();
+          }
+        }}
+      >
+        <div className="flex items-center gap-2">
+          <Tooltip
+            content={t("common.profileNameFormatTip", "Profile Name tip: 1-30 characters, duplicates not allowed")}
+            isOpen={nameFocused}
+            position={Position.TOP}
+            intent={Intent.PRIMARY}
+            className="flex-1"
+          >
+            <div className="w-full block">
+              <InputGroup
+                fill
+                placeholder={t("common.newProfileName")}
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                onFocus={() => setNameFocused(true)}
+                onBlur={() => setNameFocused(false)}
+                autoFocus
+              />
+            </div>
+          </Tooltip>
+          <Button
+            type="submit"
+            intent={Intent.SUCCESS}
+            text={t("common.create")}
+            className="whitespace-nowrap"
+            disabled={!PROFILE_NAME_REGEX.test(newName)}
+          />
+          <Button
+            type="button"
+            variant="minimal"
+            onClick={() => setShowCreate(false)}
+            icon="cross"
+          />
+        </div>
+      </form>
       {error && (
         <div className="mt-2 text-red-500 text-xs">
           {getErrorMessage(error)}

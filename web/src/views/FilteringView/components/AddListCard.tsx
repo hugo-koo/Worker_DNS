@@ -39,32 +39,41 @@ export const AddListCard: React.FC<AddListCardProps> = ({ newUrl, setNewUrl, onA
 
   return (
     <Card elevation={Elevation.ONE} className="mb-6">
-      <div className="flex gap-2 flex-col sm:flex-row">
-        <InputGroup
-          fill
-          size="large"
-          placeholder={t("filtering.urlPlaceholder")}
-          value={newUrl}
-          onChange={(e) => setNewUrl(e.target.value)}
-          leftIcon="globe"
-          rightElement={
-            <PopoverNext content={presetMenu} placement="bottom-end" animation="minimal" arrow={false} usePortal={true}>
-              <Button variant="minimal" icon="chevron-down" />
-            </PopoverNext>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!syncing && !loading) {
+            onAddList();
           }
-        />
-        <Button
-          intent={Intent.PRIMARY}
-          size="large"
-          icon="plus"
-          onClick={() => onAddList()}
-          className="shrink-0"
-          loading={syncing || loading}
-          disabled={syncing || loading}
-        >
-          {t("filtering.addSubscription")}
-        </Button>
-      </div>
+        }}
+      >
+        <div className="flex gap-2 flex-col sm:flex-row">
+          <InputGroup
+            fill
+            size="large"
+            placeholder={t("filtering.urlPlaceholder")}
+            value={newUrl}
+            onChange={(e) => setNewUrl(e.target.value)}
+            leftIcon="globe"
+            rightElement={
+              <PopoverNext content={presetMenu} placement="bottom-end" animation="minimal" arrow={false} usePortal={true}>
+                <Button type="button" variant="minimal" icon="chevron-down" />
+              </PopoverNext>
+            }
+          />
+          <Button
+            type="submit"
+            intent={Intent.PRIMARY}
+            size="large"
+            icon="plus"
+            className="shrink-0"
+            loading={syncing || loading}
+            disabled={syncing || loading}
+          >
+            {t("filtering.addSubscription")}
+          </Button>
+        </div>
+      </form>
     </Card>
   );
 };

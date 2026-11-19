@@ -7,7 +7,7 @@ import http from 'node:http';
 import { Buffer } from 'node:buffer';
 import worker from '../../app';
 import { Env, ExecutionContext } from '../../types';
-import { extractClientIp } from './clientIp';
+import { extractClientIp, isTrustedProxySocket, sanitizeClientIp } from './clientIp';
 import { ACCESS_KEY_REGEX } from '../../utils/validator';
 
 /**
@@ -33,21 +33,12 @@ export function createHttpRequestHandler(
     return /^(?:[a-zA-Z0-9.-]+|\[[0-9a-fA-F:]+\])(?::\d{1,5})?$/.test(trimmed);
   };
 
-  const isTrustedProxySocket = (remoteAddr: string | undefined): boolean => {
-    if (!remoteAddr) return false;
-    const ip = remoteAddr.startsWith('::ffff:') ? remoteAddr.slice(7) : remoteAddr;
-    if (ip === '127.0.0.1' || ip === '::1') return true;
-    const trustedRaw = env.TRUSTED_PROXIES;
-    if (!trustedRaw) return false;
-    return trustedRaw.split(',').map((s: string) => s.trim()).filter(Boolean).includes(ip);
-  };
-
   const MAX_DOH_BODY_BYTES = 64 * 1024;
   const MAX_API_BODY_BYTES = 2 * 1024 * 1024;
 
   return async (req: http.IncomingMessage, res: http.ServerResponse): Promise<void> => {
     try {
-      const fromTrustedProxy = isTrustedProxySocket(req.socket.remoteAddress);
+      const fromTrustedProxy = isTrustedProxySocket(req.socket.remoteAddress, env.TRUSTED_PROXIES);
       const forwardedProto = fromTrustedProxy
         ? (req.headers['x-forwarded-proto'] as string | undefined)?.split(',')[0]?.trim().toLowerCase()
         : undefined;
@@ -95,8 +86,27 @@ export function createHttpRequestHandler(
       headers.set('X-Http-Version', trustedHttpVersion || req.httpVersion);
 
       // Populate remote client IP (supports direct connections, Cloudflare, Caddy, Nginx)
+      const incomingCfIp = sanitizeClientIp(headers.get('CF-Connecting-IP'));
       const clientIp = extractClientIp(headers, req.socket.remoteAddress, env.TRUSTED_PROXIES);
       headers.set('CF-Connecting-IP', clientIp);
+
+      // Strip Cloudflare geolocation headers when the socket is untrusted or the resolved client IP
+      // does not match incoming CF-Connecting-IP, preventing stale/spoofed geo mismatches.
+      if (!fromTrustedProxy || !incomingCfIp || incomingCfIp !== clientIp) {
+        const cfGeoHeaders = [
+          'CF-IPCountry',
+          'CF-Region',
+          'CF-IPCity',
+          'CF-Timezone',
+          'CF-ASN',
+          'CF-AS-Org',
+          'CF-IPLatitude',
+          'CF-IPLongitude',
+        ];
+        for (const h of cfGeoHeaders) {
+          headers.delete(h);
+        }
+      }
 
       // Populate fallback geolocation coordinates for serverfull environments without Cloudflare edge proxy
       const currentLatHeader = headers.get('CF-IPLatitude');

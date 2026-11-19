@@ -11,6 +11,7 @@ import { isDummyOrPlaceholderDomain } from "../../../services";
 export interface SetupTabsProps {
   isMobile: boolean;
   copyToClipboard: (text: string) => void;
+  dohUrl?: string;
   profileKey: string;
   profileName?: string;
   accessPointName?: string;
@@ -18,9 +19,12 @@ export interface SetupTabsProps {
   dotDomain?: string;
 }
 
+const DOH_URL_PLACEHOLDER_TOKEN = "__DNS_WORKER_DOH_URL__";
+
 export const SetupTabs: React.FC<SetupTabsProps> = ({
   isMobile,
   copyToClipboard,
+  dohUrl,
   profileKey,
   profileName,
   accessPointName,
@@ -29,6 +33,33 @@ export const SetupTabs: React.FC<SetupTabsProps> = ({
 }) => {
   const { t } = useTranslation();
   const { isCloudflare } = useDeploymentMode();
+  const resolvedDohUrl = dohUrl || `${window.location.origin}/${profileKey}`;
+
+  /**
+   * Renders a localized setup instruction while replacing the `{{dohUrl}}` placeholder
+   * with a clickable, copy-to-clipboard Access DoH URL code badge.
+   */
+  const renderStepWithDohUrl = (translationKey: string): React.ReactNode => {
+    const rendered = t(translationKey, { dohUrl: DOH_URL_PLACEHOLDER_TOKEN });
+    const parts = rendered.split(DOH_URL_PLACEHOLDER_TOKEN);
+    if (parts.length === 1) {
+      return rendered;
+    }
+    return parts.map((part, idx) => (
+      <React.Fragment key={idx}>
+        {part}
+        {idx < parts.length - 1 && (
+          <code
+            onClick={() => copyToClipboard(resolvedDohUrl)}
+            title={t("setup.copyUrl", "Copy URL")}
+            className="px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-blue-600 dark:text-blue-400 font-mono text-xs cursor-pointer hover:underline break-all"
+          >
+            {resolvedDohUrl}
+          </code>
+        )}
+      </React.Fragment>
+    ));
+  };
 
   return (
     <div className="group relative overflow-hidden rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm">
@@ -62,7 +93,7 @@ export const SetupTabs: React.FC<SetupTabsProps> = ({
         panel={
           <div className="space-y-4 md:ml-4 mt-4 md:mt-0">
             <H5 className="font-bold">{t("setup.browserTitle")}</H5>
-            <p className="text-sm">{t("setup.browserSteps")}</p>
+            <p className="text-sm">{renderStepWithDohUrl("setup.browserSteps")}</p>
             <p className="text-[10px] opacity-50 cursor-pointer" onClick={() => copyToClipboard("chrome://settings/security")}>
               {t("setup.browserTips", "or copy this URL to the address bar: ") + "chrome://settings/security"}
             </p>
@@ -84,6 +115,12 @@ export const SetupTabs: React.FC<SetupTabsProps> = ({
             <p className="text-sm">{t("setup.appleDesc")}</p>
             <p className="text-[10px] opacity-50 text-center">{t("setup.appleWarning")}</p>
             <div className="p-6 bg-gray-50 dark:bg-gray-800 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 flex flex-col items-center justify-center">
+              <span
+                className="font-mono text-xs opacity-75 mb-3 max-w-full truncate select-text"
+                title={resolvedDohUrl}
+              >
+                {resolvedDohUrl}
+              </span>
               <Icon icon="document" size={40} className="opacity-20 mb-4" />
               <Button
                 intent={Intent.PRIMARY}
@@ -147,7 +184,7 @@ export const SetupTabs: React.FC<SetupTabsProps> = ({
                   ))}
                 </div>
               </li>
-              <li>{t("setup.windowsStep3")}</li>
+              <li>{renderStepWithDohUrl("setup.windowsStep3")}</li>
               <li>{t("setup.windowsStep4")}</li>
             </ol>
           </div>

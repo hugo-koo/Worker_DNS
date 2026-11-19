@@ -230,6 +230,19 @@ export async function deleteProfileRule(profileId: string, ruleId: number): Prom
   if (!res.ok) throw new Error(await res.text());
 }
 
+/**
+ * Deletes multiple custom rules from a profile in a single batch API call.
+ */
+export async function deleteProfileRulesBulk(profileId: string, ruleIds: number[]): Promise<{ success: boolean; count: number }> {
+  const res = await profileFetch(`/api/profiles/${profileId}/rules`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ids: ruleIds })
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
 export async function getProfileAccessPoints(profileId: string): Promise<AccessPoint[]> {
   const res = await profileFetch(`/api/profiles/${profileId}/access_points`);
   if (!res.ok) throw new Error("Failed to fetch access points");

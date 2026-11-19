@@ -259,7 +259,7 @@
     "copyUrl": "URL をコピー",
     "browsers": "ブラウザ",
     "browserTitle": "ブラウザ設定 (Chrome/Edge)",
-    "browserSteps": "設定 > プライバシーとセキュリティ > セキュリティ > セキュア DNS を使用する > カスタム > URL を貼り付けます。",
+    "browserSteps": "設定 > プライバシーとセキュリティ > セキュリティ > セキュア DNS を使用する > カスタム > URL ({{dohUrl}}) を貼り付けます。",
     "browserTips": "または、以下のアドレスをアドレスバーにコピーしてください：",
     "apple": "Apple",
     "appleTitle": "macOS / iOS / iPadOS / tvOS",
@@ -272,7 +272,7 @@
     "windowsStep0": "設定 > ネットワークとインターネット",
     "windowsStep1": "プロパティ > DNS サーバー割り当て > 編集 > 手動。",
     "windowsStep2": "以下の DNS IP を選択して入力します：",
-    "windowsStep3": "DoH（テンプレート手動入力）をオンにして、URLを貼り付けます。",
+    "windowsStep3": "DoH（テンプレート手動入力）をオンにして、URL ({{dohUrl}}) を貼り付けます。",
     "windowsStep4": "「暗号化されていない接続へのフォールバック」をオフにします。",
     "android": "Android",
     "androidTitle": "Android / プライベート DNS (DoT & DoQ)",
@@ -368,7 +368,11 @@
     "includeSubdomains": "サブドメインも含める",
     "includeSubdomainsDesc": "例: example.com の場合に *.example.com も一致します（デフォルトはオフ、完全一致のみ）",
     "subdomainsBadge": "+サブドメイン",
-    "wildcardDisclaimer": "サブドメインを一致させるには、ワイルドカード *.example.com を使用してください。example.com はサブドメインに一致しません。"
+    "wildcardDisclaimer": "サブドメインを一致させるには、ワイルドカード *.example.com を使用してください。example.com はサブドメインに一致しません。",
+    "exportList": "リストをエクスポート",
+    "exportSelected": "エクスポート ({{count}})",
+    "exportSuccess": "AdGuard Home 互換ルールを {{count}} 件エクスポートしました",
+    "exportEmpty": "エクスポート可能なルールがありません"
   },
   "analytics": {
     "customRange": "カスタム期間",

@@ -72,7 +72,13 @@ export const AnalyticsRangeSelector: React.FC<AnalyticsRangeSelectorProps> = ({
         ))}
         <PopoverNext
           content={
-            <div className="p-4 space-y-4 w-64">
+            <form
+              className="p-4 space-y-4 w-64"
+              onSubmit={(e) => {
+                e.preventDefault();
+                onApplyCustom();
+              }}
+            >
               <H5>{t("analytics.customRange")}</H5>
               <FormGroup label={t("analytics.startTime")}>
                 <InputGroup
@@ -96,12 +102,12 @@ export const AnalyticsRangeSelector: React.FC<AnalyticsRangeSelectorProps> = ({
                 />
               </FormGroup>
               <Button
+                type="submit"
                 fill
                 intent={Intent.PRIMARY}
                 text={t("analytics.apply")}
-                onClick={onApplyCustom}
               />
-            </div>
+            </form>
           }
         >
           <Button

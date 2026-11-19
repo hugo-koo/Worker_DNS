@@ -259,7 +259,7 @@
     "copyUrl": "Copier l'URL",
     "browsers": "Navigateurs",
     "browserTitle": "Configuration du navigateur (Chrome/Edge)",
-    "browserSteps": "Paramètres > Confidentialité et sécurité > Sécurité > Utiliser un DNS sécurisé > Personnalisé > Coller l'URL.",
+    "browserSteps": "Paramètres > Confidentialité et sécurité > Sécurité > Utiliser un DNS sécurisé > Personnalisé > Coller l'URL ({{dohUrl}}).",
     "browserTips": "Ou copiez cette adresse dans votre barre d'adresse :",
     "apple": "Apple",
     "appleTitle": "macOS / iOS / iPadOS / tvOS",
@@ -272,7 +272,7 @@
     "windowsStep0": "Paramètres > Réseau et Internet",
     "windowsStep1": "Propriétés > Attribution du serveur DNS > Modifier > Manuel.",
     "windowsStep2": "Sélectionnez et saisissez les IP DNS :",
-    "windowsStep3": "Activez DoH (modèle manuel) et collez l'URL.",
+    "windowsStep3": "Activez DoH (modèle manuel) et collez l'URL ({{dohUrl}}).",
     "windowsStep4": "Désactivez le repli vers les connexions non chiffrées.",
     "android": "Android",
     "androidTitle": "Android / DNS privé (DoT & DoQ)",
@@ -368,7 +368,11 @@
     "includeSubdomains": "Inclure les sous-domaines",
     "includeSubdomainsDesc": "Ex. : example.com correspondra aussi à *.example.com ; désactivé par défaut (correspondance exacte uniquement)",
     "subdomainsBadge": "+Sous-domaines",
-    "wildcardDisclaimer": "Pour faire correspondre les sous-domaines, utilisez le caractère générique *.example.com ; example.com ne correspondra pas aux sous-domaines."
+    "wildcardDisclaimer": "Pour faire correspondre les sous-domaines, utilisez le caractère générique *.example.com ; example.com ne correspondra pas aux sous-domaines.",
+    "exportList": "Exporter la liste",
+    "exportSelected": "Exporter ({{count}})",
+    "exportSuccess": "{{count}} règles compatibles AdGuard Home exportées",
+    "exportEmpty": "Aucune règle exportable disponible"
   },
   "analytics": {
     "customRange": "Période personnalisée",

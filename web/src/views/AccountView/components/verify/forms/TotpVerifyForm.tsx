@@ -22,7 +22,15 @@ export const TotpVerifyForm: React.FC<TotpVerifyFormProps> = ({
   const { t } = useTranslation();
 
   return (
-    <div className="py-2 space-y-4">
+    <form
+      className="py-2 space-y-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!loading && totpCode.length === 6) {
+          void onVerify();
+        }
+      }}
+    >
       <FormGroup label={t("account.totpCode", "Authenticator Code")}>
         <DigitInput
           length={6}
@@ -37,13 +45,13 @@ export const TotpVerifyForm: React.FC<TotpVerifyFormProps> = ({
         />
       </FormGroup>
       <Button
+        type="submit"
         fill
         intent={Intent.PRIMARY}
         loading={loading}
         disabled={totpCode.length !== 6}
-        onClick={() => onVerify()}
         text={t("common.confirm", "Confirm")}
       />
-    </div>
+    </form>
   );
 };

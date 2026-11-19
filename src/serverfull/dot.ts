@@ -11,6 +11,7 @@ import { parseDNSQueryFromRaw } from '../utils/dns';
 import { pipeline } from '../pipeline';
 import { resolveProfileByKey, resolveDefaultProfile } from '../api/doh';
 import { hasAlreadyTriedFailOpen, resolveFailOpenFallback } from '../pipeline/resolver/transport';
+import { recordActiveDnsConnection } from '../lib/activeDns';
 import { ACCESS_KEY_REGEX } from '../utils/validator';
 import { formatDiagnostic, formatPortError } from './format';
 import { inspectTlsCertificate, getCertbotCommand } from './cert';
@@ -271,6 +272,10 @@ export class DotDnsServer {
       });
 
       const result = await pipeline.process(request, query, context);
+      if (!profile.isEmergencyFallback) {
+        const activeDnsTtl = Number(env.ACTIVE_DNS_CACHE_TTL) || 60;
+        ctx.waitUntil(recordActiveDnsConnection(null, remoteIp, profile.id, activeDnsTtl, true));
+      }
       if (!result || result.action === 'FAIL' || !result.answer || result.answer.length === 0) {
         if (!hasAlreadyTriedFailOpen(result, env)) {
           const fallbackRes = await resolveFailOpenFallback(env, rawMsg);

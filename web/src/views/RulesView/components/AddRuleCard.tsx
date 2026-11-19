@@ -23,7 +23,15 @@ export const AddRuleCard: React.FC<AddRuleCardProps> = ({ newRule, setNewRule, a
 
   return (
     <Card elevation={Elevation.ONE} className="mb-8 p-6">
-      <div className="flex flex-col gap-5">
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!loading) {
+            addRule();
+          }
+        }}
+      >
+        <div className="flex flex-col gap-5">
         <div className="flex flex-col lg:flex-row justify-between gap-4 items-start lg:items-end">
           <div className="w-full lg:w-48">
             <FormGroup label={t("rules.action")} labelFor="rule-type" className="mb-0">
@@ -55,10 +63,10 @@ export const AddRuleCard: React.FC<AddRuleCardProps> = ({ newRule, setNewRule, a
           {newRule.type !== "REDIRECT" && (
             <FormGroup label="" labelFor="" className="mb-0">
               <Button
+                type="submit"
                 intent={Intent.PRIMARY}
                 size="large"
                 icon={<Plus size={18} />}
-                onClick={addRule}
                 loading={loading}
                 disabled={loading}
               >
@@ -111,10 +119,10 @@ export const AddRuleCard: React.FC<AddRuleCardProps> = ({ newRule, setNewRule, a
 
             <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700 flex justify-end">
               <Button
+                type="submit"
                 intent={Intent.PRIMARY}
                 large
                 icon={<Plus size={18} />}
-                onClick={addRule}
                 text={t("rules.saveRedirectRule")}
                 loading={loading}
                 disabled={loading}
@@ -122,7 +130,8 @@ export const AddRuleCard: React.FC<AddRuleCardProps> = ({ newRule, setNewRule, a
             </div>
           </div>
         )}
-      </div>
+        </div>
+      </form>
     </Card>
   );
 };

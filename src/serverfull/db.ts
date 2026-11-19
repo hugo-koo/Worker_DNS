@@ -6,9 +6,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { Buffer } from 'node:buffer';
-import { DatabaseSync } from 'node:sqlite';
+import { DatabaseSync, StatementSync } from 'node:sqlite';
 import { D1Database, D1PreparedStatement, D1Result, D1ExecResult, D1DatabaseSession } from '@cloudflare/workers-types';
 import { getPackageRoot } from './config';
+import { SizeCappedMap } from '../pipeline/cache';
 
 /**
  * Normalizes input parameter values to primitive types safely bindable by SQLite and node:sqlite.
@@ -73,8 +74,14 @@ export class NodeD1PreparedStatement implements D1PreparedStatement {
 
   constructor(
     public readonly db: DatabaseSync,
-    public readonly sql: string
+    public readonly sql: string,
+    private readonly getStmt?: (sql: string) => StatementSync,
+    private readonly evictStmt?: (sql: string) => void
   ) {}
+
+  private prepareStmt(): StatementSync {
+    return this.getStmt ? this.getStmt(this.sql) : this.db.prepare(this.sql);
+  }
 
   bind(...values: any[]): D1PreparedStatement {
     this.params = values.map(toSqliteParam);
@@ -83,7 +90,7 @@ export class NodeD1PreparedStatement implements D1PreparedStatement {
 
   async first<T = unknown>(colName?: string): Promise<T | null> {
     try {
-      const stmt = this.db.prepare(this.sql);
+      const stmt = this.prepareStmt();
       const row = stmt.get(...this.params) as Record<string, any> | undefined;
       if (!row) return null;
       if (colName) {
@@ -91,6 +98,7 @@ export class NodeD1PreparedStatement implements D1PreparedStatement {
       }
       return fromSqliteRow<T>(row);
     } catch (err: any) {
+      this.evictStmt?.(this.sql);
       console.warn(`[SQLite D1] Query error in first(): ${err.message}\nSQL: ${this.sql}`);
       throw err;
     }
@@ -98,7 +106,7 @@ export class NodeD1PreparedStatement implements D1PreparedStatement {
 
   async all<T = unknown>(): Promise<D1Result<T>> {
     try {
-      const stmt = this.db.prepare(this.sql);
+      const stmt = this.prepareStmt();
       const rows = stmt.all(...this.params) as Record<string, any>[];
       const normalizedRows = rows.map(r => fromSqliteRow<T>(r));
       return {
@@ -115,6 +123,7 @@ export class NodeD1PreparedStatement implements D1PreparedStatement {
         }
       };
     } catch (err: any) {
+      this.evictStmt?.(this.sql);
       console.warn(`[SQLite D1] Query error in all(): ${err.message}\nSQL: ${this.sql}`);
       throw err;
     }
@@ -122,7 +131,7 @@ export class NodeD1PreparedStatement implements D1PreparedStatement {
 
   async run<T = unknown>(): Promise<D1Result<T>> {
     try {
-      const stmt = this.db.prepare(this.sql);
+      const stmt = this.prepareStmt();
       const result = stmt.run(...this.params);
       const changes = Number(result.changes);
       const lastInsertRowid = Number(result.lastInsertRowid);
@@ -140,14 +149,15 @@ export class NodeD1PreparedStatement implements D1PreparedStatement {
         }
       };
     } catch (err: any) {
+      this.evictStmt?.(this.sql);
       console.warn(`[SQLite D1] Query error in run(): ${err.message}\nSQL: ${this.sql}`);
       throw err;
     }
   }
 
-  async raw<T = unknown[]>(options?: { columnNames?: boolean }): Promise<any> {
+  async raw<_T = unknown[]>(options?: { columnNames?: boolean }): Promise<any> {
     try {
-      const stmt = this.db.prepare(this.sql);
+      const stmt = this.prepareStmt();
       const rows = stmt.all(...this.params) as Record<string, any>[];
       const rawRows = rows.map(r => Object.values(r).map(fromSqliteValue));
       if (options?.columnNames && rows.length > 0) {
@@ -155,6 +165,7 @@ export class NodeD1PreparedStatement implements D1PreparedStatement {
       }
       return rawRows;
     } catch (err: any) {
+      this.evictStmt?.(this.sql);
       console.warn(`[SQLite D1] Query error in raw(): ${err.message}\nSQL: ${this.sql}`);
       throw err;
     }
@@ -162,10 +173,26 @@ export class NodeD1PreparedStatement implements D1PreparedStatement {
 }
 
 export class NodeD1Database implements D1Database {
+  private readonly stmtCache = new SizeCappedMap<string, StatementSync>(256);
+
   constructor(
     public readonly rawDb: DatabaseSync,
     public readonly dbPath?: string
   ) {}
+
+  private getOrPrepareStatement = (sql: string): StatementSync => {
+    const cached = this.stmtCache.get(sql);
+    if (cached) {
+      return cached;
+    }
+    const stmt = this.rawDb.prepare(sql);
+    this.stmtCache.set(sql, stmt);
+    return stmt;
+  };
+
+  private evictStatement = (sql: string): void => {
+    this.stmtCache.delete(sql);
+  };
 
 
   /**
@@ -173,6 +200,7 @@ export class NodeD1Database implements D1Database {
    */
   vacuum(): void {
     try {
+      this.stmtCache.clear();
       this.rawDb.exec('VACUUM;');
       this.rawDb.exec('PRAGMA wal_checkpoint(TRUNCATE);');
     } catch (err: unknown) {
@@ -207,7 +235,12 @@ export class NodeD1Database implements D1Database {
   private batchMutex: Promise<void> = Promise.resolve();
 
   prepare(query: string): D1PreparedStatement {
-    return new NodeD1PreparedStatement(this.rawDb, query) as unknown as D1PreparedStatement;
+    return new NodeD1PreparedStatement(
+      this.rawDb,
+      query,
+      this.getOrPrepareStatement,
+      this.evictStatement
+    ) as unknown as D1PreparedStatement;
   }
 
   async batch<T = unknown>(statements: D1PreparedStatement[]): Promise<D1Result<T>[]> {
@@ -238,6 +271,7 @@ export class NodeD1Database implements D1Database {
   }
 
   async exec(query: string): Promise<D1ExecResult> {
+    this.stmtCache.clear();
     this.rawDb.exec(query);
     return { count: 0, duration: 0 };
   }
@@ -248,6 +282,7 @@ export class NodeD1Database implements D1Database {
 
   close(): void {
     try {
+      this.stmtCache.clear();
       this.rawDb.close();
     } catch {}
   }

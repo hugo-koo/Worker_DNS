@@ -12,6 +12,8 @@ import {
 import { hasAlreadyTriedFailOpen, resolveFailOpenFallback } from '../pipeline/resolver/transport';
 import { DEFAULT_FAIL_OPEN_UPSTREAM } from '../constants/presets';
 import { lookupAccessKeyInDo, syncResolvedProfileKeyToDo } from '../lib/accessKeyRegistry';
+import { recordActiveDnsConnection } from '../lib/activeDns';
+import { detectServerfullMode } from '../router/runtimeConfig';
 
 /** In-memory throttle tracker for user last DNS resolution database updates */
 const activeThrottleMemoryMap = new Map<string, number>();
@@ -259,11 +261,15 @@ export async function handleDoHRequest(
         try {
           const clientIp = request.headers.get("CF-Connecting-IP") || "127.0.0.1";
           
-          // Record active connection (used by Debug API)
+          // Record active connection (used by Verify Connection / Connected or Not API)
           const activeDnsTtl = Number(env.ACTIVE_DNS_CACHE_TTL) || 60;
-          if (cache) {
-            await cacheUtils.set(cache, `active_dns:${clientIp}`, profileId, activeDnsTtl);
-          }
+          await recordActiveDnsConnection(
+            cache,
+            clientIp,
+            profileId,
+            activeDnsTtl,
+            detectServerfullMode(env)
+          );
 
           // Update user DNS resolution activity timestamp (throttled hourly for last_resolve_at & lifecycle inactivity)
           const nowSec = Math.floor(Date.now() / 1000);

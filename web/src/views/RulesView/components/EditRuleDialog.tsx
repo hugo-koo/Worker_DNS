@@ -27,7 +27,15 @@ export const EditRuleDialog: React.FC<EditRuleDialogProps> = ({
 
   return (
     <Dialog isOpen={!!editRule} onClose={cancelEdit} title={t("rules.editRule", "Edit Rule")} style={{ width: "600px" }}>
-      <DialogBody>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!isSaving && !isDeleting && editRule) {
+            saveEditRule();
+          }
+        }}
+      >
+        <DialogBody>
         {editRule && (
           <div className="flex flex-col gap-4">
             <div className="flex gap-4">
@@ -100,12 +108,12 @@ export const EditRuleDialog: React.FC<EditRuleDialogProps> = ({
       <DialogFooter
         actions={
           <div className="flex gap-2">
-            <Button onClick={cancelEdit} disabled={isSaving || isDeleting}>
+            <Button type="button" onClick={cancelEdit} disabled={isSaving || isDeleting}>
               {t("rules.cancel", "Cancel")}
             </Button>
             <Button
+              type="submit"
               intent={Intent.PRIMARY}
-              onClick={saveEditRule}
               loading={isSaving}
               disabled={isSaving || isDeleting}
             >
@@ -115,6 +123,7 @@ export const EditRuleDialog: React.FC<EditRuleDialogProps> = ({
         }
       >
         <Button
+          type="button"
           icon={<Trash2 size={14} />}
           intent={Intent.DANGER}
           text={t("rules.delete", "Delete")}
@@ -125,6 +134,7 @@ export const EditRuleDialog: React.FC<EditRuleDialogProps> = ({
           disabled={isSaving || isDeleting}
         />
       </DialogFooter>
+      </form>
     </Dialog>
   );
 };

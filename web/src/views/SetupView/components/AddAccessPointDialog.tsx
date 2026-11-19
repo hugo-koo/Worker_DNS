@@ -29,35 +29,44 @@ export const AddAccessPointDialog: React.FC<AddAccessPointDialogProps> = ({
 
   return (
     <Dialog isOpen={isOpen} onClose={onClose} title={t("setup.addAccessPoint")}>
-      <div className={Classes.DIALOG_BODY}>
-        <Tooltip
-          content={t("setup.accessPointNameFormatTip", "1-30 characters, letters, numbers, hyphens and underscores allowed")}
-          isOpen={newApNameFocused}
-          position={Position.TOP}
-          intent={Intent.PRIMARY}
-          className="w-full"
-        >
-          <div className="w-full block">
-            <InputGroup
-              autoFocus
-              large
-              placeholder={t("setup.accessPointName")}
-              value={newApName}
-              onChange={(e) => setNewApName(e.target.value)}
-              onFocus={() => setNewApNameFocused(true)}
-              onBlur={() => setNewApNameFocused(false)}
-            />
-          </div>
-        </Tooltip>
-      </div>
-      <div className={Classes.DIALOG_FOOTER}>
-        <div className={Classes.DIALOG_FOOTER_ACTIONS}>
-          <Button onClick={onClose}>{t("common.cancel", "Cancel")}</Button>
-          <Button intent={Intent.PRIMARY} onClick={handleAdd} loading={isAdding} disabled={!isValidApName(newApName)}>
-            {t("common.create")}
-          </Button>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!isAdding && isValidApName(newApName)) {
+            handleAdd();
+          }
+        }}
+      >
+        <div className={Classes.DIALOG_BODY}>
+          <Tooltip
+            content={t("setup.accessPointNameFormatTip", "1-30 characters, letters, numbers, hyphens and underscores allowed")}
+            isOpen={newApNameFocused}
+            position={Position.TOP}
+            intent={Intent.PRIMARY}
+            className="w-full"
+          >
+            <div className="w-full block">
+              <InputGroup
+                autoFocus
+                large
+                placeholder={t("setup.accessPointName")}
+                value={newApName}
+                onChange={(e) => setNewApName(e.target.value)}
+                onFocus={() => setNewApNameFocused(true)}
+                onBlur={() => setNewApNameFocused(false)}
+              />
+            </div>
+          </Tooltip>
         </div>
-      </div>
+        <div className={Classes.DIALOG_FOOTER}>
+          <div className={Classes.DIALOG_FOOTER_ACTIONS}>
+            <Button type="button" onClick={onClose}>{t("common.cancel", "Cancel")}</Button>
+            <Button type="submit" intent={Intent.PRIMARY} loading={isAdding} disabled={!isValidApName(newApName)}>
+              {t("common.create")}
+            </Button>
+          </div>
+        </div>
+      </form>
     </Dialog>
   );
 };

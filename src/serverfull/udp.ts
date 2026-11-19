@@ -10,6 +10,7 @@ import { parseDNSQueryFromRaw } from '../utils/dns';
 import { pipeline } from '../pipeline';
 import { resolveDefaultProfile, resolveProfileByKey } from '../api/doh';
 import { hasAlreadyTriedFailOpen, resolveFailOpenFallback } from '../pipeline/resolver/transport';
+import { recordActiveDnsConnection } from '../lib/activeDns';
 import { formatPortError } from './format';
 
 export interface UdpServerOptions {
@@ -163,6 +164,10 @@ export class UdpDnsServer {
       });
 
       const result = await pipeline.process(request, query, context);
+      if (!profile.isEmergencyFallback && profile.id !== 'default') {
+        const activeDnsTtl = Number(env.ACTIVE_DNS_CACHE_TTL) || 60;
+        ctx.waitUntil(recordActiveDnsConnection(null, rinfo.address, profile.id, activeDnsTtl, true));
+      }
       if (!result || result.action === 'FAIL' || !result.answer || result.answer.length === 0) {
         if (!hasAlreadyTriedFailOpen(result, env)) {
           const fallbackRes = await resolveFailOpenFallback(env, rawBytes);

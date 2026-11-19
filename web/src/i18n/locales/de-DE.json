@@ -259,7 +259,7 @@
     "copyUrl": "URL kopieren",
     "browsers": "Browser",
     "browserTitle": "Browser-Konfiguration (Chrome/Edge)",
-    "browserSteps": "Einstellungen > Datenschutz und Sicherheit > Sicherheit > Sicheres DNS verwenden > Benutzerdefiniert > URL einfügen.",
+    "browserSteps": "Einstellungen > Datenschutz und Sicherheit > Sicherheit > Sicheres DNS verwenden > Benutzerdefiniert > URL ({{dohUrl}}) einfügen.",
     "browserTips": "Oder kopieren Sie diese Adresse in Ihre Adressleiste:",
     "apple": "Apple",
     "appleTitle": "macOS / iOS / iPadOS / tvOS",
@@ -272,7 +272,7 @@
     "windowsStep0": "Einstellungen > Netzwerk und Internet",
     "windowsStep1": "Eigenschaften > DNS-Serverzuweisung > Bearbeiten > Manuell.",
     "windowsStep2": "Wählen und tragen Sie die DNS-IPs ein:",
-    "windowsStep3": "Aktivieren Sie DoH (Manuelle Vorlage) und fügen Sie die URL ein.",
+    "windowsStep3": "Aktivieren Sie DoH (Manuelle Vorlage) und fügen Sie die URL ({{dohUrl}}) ein.",
     "windowsStep4": "Deaktivieren Sie das Fallback auf unverschlüsselte Verbindungen.",
     "android": "Android",
     "androidTitle": "Android / Privates DNS (DoT & DoQ)",
@@ -368,7 +368,11 @@
     "includeSubdomains": "Subdomains einschließen",
     "includeSubdomainsDesc": "Z.B. entspricht example.com auch *.example.com; standardmäßig deaktiviert (nur exakte Übereinstimmung)",
     "subdomainsBadge": "+Subdomains",
-    "wildcardDisclaimer": "Verwenden Sie zum Abgleichen von Subdomains den Platzhalter *.example.com; example.com gleicht keine Subdomains ab."
+    "wildcardDisclaimer": "Verwenden Sie zum Abgleichen von Subdomains den Platzhalter *.example.com; example.com gleicht keine Subdomains ab.",
+    "exportList": "Liste exportieren",
+    "exportSelected": "Exportieren ({{count}})",
+    "exportSuccess": "{{count}} AdGuard-Home-Regeln exportiert",
+    "exportEmpty": "Keine exportierbaren Regeln vorhanden"
   },
   "analytics": {
     "customRange": "Benutzerdefinierter Zeitraum",

@@ -4,11 +4,23 @@
  * SQLite concurrency maintenance, and multi-runtime execution coordination.
  */
 
+import assert from 'node:assert';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-import { dnsCache, DEFAULT_DNS_CACHE_SIZE, syncDnsCacheSize, SizeCappedMap } from '../src/pipeline/cache';
+import {
+  dnsCache,
+  bloomMemoryMap,
+  configCache,
+  DEFAULT_DNS_CACHE_SIZE,
+  syncDnsCacheSize,
+  SizeCappedMap
+} from '../src/pipeline/cache';
 import { tuneV8Engine } from '../src/serverfull/v8';
 import { getClusterInfo } from '../src/serverfull/cluster';
 import { NodeD1Database } from '../src/serverfull/db';
+import { attachStaticAssetHandler } from '../src/serverfull/http/assets';
 import { getActiveRuntimeDescription, handleRuntimeSwitch } from '../src/serverfull/commands/checkEnv';
 import { getServerfullConfig } from '../src/serverfull/config';
 
@@ -121,6 +133,90 @@ if (env.DNS_CACHE_SIZE !== 25000) {
 }
 console.log('   ✓ CLI options and environment mapping verified.');
 
-console.log('\n================================================================');
-console.log('   ALL HIGH-PERFORMANCE RUNTIME TESTS PASSED!                   ');
-console.log('================================================================\n');
+// 8. Validate Serverfull vs Workers bloomMemoryMap & configCache scaling
+console.log('8. Validating Serverfull vs Workers Bloom & Config cache capacity scaling...');
+syncDnsCacheSize({ DATABASE_SERVICE: 'D1' } as any);
+if (bloomMemoryMap.getMaxEntries() !== 3 || configCache.getMaxEntries() !== 200) {
+  throw new Error(`Expected Workers limits (3 / 200), got (${bloomMemoryMap.getMaxEntries()} / ${configCache.getMaxEntries()})`);
+}
+syncDnsCacheSize({ SERVERFULL_DB_PATH: ':memory:', DATABASE_SERVICE: 'File' } as any);
+if (bloomMemoryMap.getMaxEntries() !== 32 || configCache.getMaxEntries() !== 500) {
+  throw new Error(`Expected Serverfull limits (32 / 500), got (${bloomMemoryMap.getMaxEntries()} / ${configCache.getMaxEntries()})`);
+}
+syncDnsCacheSize({ SERVERFULL_DB_PATH: ':memory:', BLOOM_CACHE_SIZE: 48 } as any);
+if (bloomMemoryMap.getMaxEntries() !== 48) {
+  throw new Error(`Expected custom BLOOM_CACHE_SIZE 48, got ${bloomMemoryMap.getMaxEntries()}`);
+}
+console.log('   ✓ Bloom & Config cache runtime capacity scaling verified.');
+
+// 9. Validate NodeD1Database StatementSync LRU caching and exec() invalidation
+console.log('9. Validating NodeD1Database prepared statement caching...');
+async function runAsyncPerfChecks() {
+  const cachedDb = new DatabaseSync(':memory:');
+  cachedDb.exec('CREATE TABLE kv_stmt (k TEXT PRIMARY KEY, v TEXT);');
+  let prepareCalls = 0;
+  const origPrepare = cachedDb.prepare.bind(cachedDb);
+  (cachedDb as any).prepare = (sql: string) => {
+    prepareCalls++;
+    return origPrepare(sql);
+  };
+  const d1 = new NodeD1Database(cachedDb, ':memory:');
+  await d1.prepare('INSERT INTO kv_stmt (k, v) VALUES (?, ?)').bind('k1', 'v1').run();
+  await d1.prepare('INSERT INTO kv_stmt (k, v) VALUES (?, ?)').bind('k2', 'v2').run();
+  assert.strictEqual(prepareCalls, 1, `Expected 1 prepare() call for repeated INSERT SQL, got ${prepareCalls}`);
+  const row1 = await d1.prepare('SELECT v FROM kv_stmt WHERE k = ?').bind('k1').first<{ v: string }>();
+  const row2 = await d1.prepare('SELECT v FROM kv_stmt WHERE k = ?').bind('k2').first<{ v: string }>();
+  assert.strictEqual(row1?.v, 'v1');
+  assert.strictEqual(row2?.v, 'v2');
+  assert.strictEqual(prepareCalls, 2, `Expected cached SELECT statement reuse (prepareCalls=${prepareCalls})`);
+  await d1.exec('SELECT 1');
+  await d1.prepare('SELECT v FROM kv_stmt WHERE k = ?').bind('k1').first<{ v: string }>();
+  assert.strictEqual(prepareCalls, 3, `Expected exec() to clear statement cache (prepareCalls=${prepareCalls})`);
+  d1.close();
+  console.log('   ✓ NodeD1Database StatementSync LRU caching verified.');
+
+  // 10. Validate Serverfull static asset cache + ETag / 304
+  console.log('10. Validating static asset memory cache & ETag / 304 Not Modified...');
+  const assetTmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dns-worker-assets-'));
+  try {
+    fs.mkdirSync(path.join(assetTmpDir, 'assets'), { recursive: true });
+    fs.writeFileSync(path.join(assetTmpDir, 'assets', 'app-123.js'), 'console.log("ok");');
+    const mockAssetEnv: any = {};
+    attachStaticAssetHandler(mockAssetEnv, assetTmpDir);
+
+    const firstRes = await mockAssetEnv.ASSETS.fetch(new Request('http://127.0.0.1/assets/app-123.js'));
+    if (firstRes.status !== 200) {
+      throw new Error(`Expected 200 for first static asset request, got ${firstRes.status}`);
+    }
+    const etag = firstRes.headers.get('ETag');
+    if (!etag) {
+      throw new Error('Expected ETag header on static asset response');
+    }
+    // Delete file on disk to prove immutable /assets/* serves directly from memory cache
+    fs.unlinkSync(path.join(assetTmpDir, 'assets', 'app-123.js'));
+    const cachedRes = await mockAssetEnv.ASSETS.fetch(new Request('http://127.0.0.1/assets/app-123.js'));
+    if (cachedRes.status !== 200 || (await cachedRes.text()) !== 'console.log("ok");') {
+      throw new Error('Expected immutable static asset to serve from memory cache');
+    }
+    const notModRes = await mockAssetEnv.ASSETS.fetch(
+      new Request('http://127.0.0.1/assets/app-123.js', { headers: { 'If-None-Match': etag } })
+    );
+    if (notModRes.status !== 304) {
+      throw new Error(`Expected 304 Not Modified for matching If-None-Match, got ${notModRes.status}`);
+    }
+    console.log('   ✓ Static asset memory cache and ETag 304 verified.');
+  } finally {
+    fs.rmSync(assetTmpDir, { recursive: true, force: true });
+  }
+}
+
+runAsyncPerfChecks()
+  .then(() => {
+    console.log('\n================================================================');
+    console.log('   ALL HIGH-PERFORMANCE RUNTIME TESTS PASSED!                   ');
+    console.log('================================================================\n');
+  })
+  .catch((err) => {
+    console.error('Test failed:', err);
+    process.exit(1);
+  });

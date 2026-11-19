@@ -259,7 +259,7 @@
     "copyUrl": "Copiar URL",
     "browsers": "Navegadores",
     "browserTitle": "Configuración del navegador (Chrome/Edge)",
-    "browserSteps": "Configuración > Privacidad y seguridad > Seguridad > Usar DNS seguro > Personalizado > Pegar URL.",
+    "browserSteps": "Configuración > Privacidad y seguridad > Seguridad > Usar DNS seguro > Personalizado > Pegar URL ({{dohUrl}}).",
     "browserTips": "O copia esta dirección en tu barra de direcciones:",
     "apple": "Apple",
     "appleTitle": "macOS / iOS / iPadOS / tvOS",
@@ -272,7 +272,7 @@
     "windowsStep0": "Configuración > Red e Internet",
     "windowsStep1": "Propiedades > Asignación de servidor DNS > Editar > Manual.",
     "windowsStep2": "Selecciona e introduce las IP de DNS:",
-    "windowsStep3": "Activa DoH (plantilla manual) y pega la URL.",
+    "windowsStep3": "Activa DoH (plantilla manual) y pega la URL ({{dohUrl}}).",
     "windowsStep4": "Desactiva el fallback a texto plano.",
     "android": "Android",
     "androidTitle": "Android / DNS privado (DoT y DoQ)",
@@ -368,7 +368,11 @@
     "includeSubdomains": "Incluir subdominios",
     "includeSubdomainsDesc": "P. ej., example.com también coincidirá con *.example.com; desactivado por defecto (solo coincidencia exacta)",
     "subdomainsBadge": "+Subdominios",
-    "wildcardDisclaimer": "Para hacer coincidir subdominios, use el comodín *.example.com; example.com no coincidirá con subdominios."
+    "wildcardDisclaimer": "Para hacer coincidir subdominios, use el comodín *.example.com; example.com no coincidirá con subdominios.",
+    "exportList": "Exportar lista",
+    "exportSelected": "Exportar ({{count}})",
+    "exportSuccess": "Se exportaron {{count}} reglas compatibles con AdGuard Home",
+    "exportEmpty": "No hay reglas disponibles para exportar"
   },
   "analytics": {
     "customRange": "Periodo personalizado",

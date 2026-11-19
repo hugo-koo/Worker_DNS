@@ -259,7 +259,7 @@
     "copyUrl": "Copy URL",
     "browsers": "Browsers",
     "browserTitle": "Browser Configuration (Chrome/Edge)",
-    "browserSteps": "Settings > Privacy and security > Security > Use secure DNS > Custom > Paste URL.",
+    "browserSteps": "Settings > Privacy and security > Security > Use secure DNS > Custom > Paste URL ({{dohUrl}}).",
     "browserTips": "Or paste this into your address bar:",
     "apple": "Apple",
     "appleTitle": "macOS / iOS / iPadOS / tvOS",
@@ -272,7 +272,7 @@
     "windowsStep0": "Settings > Network & internet",
     "windowsStep1": "Properties > DNS server assignment > Edit > Manual.",
     "windowsStep2": "Fill in DNS IPs:",
-    "windowsStep3": "Enable DoH (manual template) and paste URL.",
+    "windowsStep3": "Enable DoH (manual template) and paste URL ({{dohUrl}}).",
     "windowsStep4": "Disable Fallback to plaintext.",
     "android": "Android",
     "androidTitle": "Android / Private DNS (DoT & DoQ)",
@@ -368,7 +368,11 @@
     "includeSubdomains": "Match subdomains",
     "includeSubdomainsDesc": "E.g., example.com also matches *.example.com; off by default (exact match only)",
     "subdomainsBadge": "+Subdomains",
-    "wildcardDisclaimer": "To match subdomains, use the wildcard *.example.com; example.com will not match subdomains."
+    "wildcardDisclaimer": "To match subdomains, use the wildcard *.example.com; example.com will not match subdomains.",
+    "exportList": "Export List",
+    "exportSelected": "Export ({{count}})",
+    "exportSuccess": "Exported {{count}} AdGuard Home rules",
+    "exportEmpty": "No exportable rules available"
   },
   "analytics": {
     "customRange": "Custom Range",

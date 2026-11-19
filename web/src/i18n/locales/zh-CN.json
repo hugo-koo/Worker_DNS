@@ -259,7 +259,7 @@
     "copyUrl": "复制 URL",
     "browsers": "浏览器",
     "browserTitle": "浏览器配置 (Chrome/Edge)",
-    "browserSteps": "设置 > 隐私和安全 > 安全 > 使用安全 DNS > 自定义 > 粘贴 URL。",
+    "browserSteps": "设置 > 隐私和安全 > 安全 > 使用安全 DNS > 自定义 > 粘贴 URL ({{dohUrl}})。",
     "browserTips": "或者将此网址复制到地址栏：",
     "apple": "Apple",
     "appleTitle": "macOS / iOS / iPadOS / tvOS",
@@ -272,7 +272,7 @@
     "windowsStep0": "设置 > 网络与互联网",
     "windowsStep1": "属性 > DNS 服务器 > 编辑 > 手动。",
     "windowsStep2": "选择并填入 DNS IP：",
-    "windowsStep3": "启用 DoH (手动模板) 并粘贴 URL。",
+    "windowsStep3": "启用 DoH (手动模板) 并粘贴 URL ({{dohUrl}})。",
     "windowsStep4": "关闭 回退到明文。",
     "android": "Android",
     "androidTitle": "Android / 私有 DNS (DoT & DoQ)",
@@ -368,7 +368,11 @@
     "includeSubdomains": "同时匹配子域名",
     "includeSubdomainsDesc": "例如 example.com 同时匹配 *.example.com；默认关闭，仅精确匹配",
     "subdomainsBadge": "+子域名",
-    "wildcardDisclaimer": "若要匹配子域名，需使用通配符 *.example.com ，example.com 不会匹配子域名。"
+    "wildcardDisclaimer": "若要匹配子域名，需使用通配符 *.example.com ，example.com 不会匹配子域名。",
+    "exportList": "导出列表",
+    "exportSelected": "导出 ({{count}})",
+    "exportSuccess": "已导出 {{count}} 条 AdGuard Home 兼容规则",
+    "exportEmpty": "没有可导出的规则"
   },
   "analytics": {
     "customRange": "自定义时间范围",

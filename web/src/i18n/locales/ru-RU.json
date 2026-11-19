@@ -259,7 +259,7 @@
     "copyUrl": "Копировать URL",
     "browsers": "Браузеры",
     "browserTitle": "Настройка браузеров (Chrome/Edge)",
-    "browserSteps": "Настройки > Приватность и безопасность > Безопасность > Безопасный DNS > Пользовательский > Вставьте URL.",
+    "browserSteps": "Настройки > Приватность и безопасность > Безопасность > Безопасный DNS > Пользовательский > Вставьте URL ({{dohUrl}}).",
     "browserTips": "Или вставьте URL в адресную строку:",
     "apple": "Apple",
     "appleTitle": "macOS / iOS / iPadOS / tvOS",
@@ -272,7 +272,7 @@
     "windowsStep0": "Настройки > Сеть и Интернет",
     "windowsStep1": "Свойства > DNS-серверы > Изменить > Вручную.",
     "windowsStep2": "Выберите и введите DNS IP:",
-    "windowsStep3": "Включите DoH (пользовательский шаблон) и вставьте URL.",
+    "windowsStep3": "Включите DoH (пользовательский шаблон) и вставьте URL ({{dohUrl}}).",
     "windowsStep4": "Отключите откат к незашифрованному DNS.",
     "android": "Android",
     "androidTitle": "Android / Частный DNS (DoT и DoQ)",
@@ -368,7 +368,11 @@
     "includeSubdomains": "Включать поддомены",
     "includeSubdomainsDesc": "Напр., example.com также совпадает с *.example.com; по умолчанию выключено (только точное совпадение)",
     "subdomainsBadge": "+Поддомены",
-    "wildcardDisclaimer": "Для соответствия поддоменам используйте подстановочный знак *.example.com; example.com не будет соответствовать поддоменам."
+    "wildcardDisclaimer": "Для соответствия поддоменам используйте подстановочный знак *.example.com; example.com не будет соответствовать поддоменам.",
+    "exportList": "Экспорт списка",
+    "exportSelected": "Экспорт ({{count}})",
+    "exportSuccess": "Экспортировано правил AdGuard Home: {{count}}",
+    "exportEmpty": "Нет правил для экспорта"
   },
   "analytics": {
     "customRange": "Произвольный период",
