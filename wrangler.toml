@@ -33,11 +33,11 @@ run_worker_first = true
 # 若在 [vars] 中设置 DATABASE_SERVICE = "Turso"，Worker 运行时将通过 HTTP (Hrana 协议)
 # 直连远程 Turso 数据库，无需在 Cloudflare 上创建或绑定任何 D1 数据库，可直接将下方 [[d1_databases]] 整段注释或删除。
 [[d1_databases]]
-binding = "DB"
-database_name = "dns_worker_db"
+#binding = "DB"
+#database_name = "dns_worker_db"
 # Only need to provide your actual D1 `database_id` when using D1; no configuration is required if you choose Turso.
 # 仅在使用 D1 时需要填写您的真实 D1 database_id；选择 Turso 时无需配置。
-database_id = "8277464f-d370-4f7b-82a3-db4d412f65cf"
+#database_id = "8277464f-d370-4f7b-82a3-db4d412f65cf"
 
 [triggers]
 # Run scheduled maintenance tasks every minute.
