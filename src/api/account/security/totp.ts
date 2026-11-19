@@ -177,24 +177,7 @@ export async function handleTotpAndMfaRequest(
 
     // PATCH /api/account/totp/settings — update skip_password toggle
     if (subAction === "settings" && request.method === "PATCH") {
-      const dbUser = await userModel.getById(user.id);
-      if (!dbUser) return new Response("User not found", { status: 404 });
-      const passkeyModel = new PasskeyModel(env.DB);
-      const passkeys = await passkeyModel.listByUser(user.id);
-      const hasMfa = !!dbUser.totp_enabled || passkeys.length > 0;
-      if (!hasMfa) return new Response("MFA is not enabled", { status: 400 });
-
-      const body = (await request.json()) as ReauthPayload & { skip_password: boolean };
-      if (body.skip_password) {
-        const authResult = await verifyUserReauth(dbUser, body, env, request, { sessionId: user.sessionId });
-        if (!authResult.success) {
-          return new Response(authResult.error || "Re-authentication required", { status: 403 });
-        }
-      }
-      await userModel.updateTOTPSettings(user.id, !!body.skip_password);
-      return new Response(JSON.stringify({ success: true }), {
-        headers: { "Content-Type": "application/json" }
-      });
+      return handleMfaSettingsPatch(request, env, user, userModel);
     }
 
     // DELETE /api/account/totp — disable TOTP (strictly requires step-up reauthentication)
@@ -223,25 +206,39 @@ export async function handleTotpAndMfaRequest(
 
   // ─── 统一 MFA 设置接口 (/api/account/mfa/settings) ───
   if (action === "mfa" && pathParts[3] === "settings" && request.method === "PATCH") {
-    const dbUser = await userModel.getById(user.id);
-    if (!dbUser) return new Response("User not found", { status: 404 });
-    const passkeyModel = new PasskeyModel(env.DB);
-    const passkeys = await passkeyModel.listByUser(user.id);
-    const hasMfa = !!dbUser.totp_enabled || passkeys.length > 0;
-    if (!hasMfa) return new Response("MFA is not enabled", { status: 400 });
-
-    const body = (await request.json()) as ReauthPayload & { skip_password: boolean };
-    if (body.skip_password) {
-      const authResult = await verifyUserReauth(dbUser, body, env, request, { sessionId: user.sessionId });
-      if (!authResult.success) {
-        return new Response(authResult.error || "Re-authentication required", { status: 403 });
-      }
-    }
-    await userModel.updateTOTPSettings(user.id, !!body.skip_password);
-    return new Response(JSON.stringify({ success: true }), {
-      headers: { "Content-Type": "application/json" }
-    });
+    return handleMfaSettingsPatch(request, env, user, userModel);
   }
 
   return new Response("Not Found", { status: 404 });
+}
+
+/**
+ * Shared handler for PATCH /api/account/totp/settings and PATCH /api/account/mfa/settings.
+ * Requires MFA (TOTP or Passkey) to be configured and enforces step-up re-authentication
+ * when enabling passwordless login (`skip_password = true`).
+ */
+async function handleMfaSettingsPatch(
+  request: Request,
+  env: Env,
+  user: User,
+  userModel: UserModel
+): Promise<Response> {
+  const dbUser = await userModel.getById(user.id);
+  if (!dbUser) return new Response("User not found", { status: 404 });
+  const passkeyModel = new PasskeyModel(env.DB);
+  const passkeys = await passkeyModel.listByUser(user.id);
+  const hasMfa = !!dbUser.totp_enabled || passkeys.length > 0;
+  if (!hasMfa) return new Response("MFA is not enabled", { status: 400 });
+
+  const body = (await request.json()) as ReauthPayload & { skip_password: boolean };
+  if (body.skip_password) {
+    const authResult = await verifyUserReauth(dbUser, body, env, request, { sessionId: user.sessionId });
+    if (!authResult.success) {
+      return new Response(authResult.error || "Re-authentication required", { status: 403 });
+    }
+  }
+  await userModel.updateTOTPSettings(user.id, !!body.skip_password);
+  return new Response(JSON.stringify({ success: true }), {
+    headers: { "Content-Type": "application/json" }
+  });
 }

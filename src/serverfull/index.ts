@@ -16,7 +16,7 @@ import { DotDnsServer } from './dot';
 import { HttpServer, HttpsServer } from './http';
 import { inspectTlsCertificate, getCertbotDiagnosticOptions } from './cert';
 import { flushLogBatch } from '../pipeline/logBatcher';
-import worker from '../index';
+import worker from '../app';
 import { ExecutionContext } from '../types';
 import { isUsableJwtSecret, isStrongJwtSecret } from '../lib/jwt';
 import { formatBanner, formatDiagnostic, formatKeyValueSection } from './format';

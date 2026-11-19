@@ -173,15 +173,20 @@ export async function handleMeRequest(
     const { invalidateSession } = await import("../../lib/auth");
     const { invalidateAuthUserCacheByUserId } = await import("../../lib/middleware");
     const { ProfileModel } = await import("../../models/profile");
+    const { collectOwnerAccessKeys, deleteAccessKeysInDo } = await import("../../lib/accessKeyRegistry");
     const profileModel = new ProfileModel(env.DB);
     const cookieHeader = request.headers.get("Cookie") || "";
     const refreshToken = readRefreshTokenCookie(cookieHeader);
     const sessionId = refreshToken ? parseRefreshTokenString(refreshToken)?.sid || null : null;
     if (sessionId) await invalidateSession(env, sessionId);
     invalidateAuthUserCacheByUserId(user.id);
+    const keysToRevoke = await collectOwnerAccessKeys(env.DB, user.id);
     // Explicitly delete profiles/logs/hourly_rollups before deleting user to satisfy FK constraints and prevent orphaned data
     await profileModel.deleteByOwner(user.id);
     await userModel.delete(user.id);
+    if (keysToRevoke.length > 0) {
+      ctx.waitUntil(deleteAccessKeysInDo(env, keysToRevoke));
+    }
     return new Response(JSON.stringify({ success: true }), {
       headers: { "Set-Cookie": createBlankRefreshTokenCookie(), "Content-Type": "application/json" }
     });

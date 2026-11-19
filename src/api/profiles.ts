@@ -16,7 +16,7 @@ export async function handleProfilesRequest(request: Request, env: Env, user: Us
   // 处理列表和创建 (/api/profiles)
   if (pathParts.length === 2) {
     if (!user) return new Response("Unauthorized", { status: 401 });
-    return handleProfilesCoreCollectionRequest(request, env, user, pathParts);
+    return handleProfilesCoreCollectionRequest(request, env, user, pathParts, ctx);
   }
 
   // 处理特定 Profile (/api/profiles/:id)

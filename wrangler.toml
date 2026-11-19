@@ -43,6 +43,19 @@ run_worker_first = true
 # Run scheduled maintenance tasks every minute.
 crons = ["* * * * *"]
 
+# ==============================================================================
+# Durable Objects (Access Key Fail-Open Registry)
+# ==============================================================================
+# Persists legitimate Access Keys in edge SQLite Durable Objects so DoH remains
+# available with Access Key verification even when D1 or Turso is offline.
+[[durable_objects.bindings]]
+name = "ACCESS_KEY_DO"
+class_name = "AccessKeyRegistry"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["AccessKeyRegistry"]
+
 [placement]
 mode = "targeted"
 region = "aws:ap-southeast-1"

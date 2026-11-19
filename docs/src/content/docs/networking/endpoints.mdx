@@ -60,7 +60,7 @@ DNS Worker supports all major modern encrypted DNS protocols alongside classic U
 
 | Protocol | Endpoint Format | Applicable Environments |
 | :--- | :--- | :--- |
-| **DoH (DNS over HTTPS)** | `https://<domain>/dns-query/<profileKey>` | HTTP/2 & HTTP/3 compatible; Browsers, Windows 11, iOS/macOS profiles, curl |
+| **DoH (DNS over HTTPS)** | `https://<domain>/<profileKey>` | HTTP/2 & HTTP/3 compatible; Browsers, Windows 11, iOS/macOS profiles, curl |
 | **DoT (DNS over TLS)** | `tls://<profileKey>.<dotDomain>:853` | DoQ (RFC 9250) compatible; Linux `systemd-resolved`, Stubby, Android Private DNS |
 | **Android Private DNS** | `<profileKey>.<dotDomain>` | Android 9+ native Private DNS |
 | **Classic UDP (Do53)** | `udp://<server-ip>:53` | Legacy routers, IoT devices, local testing |
@@ -104,7 +104,7 @@ Apple operating systems natively support Encrypted DNS (DoH and DoT) through sig
 #### Method B: Manual App Integration
 You can also use apps such as **AdGuard**, **DNSCloak**, or **Shadowrocket**:
 - Select upstream type as **DNS-over-HTTPS**.
-- Enter your profile DoH URL: `https://<domain>/dns-query/<profileKey>`.
+- Enter your profile DoH URL: `https://<domain>/<profileKey>`.
 
 ---
 
@@ -119,7 +119,7 @@ Windows 11 natively supports DNS over HTTPS in system network settings:
 5. In **Preferred DNS**, enter your DNS Worker server IP (or a local loopback/proxy IP).
 6. Under **DNS over HTTPS**, select **On (automatic template)** or enter your DoH template:
    ```text
-   https://<domain>/dns-query/<profileKey>
+   https://<domain>/<profileKey>
    ```
 7. Click **Save**.
 
@@ -152,5 +152,5 @@ If you run a local gateway or router, you can forward all LAN DNS requests to yo
 In AdGuard Home **Settings** → **DNS Settings** → **Upstream DNS servers**, add:
 ```text
 tls://<profileKey>.<dotDomain>
-https://<domain>/dns-query/<profileKey>
+https://<domain>/<profileKey>
 ```

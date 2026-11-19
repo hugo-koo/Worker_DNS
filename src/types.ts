@@ -1,7 +1,9 @@
 import { D1Database, ExecutionContext as CFExecutionContext } from "@cloudflare/workers-types";
+import type { AccessKeyDoNamespace } from "./lib/accessKeyRegistry";
 
 export interface Env {
   DB: D1Database;
+  ACCESS_KEY_DO?: AccessKeyDoNamespace;
   ASSETS: any;
   JWT_SECRET?: string;
   MAX_ACCESS_POINTS_PER_PROFILE?: string | number;

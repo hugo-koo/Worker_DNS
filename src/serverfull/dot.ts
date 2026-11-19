@@ -262,7 +262,7 @@ export class DotDnsServer {
       };
 
       const host = remoteIp.includes(':') ? `[${remoteIp}]` : remoteIp;
-      const request = new Request(`http://${host}/dns-query`, {
+      const request = new Request(`http://${host}/${sniKey}`, {
         headers: {
           'CF-Connecting-IP': remoteIp,
           'Accept': 'application/dns-message',

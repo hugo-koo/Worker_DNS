@@ -8,6 +8,7 @@ import {
   getPresetUpstreams,
   getPresetExternalFilters
 } from '../constants/presets';
+import { detectServerfullMode } from '../router/runtimeConfig';
 
 /**
  * Handles system/utility routes like /api/clientinfo and /api/substitute
@@ -59,13 +60,7 @@ export async function handleSystemRequest(request: Request, env: Env): Promise<R
       }
     }
 
-    const isServerfull = Boolean(
-      env.SERVERFULL_DEFAULT_PROFILE_KEY !== undefined ||
-      env.SERVERFULL_HOST !== undefined ||
-      env.SERVERFULL_DOT_DOMAIN !== undefined ||
-      env.SERVERFULL_HTTP_PORT !== undefined ||
-      env.SERVERFULL_HTTPS_PORT !== undefined
-    );
+    const isServerfull = detectServerfullMode(env);
 
     return new Response(JSON.stringify({
       ip: clientIp,

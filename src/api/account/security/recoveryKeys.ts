@@ -7,7 +7,6 @@ import { verifyUserReauth, ReauthPayload } from "./reauth";
 
 /**
  * Handles emergency recovery keys management endpoints:
- * - POST /api/account/recovery-keys/view (re-authenticate and view decrypted recovery keys)
  * - POST /api/account/recovery-keys/rotate (re-authenticate and rotate recovery keys)
  *
  * @param request - Inbound HTTP Request.

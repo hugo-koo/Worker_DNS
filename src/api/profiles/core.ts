@@ -10,6 +10,12 @@ import { PROFILE_NAME_REGEX } from "../../utils/validator";
 import { getDefaultUpstreamUrl } from "../../constants/presets";
 import { profileKeyMemoryMap } from "../../pipeline/cache";
 import { cacheUtils } from "../../utils/cache";
+import {
+  collectProfileAccessKeys,
+  deleteAccessKeysInDo,
+  syncProfileKeysToDo,
+  syncSingleKeyFromDbToDo
+} from "../../lib/accessKeyRegistry";
 
 /**
  * Handle requests to /api/profiles (without specific profile ID)
@@ -18,7 +24,8 @@ export async function handleProfilesCoreCollectionRequest(
   request: Request,
   env: Env,
   user: User,
-  pathParts: string[]
+  pathParts: string[],
+  ctx?: ExecutionContext
 ): Promise<Response> {
   const profileModel = new ProfileModel(env.DB);
 
@@ -68,6 +75,12 @@ export async function handleProfilesCoreCollectionRequest(
       best_effort_ech: { enabled: false, fronting_domain: "cloudflare-ech.com" }
     };
     await profileModel.create({ id: newId, owner_id: user.id, name: body.name || "Unnamed Profile", settings: defaultSettings });
+
+    if (ctx) {
+      ctx.waitUntil(syncProfileKeysToDo(env.DB, env, newId));
+    } else {
+      await syncProfileKeysToDo(env.DB, env, newId);
+    }
 
     // Automatically inherit active account-level E2EE keys if configured
     try {
@@ -130,7 +143,11 @@ export async function handleProfilesCoreRequest(
   // - GET /api/profiles/:id
   if (pathParts.length === 3) {
     if (request.method === 'DELETE') {
+      const keysToRevoke = await collectProfileAccessKeys(env.DB, profileId);
       await profileModel.delete(profileId);
+      if (keysToRevoke.length > 0) {
+        ctx.waitUntil(deleteAccessKeysInDo(env, keysToRevoke));
+      }
       if (profile.profile_key) {
         profileKeyMemoryMap.delete(profile.profile_key);
         const cache = typeof caches !== 'undefined' ? (caches as any).default : null;
@@ -169,7 +186,9 @@ export async function handleProfilesCoreRequest(
       if (cache) {
         ctx.waitUntil(cacheUtils.delete(cache, `doh_key_v1:${profile.profile_key}`));
       }
+      ctx.waitUntil(syncSingleKeyFromDbToDo(env.DB, env, profile.profile_key));
     }
+    ctx.waitUntil(syncProfileKeysToDo(env.DB, env, profileId));
     ctx.waitUntil(pipeline.clearCache(profileId, false, env));
     return new Response(JSON.stringify({ profile_key: newKey }), { headers: { 'Content-Type': 'application/json' } });
   }
@@ -316,7 +335,17 @@ export async function handleProfilesCoreRequest(
 
   // POST /api/profiles/:id/test
   if (pathParts[3] === 'test' && request.method === 'POST') {
-    const { domain, type } = await request.json() as { domain: string, type: string };
+    let body: { domain?: unknown; type?: unknown };
+    try {
+      body = await request.json() as { domain?: unknown; type?: unknown };
+    } catch {
+      return new Response("Invalid JSON payload", { status: 400 });
+    }
+    const domain = typeof body?.domain === 'string' ? body.domain.trim() : '';
+    const type = typeof body?.type === 'string' && body.type.trim() ? body.type.trim().toUpperCase() : 'A';
+    if (!domain || domain.length > 253) {
+      return new Response("Invalid or missing domain parameter", { status: 400 });
+    }
     const rawQuery = buildDNSQuery(domain, type);
     const result = await pipeline.process(request, { name: domain, type, raw: rawQuery }, { profileId, startTime: Date.now(), env, ctx });
     return new Response(JSON.stringify({

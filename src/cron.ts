@@ -5,6 +5,7 @@ import { UserModel } from './models/user';
 import { syncNextGlobalList } from './utils/sync';
 import { syncCloudflareIpRanges } from './utils/ech';
 import { cacheUtils } from './utils/cache';
+import { syncAllAccessKeysSnapshotToDo } from './lib/accessKeyRegistry';
 
 import { SystemSettingsModel } from './models/systemSettings';
 
@@ -12,6 +13,8 @@ import { SystemSettingsModel } from './models/systemSettings';
 let lastCleanupMemoryTs = 0;
 /** In-memory throttle tracker for daily Cloudflare IP sync */
 let lastCfIpsSyncMemoryTs = 0;
+/** In-memory throttle tracker for Durable Object Access Key snapshot sync */
+let lastDoKeysSyncMemoryTs = 0;
 
 /**
  * Handles cron-scheduled events to run background cleanup and list synchronization.
@@ -158,6 +161,36 @@ export async function handleScheduled(
       }
     } catch (e) {
       console.error("[Cron] Cloudflare IP range sync failed:", e);
+    }
+
+    // ── ACCESS KEY DURABLE OBJECTS SNAPSHOT SYNC (15m Throttled) ──────────────
+    // Reconciles valid profile keys and access point tokens into Durable Objects so
+    // DoH fail-open lookups remain authenticated even when D1/Turso is offline.
+    if (env.ACCESS_KEY_DO) {
+      try {
+        const doSyncCacheKey = "cron:do_access_keys_synced_v1";
+        const DO_SYNC_INTERVAL_SEC = 900;
+        let shouldSyncDoKeys = !lastDoKeysSyncMemoryTs || (now - lastDoKeysSyncMemoryTs >= DO_SYNC_INTERVAL_SEC);
+        if (shouldSyncDoKeys && cache) {
+          const cachedDoSync = await cacheUtils.get<number>(cache, doSyncCacheKey).catch(() => null);
+          if (cachedDoSync && now - cachedDoSync < DO_SYNC_INTERVAL_SEC) {
+            lastDoKeysSyncMemoryTs = cachedDoSync;
+            shouldSyncDoKeys = false;
+          }
+        }
+        if (shouldSyncDoKeys) {
+          const syncedCount = await syncAllAccessKeysSnapshotToDo(env);
+          lastDoKeysSyncMemoryTs = now;
+          if (cache) {
+            await cacheUtils.set(cache, doSyncCacheKey, now, DO_SYNC_INTERVAL_SEC).catch(() => {});
+          }
+          if (syncedCount > 0) {
+            console.log(`[Cron] Synced ${syncedCount} Access Key(s) to Durable Objects.`);
+          }
+        }
+      } catch (e) {
+        console.error("[Cron] Access Key DO snapshot sync failed:", e);
+      }
     }
 
     // ── SYNC ──────────────────────────────────────────────────────────────────

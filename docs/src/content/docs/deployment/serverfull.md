@@ -187,12 +187,14 @@ dns.example.com {
         header_up X-Forwarded-For {remote_host}
         header_up X-Forwarded-Proto {scheme}
         header_up CF-Connecting-IP {remote_host}
+        header_up X-Http-Version {http.request.proto}
     }
 }
 ```
 
 > [!NOTE]
-> DNS Worker automatically recognizes and parses `CF-Connecting-IP`, `X-Real-IP`, and `X-Forwarded-For` headers. Your query logs, active sessions, and security audits will accurately record the client's genuine public IP instead of `127.0.0.1`.
+> - `header_up X-Http-Version {http.request.proto}` forwards the client's actual HTTP/2 or HTTP/3 protocol to DNS Worker so RFC 8484 §5.2 checks succeed over the local `127.0.0.1:10080` HTTP/1.1 proxy hop instead of returning `505 HTTP Version Not Supported`. If Caddy runs on another host or Docker bridge IP rather than `127.0.0.1`, add that proxy IP to `TRUSTED_PROXIES` in `.env`.
+> - DNS Worker automatically recognizes and parses `CF-Connecting-IP`, `X-Real-IP`, and `X-Forwarded-For` headers. Your query logs, active sessions, and security audits will accurately record the client's genuine public IP instead of `127.0.0.1`.
 
 Reload Caddy to apply:
 ```bash
@@ -227,6 +229,7 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Http-Version $server_protocol;
 
         # WebSocket support for real-time dashboard updates
         proxy_set_header Upgrade $http_upgrade;

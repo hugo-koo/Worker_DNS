@@ -5,9 +5,10 @@
 
 import http from 'node:http';
 import { Buffer } from 'node:buffer';
-import worker from '../../index';
+import worker from '../../app';
 import { Env, ExecutionContext } from '../../types';
 import { extractClientIp } from './clientIp';
+import { ACCESS_KEY_REGEX } from '../../utils/validator';
 
 /**
  * Creates a shared request dispatch handler for Node.js http and https servers.
@@ -83,7 +84,15 @@ export function createHttpRequestHandler(
           headers.set(k, String(v));
         }
       }
-      headers.set('X-Http-Version', req.httpVersion);
+      // Preserve trusted reverse-proxy client protocol (e.g. Caddy `header_up X-Http-Version {http.request.proto}`)
+      // so RFC 8484 §5.2 evaluates the client-to-proxy protocol rather than the proxy-to-origin HTTP/1.1 hop.
+      const rawTrustedProtoHeader = fromTrustedProxy ? req.headers['x-http-version'] : undefined;
+      const trustedHttpVersion =
+        typeof rawTrustedProtoHeader === 'string' &&
+        /^(?:HTTP\/)?\d+(?:\.\d+)?$/i.test(rawTrustedProtoHeader.trim())
+          ? rawTrustedProtoHeader.trim()
+          : undefined;
+      headers.set('X-Http-Version', trustedHttpVersion || req.httpVersion);
 
       // Populate remote client IP (supports direct connections, Cloudflare, Caddy, Nginx)
       const clientIp = extractClientIp(headers, req.socket.remoteAddress, env.TRUSTED_PROXIES);
@@ -101,7 +110,7 @@ export function createHttpRequestHandler(
 
       let body: any = null;
       if (req.method !== 'GET' && req.method !== 'HEAD') {
-        const isDnsQuery = fullUrl.pathname === '/dns-query' || fullUrl.pathname.endsWith('/dns-query');
+        const isDnsQuery = !fullUrl.pathname.startsWith('/api/') && ACCESS_KEY_REGEX.test(fullUrl.pathname.slice(1));
         const maxBodyBytes = isDnsQuery ? MAX_DOH_BODY_BYTES : MAX_API_BODY_BYTES;
         const declaredLength = Number(req.headers['content-length']);
         if (Number.isFinite(declaredLength) && declaredLength > maxBodyBytes) {

@@ -60,7 +60,7 @@ DNS Worker 支持所有主流现代加密 DNS 协议以及传统 UDP DNS。
 
 | 协议 | 接入点地址格式 | 适用场景 |
 | :--- | :--- | :--- |
-| **DoH (DNS over HTTPS)** | `https://<domain>/dns-query/<profileKey>` | 兼容 HTTP/2 与 HTTP/3，适用于浏览器、Windows 11、iOS/macOS 描述文件、curl |
+| **DoH (DNS over HTTPS)** | `https://<domain>/<profileKey>` | 兼容 HTTP/2 与 HTTP/3，适用于浏览器、Windows 11、iOS/macOS 描述文件、curl |
 | **DoT (DNS over TLS)** | `tls://<profileKey>.<dotDomain>:853` | 兼容 DoQ (RFC 9250)，适用于 Linux `systemd-resolved`、Stubby、Android 原生私有 DNS |
 | **Android 私有 DNS** | `<profileKey>.<dotDomain>` | Android 9+ 系统自带私有 DNS |
 | **传统 UDP (Do53)** | `udp://<server-ip>:53` | 传统路由器、IoT 物联网设备、局域网测试 |
@@ -104,7 +104,7 @@ Apple 生态系统通过签名描述文件（`.mobileconfig`）原生支持加�
 #### 方式 B：第三方工具集成
 亦可在 **AdGuard**、**DNSCloak** 或 **Shadowrocket** 中配置：
 - 上游类型选择 **DNS-over-HTTPS**。
-- 填入对应 DoH 地址：`https://<domain>/dns-query/<profileKey>`。
+- 填入对应 DoH 地址：`https://<domain>/<profileKey>`。
 
 ---
 
@@ -119,7 +119,7 @@ Windows 11 系统网络设置原生支持 DNS over HTTPS：
 5. 在 **首选 DNS** 中输入服务器 IP。
 6. 在 **DNS over HTTPS** 下拉菜单中选择 **开 (自动模板)**，或填入 DoH 模板：
    ```text
-   https://<domain>/dns-query/<profileKey>
+   https://<domain>/<profileKey>
    ```
 7. 点击 **保存**。
 
@@ -152,5 +152,5 @@ Windows 11 系统网络设置原生支持 DNS over HTTPS：
 在 AdGuard Home **设置** → **DNS 设置** → **上游 DNS 服务器** 中填入：
 ```text
 tls://<profileKey>.<dotDomain>
-https://<domain>/dns-query/<profileKey>
+https://<domain>/<profileKey>
 ```

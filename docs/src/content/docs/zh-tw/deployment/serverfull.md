@@ -187,12 +187,14 @@ dns.example.com {
         header_up X-Forwarded-For {remote_host}
         header_up X-Forwarded-Proto {scheme}
         header_up CF-Connecting-IP {remote_host}
+        header_up X-Http-Version {http.request.proto}
     }
 }
 ```
 
 > [!NOTE]
-> DNS Worker 會自動識別並解析反代請求中的 `CF-Connecting-IP`、`X-Real-IP` 以及 `X-Forwarded-For`（最左側源 IP）。無論使用 Caddy 還是 Nginx，DNS 查詢日誌、活躍登入會話與安全審計記錄均會準確記錄客戶端真實外網 IP，而非 `127.0.0.1`。
+> - `header_up X-Http-Version {http.request.proto}` 會把客戶端與 Caddy 之間真實的 HTTP/2 或 HTTP/3 通訊協定版本透傳給 DNS Worker，避免經過本機 `127.0.0.1:10080` 的 HTTP/1.1 回源跳時觸發 RFC 8484 §5.2 的 `505 HTTP Version Not Supported`。若 Caddy 部署於 Docker 網橋或其他主機而非 `127.0.0.1`，請在 `.env` 中將 Caddy 的來源 IP 加入 `TRUSTED_PROXIES`。
+> - DNS Worker 會自動識別並解析反代請求中的 `CF-Connecting-IP`、`X-Real-IP` 以及 `X-Forwarded-For`（最左側源 IP）。無論使用 Caddy 還是 Nginx，DNS 查詢日誌、活躍登入會話與安全審計記錄均會準確記錄客戶端真實外網 IP，而非 `127.0.0.1`。
 
 過載 Caddy 即可生效：
 ```bash
@@ -227,6 +229,7 @@ server {
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Http-Version $server_protocol;
 
         # WebSocket 支持（管理面板实时通信）
         proxy_set_header Upgrade $http_upgrade;

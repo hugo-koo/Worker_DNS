@@ -1,6 +1,9 @@
 import { Env, User, ExecutionContext } from "../../types";
 import { AccessPointModel } from "../../models/accessPoint";
 import { AP_NAME_REGEX } from "../../utils/validator";
+import { syncProfileKeysToDo, syncSingleKeyFromDbToDo, upsertAccessKeysInDo } from "../../lib/accessKeyRegistry";
+import { profileKeyMemoryMap } from "../../pipeline/cache";
+import { cacheUtils } from "../../utils/cache";
 
 /**
  * Handle access points requests to /api/profiles/:id/access_points
@@ -23,7 +26,18 @@ export async function handleProfileAccessPointsRequest(
   if (request.method === 'POST') {
     if (pathParts.length === 6 && pathParts[5] === 'rotate_token') {
       const apId = pathParts[4];
+      const existingAps = await apModel.getAccessPoints(profileId);
+      const oldAp = existingAps.find(ap => ap.id === apId);
       const newToken = await apModel.rotateAccessPointToken(apId, profileId);
+      if (oldAp?.token) {
+        profileKeyMemoryMap.delete(oldAp.token);
+        const cache = typeof caches !== 'undefined' ? (caches as any).default : null;
+        if (cache) {
+          ctx.waitUntil(cacheUtils.delete(cache, `doh_key_v1:${oldAp.token}`));
+        }
+        ctx.waitUntil(syncSingleKeyFromDbToDo(env.DB, env, oldAp.token));
+      }
+      ctx.waitUntil(syncProfileKeysToDo(env.DB, env, profileId));
       return new Response(JSON.stringify({ token: newToken }), { headers: { 'Content-Type': 'application/json' } });
     }
 
@@ -39,6 +53,18 @@ export async function handleProfileAccessPointsRequest(
     if (currentAps.length >= maxAps) return new Response(`Access point limit exceeded (max ${maxAps})`, { status: 400 });
     
     const result = await apModel.addAccessPoint(profileId, body.name);
+    ctx.waitUntil(
+      upsertAccessKeysInDo(env, [
+        {
+          accessKey: result.token,
+          profileId,
+          ownerId: user.id,
+          accessPointId: result.id,
+          accessPointName: result.name,
+          updatedAt: result.updated_at || Math.floor(Date.now() / 1000)
+        }
+      ])
+    );
     return new Response(JSON.stringify(result), { status: 201, headers: { 'Content-Type': 'application/json' } });
   }
 
@@ -54,12 +80,27 @@ export async function handleProfileAccessPointsRequest(
     }
 
     await apModel.updateAccessPointName(apId, profileId, body.name);
+    const updatedAp = currentAps.find(ap => ap.id === apId);
+    if (updatedAp?.token) {
+      profileKeyMemoryMap.delete(updatedAp.token);
+      ctx.waitUntil(syncSingleKeyFromDbToDo(env.DB, env, updatedAp.token));
+    }
     return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
   }
 
   if (request.method === 'DELETE' && pathParts.length === 5) {
     const apId = pathParts[4];
+    const currentAps = await apModel.getAccessPoints(profileId);
+    const targetAp = currentAps.find(ap => ap.id === apId);
     await apModel.deleteAccessPoint(apId, profileId);
+    if (targetAp?.token) {
+      profileKeyMemoryMap.delete(targetAp.token);
+      const cache = typeof caches !== 'undefined' ? (caches as any).default : null;
+      if (cache) {
+        ctx.waitUntil(cacheUtils.delete(cache, `doh_key_v1:${targetAp.token}`));
+      }
+      ctx.waitUntil(syncSingleKeyFromDbToDo(env.DB, env, targetAp.token));
+    }
     return new Response(null, { status: 204 });
   }
 

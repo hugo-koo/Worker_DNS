@@ -154,7 +154,7 @@ export class UdpDnsServer {
       };
 
       const host = rinfo.address.includes(':') ? `[${rinfo.address}]` : rinfo.address;
-      const request = new Request(`http://${host}/dns-query`, {
+      const request = new Request(`http://${host}/${profile.profile_key || profile.id || 'default'}`, {
         headers: {
           'CF-Connecting-IP': rinfo.address,
           'Accept': 'application/dns-message',

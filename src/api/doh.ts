@@ -11,6 +11,7 @@ import {
 } from '../pipeline/cache';
 import { hasAlreadyTriedFailOpen, resolveFailOpenFallback } from '../pipeline/resolver/transport';
 import { DEFAULT_FAIL_OPEN_UPSTREAM } from '../constants/presets';
+import { lookupAccessKeyInDo, syncResolvedProfileKeyToDo } from '../lib/accessKeyRegistry';
 
 /** In-memory throttle tracker for user last DNS resolution database updates */
 const activeThrottleMemoryMap = new Map<string, number>();
@@ -53,9 +54,14 @@ export async function resolveProfileByKey(
   const cache = typeof caches !== "undefined" ? (caches as any).default : null;
   const now = Date.now();
 
-  // 1. Check L1 Memory Cache (Isolate Global) - 5 minutes
+  if (!profileKey) {
+    return null;
+  }
+
+  // 1. Check L1 Memory Cache (Isolate Global) - 5 minutes (30s for emergency fail-open fallback)
   const inMem = profileKeyMemoryMap.get(profileKey);
-  if (inMem && now - inMem.ts < 300_000) {
+  const l1Ttl = inMem?.data?.isEmergencyFallback ? 30_000 : 300_000;
+  if (inMem && now - inMem.ts < l1Ttl) {
     return inMem.data;
   }
 
@@ -73,8 +79,11 @@ export async function resolveProfileByKey(
     }
   }
 
-  // 3. Fallback to D1 (only executed on cache miss)
+  // 3. Fallback to D1/Turso (only executed on cache miss)
   try {
+    if (!env.DB) {
+      throw new Error('Database not configured');
+    }
     const profileModel = new ProfileModel(env.DB);
     const profile = await profileModel.findByKey(profileKey);
 
@@ -83,19 +92,51 @@ export async function resolveProfileByKey(
       if (cache) {
         ctx.waitUntil(cacheUtils.set(cache, cacheKey, profile, 3600));
       }
+      ctx.waitUntil(syncResolvedProfileKeyToDo(env, profileKey, profile));
       return profile;
     }
   } catch (e: any) {
-    console.warn(`[DoH] D1 profile lookup failed for key ${profileKey}:`, e.message || e);
-    // If D1 is exhausted or erroring, attempt to return stale in-memory data if available
-    if (inMem?.data) {
+    console.warn(`[DoH] DB profile lookup failed for key ${profileKey}:`, e.message || e);
+    // If DB is exhausted or erroring, return cached real profile if available
+    if (inMem?.data && !inMem.data.isEmergencyFallback) {
       return inMem.data;
     }
 
-    // Emergency fail-open fallback if D1 has exceeded its read quota or is unavailable:
-    // Generate a temporary fallback profile so DNS resolution doesn't return 404 or 500
     const failOpenUpstream = env.FAIL_OPEN_UPSTREAM || DEFAULT_FAIL_OPEN_UPSTREAM;
-    console.warn(`[DoH] D1 unavailable. Providing emergency fallback profile for key ${profileKey} -> ${failOpenUpstream}`);
+
+    // Verify Access Key against Durable Objects registry when available
+    const doLookup = await lookupAccessKeyInDo(env, profileKey);
+    if (doLookup) {
+      if (!doLookup.found && doLookup.populated) {
+        console.warn(`[DoH] Rejecting unregistered key ${profileKey} during DB fail-open outage (verified via DO).`);
+        return null;
+      }
+
+      if (doLookup.found && doLookup.record) {
+        const doFallbackProfile = {
+          id: doLookup.record.profileId,
+          name: "Emergency Fallback",
+          access_point_id: doLookup.record.accessPointId ?? undefined,
+          access_point_name: doLookup.record.accessPointName ?? undefined,
+          settings: JSON.stringify({
+            upstream: [failOpenUpstream],
+            default_policy: "ALLOW",
+            log_retention_days: 0,
+            ecs: { enabled: true, use_client_ip: true }
+          }),
+          owner_id: doLookup.record.ownerId,
+          created_at: Math.floor(now / 1000),
+          updated_at: doLookup.record.updatedAt || Math.floor(now / 1000),
+          isEmergencyFallback: true
+        } as any;
+        profileKeyMemoryMap.set(profileKey, { data: doFallbackProfile, ts: now });
+        return doFallbackProfile;
+      }
+    }
+
+    // Emergency fail-open fallback when DO is unbound (e.g. Serverfull / unit tests) or unseeded:
+    // Generate a temporary fallback profile so DNS resolution doesn't return 404 or 500
+    console.warn(`[DoH] DB unavailable. Providing emergency fallback profile for key ${profileKey} -> ${failOpenUpstream}`);
     return {
       id: profileKey,
       name: "Emergency Fallback",
@@ -173,7 +214,8 @@ export async function handleDoHRequest(
 ): Promise<Response> {
   // RFC 8484 §5.2: Minimum HTTP version restriction for DoH
   // "The DNS-over-HTTPS protocol MUST be implemented using HTTP/2 or later. Clients and servers MUST NOT negotiate HTTP/1.1 for DoH."
-  const httpProto = (request.cf?.httpProtocol as string | undefined) || request.headers.get('X-Http-Version');
+  const rawHttpProto = (request.cf?.httpProtocol as string | undefined) || request.headers.get('X-Http-Version');
+  const httpProto = rawHttpProto?.trim().toUpperCase();
   if (httpProto && (httpProto === 'HTTP/1.0' || httpProto === 'HTTP/1.1' || httpProto === '1.0' || httpProto === '1.1')) {
     return new Response(
       'This server implements RFC 8484 - DNS Queries over HTTP, and requires HTTP/2 or later in accordance with section 5.2 of the RFC.\n',

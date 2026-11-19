@@ -382,11 +382,11 @@ async function runTests() {
   }
   console.log('>>> [TEST D] SUCCESS: Native HTTP/2 connection succeeded!');
 
-  // Verify RFC 8484 §5.2 minimum HTTP version enforcement: HTTP/1.1 to /dns-query returns 505
-  console.log('>>> [TEST D] Testing RFC 8484 §5.2 rejection (HTTP/1.1 to /dns-query returns 505)...');
+  // Verify RFC 8484 §5.2 minimum HTTP version enforcement: HTTP/1.1 to DoH /:key returns 505, and /dns-query is NOT routed as DoH
+  console.log('>>> [TEST D] Testing RFC 8484 §5.2 rejection (HTTP/1.1 to /testkey123 returns 505) & /dns-query non-support...');
   const h1DohRes = await new Promise<{ status: number; body: string }>((resolve, reject) => {
     const req = https.get(
-      `https://127.0.0.1:${HTTPS_TEST_PORT}/dns-query?dns=AAABAAABAAAAAAAAA3d3dwdleGFtcGxlA2NvbQAAAQAB`,
+      `https://127.0.0.1:${HTTPS_TEST_PORT}/testkey123?dns=AAABAAABAAAAAAAAA3d3dwdleGFtcGxlA2NvbQAAAQAB`,
       {
         servername: 'dns.local',
         ca: fs.readFileSync(tlsCertPath),
@@ -409,7 +409,33 @@ async function runTests() {
   if (!h1DohRes.body.includes('RFC 8484')) {
     throw new Error(`Expected RFC 8484 explanation in 505 response, got ${h1DohRes.body}`);
   }
-  console.log('>>> [TEST D] SUCCESS: RFC 8484 §5.2 strictly enforces HTTP/2 minimum (HTTP 505 on HTTP/1.1)!');
+  const unsupportedDnsQueryRes = await new Promise<{ status: number; contentType: string; body: string }>((resolve, reject) => {
+    const req = https.get(
+      `https://127.0.0.1:${HTTPS_TEST_PORT}/dns-query?dns=AAABAAABAAAAAAAAA3d3dwdleGFtcGxlA2NvbQAAAQAB`,
+      {
+        servername: 'dns.local',
+        ca: fs.readFileSync(tlsCertPath),
+        rejectUnauthorized: true,
+        headers: {
+          'Accept': 'application/dns-message'
+        }
+      },
+      (res) => {
+        let data = '';
+        res.on('data', (c) => data += c);
+        res.on('end', () => resolve({
+          status: res.statusCode || 0,
+          contentType: String(res.headers['content-type'] || ''),
+          body: data
+        }));
+      }
+    );
+    req.on('error', reject);
+  });
+  if (unsupportedDnsQueryRes.status === 505 || unsupportedDnsQueryRes.contentType.includes('application/dns-message')) {
+    throw new Error(`/dns-query must NOT be routed as a DoH endpoint (got status ${unsupportedDnsQueryRes.status})`);
+  }
+  console.log('>>> [TEST D] SUCCESS: RFC 8484 §5.2 enforces HTTP/2 on /:key (505 on HTTP/1.1) and /dns-query is disabled!');
 
   // ── TEST D2: Public System Endpoints (/api/resolve & /api/geoip) ──
   console.log('\n>>> [TEST D2] Testing Public /api/resolve and /api/geoip APIs...');

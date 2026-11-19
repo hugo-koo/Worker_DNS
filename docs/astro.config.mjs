@@ -514,6 +514,16 @@ export default defineConfig({
               slug: 'reference/cli',
             },
             {
+              label: 'API Reference',
+              translations: {
+                'zh-CN': 'API / 应用程序接口',
+                'zh-cn': 'API / 应用程序接口',
+                'zh-TW': 'API / 應用程式介面',
+                'zh-tw': 'API / 應用程式介面',
+              },
+              slug: 'reference/api',
+            },
+            {
               label: 'Troubleshooting & FAQ',
               translations: {
                 'zh-CN': '常见问题与排错',
