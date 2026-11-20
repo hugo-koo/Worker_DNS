@@ -56,7 +56,8 @@
     "unknown": "未知",
     "system": "系统",
     "created": "创建时间",
-    "renameProfile": "重命名配置"
+    "renameProfile": "重命名配置",
+    "modeDemo": "演示模式"
   },
   "nav": {
     "setup": "安装",

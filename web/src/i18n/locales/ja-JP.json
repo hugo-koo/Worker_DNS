@@ -56,7 +56,8 @@
     "unknown": "不明",
     "system": "システム",
     "created": "作成日時",
-    "renameProfile": "プロファイル名を変更"
+    "renameProfile": "プロファイル名を変更",
+    "modeDemo": "デモモード"
   },
   "nav": {
     "setup": "インストール",

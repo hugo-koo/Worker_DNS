@@ -9,6 +9,13 @@ import {
 } from '../constants/presets';
 import { detectServerfullMode } from '../router/runtimeConfig';
 import { getActiveDnsConnection } from '../lib/activeDns';
+import {
+  buildDemoClientInfoPayload,
+  getDemoGeoIpPayload,
+  getDemoResolvePayload,
+  getDemoSubstitutePayload,
+  isDemoMode,
+} from '../lib/demoConfig';
 
 /**
  * Handles system/utility routes like /api/clientinfo and /api/substitute
@@ -18,8 +25,31 @@ export async function handleSystemRequest(request: Request, env: Env): Promise<R
   const cache = typeof caches !== 'undefined' ? (caches as any).default : null;
 
   if (url.pathname === '/api/clientinfo') {
-    const clientIp = request.headers.get("CF-Connecting-IP") || "127.0.0.1";
     const isServerfull = detectServerfullMode(env);
+    const demoMode = isDemoMode(env);
+    if (demoMode) {
+      let connectedDemoProfileId: string | null = null;
+      if (env.DB) {
+        try {
+          const row = await env.DB.prepare("SELECT id FROM profiles ORDER BY created_at DESC LIMIT 1")
+            .first<{ id: string }>();
+          connectedDemoProfileId = row?.id || null;
+        } catch {
+          // Ignore optional demo lookup errors
+        }
+      }
+      return new Response(
+        JSON.stringify(
+          buildDemoClientInfoPayload(env, {
+            isServerfull,
+            connectedProfileId: connectedDemoProfileId,
+          })
+        ),
+        { headers: { 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const clientIp = request.headers.get("CF-Connecting-IP") || "127.0.0.1";
     const connectedProfileId = await getActiveDnsConnection(cache, clientIp, isServerfull);
     const cf = (request as { cf?: Record<string, unknown> }).cf;
 
@@ -118,6 +148,12 @@ export async function handleSystemRequest(request: Request, env: Env): Promise<R
   }
 
   if (url.pathname === '/api/substitute') {
+    if (isDemoMode(env)) {
+      return new Response(JSON.stringify(getDemoSubstitutePayload()), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
     const subDomain = env.SUBSTITUTE_DOMAIN || DEFAULT_SUBSTITUTE_DOMAIN;
     let substituteDomainIp: string | null = null;
     let substituteDomainIpv6: string | null = null;
@@ -208,6 +244,11 @@ export async function handleSystemRequest(request: Request, env: Env): Promise<R
 
   if (url.pathname === '/api/geoip') {
     const rawIp = url.searchParams.get('ip');
+    if (isDemoMode(env)) {
+      return new Response(JSON.stringify(getDemoGeoIpPayload(rawIp || undefined)), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
     const connectingIp = request.headers.get("CF-Connecting-IP");
     const targetIp = (rawIp || connectingIp || "").trim();
 
@@ -259,6 +300,12 @@ export async function handleSystemRequest(request: Request, env: Env): Promise<R
   }
 
   if (url.pathname === '/api/resolve') {
+    if (isDemoMode(env)) {
+      return new Response(JSON.stringify(getDemoResolvePayload()), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
     const domain = url.searchParams.get('name') || url.searchParams.get('domain');
     if (!domain) {
       return new Response(JSON.stringify({ error: "Missing domain parameter" }), {

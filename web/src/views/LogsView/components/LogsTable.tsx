@@ -89,14 +89,14 @@ export const LogsTable: React.FC<LogsTableProps> = ({
     {
       key: "source",
       header: t("logs.tableSource"),
-      headerClassName: "w-32",
+      headerClassName: "w-32 2xl:w-44",
       render: (log: LogEntry): React.ReactNode => (
         <div className="flex items-center gap-2">
           <Tag minimal className="font-mono text-[10px]" title={log.geo_country || "Unknown"}>
             {getFlagEmoji(log.geo_country)}
           </Tag>
           {log.access_point_name && (
-            <span className="text-xs opacity-70 truncate max-w-20" title={log.access_point_name}>
+            <span className="text-xs opacity-70 truncate max-w-20 2xl:max-w-36" title={log.access_point_name}>
               {log.access_point_name}
             </span>
           )}

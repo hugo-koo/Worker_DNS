@@ -33,7 +33,7 @@ export const ListsTable: React.FC<ListsTableProps> = ({
     {
       key: "url",
       header: t("filtering.tableUrl"),
-      cellClassName: "font-mono text-sm max-w-md truncate",
+      cellClassName: "font-mono text-sm max-w-md 2xl:max-w-2xl truncate",
       render: (list: FilterList): React.ReactNode => {
         const scopes = list.scopes || (list.scope ? [list.scope] : []);
         return (

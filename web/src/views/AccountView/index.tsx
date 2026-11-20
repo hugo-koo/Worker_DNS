@@ -21,6 +21,7 @@ import { UserFilterListsCard } from "./components/UserFilterListsCard";
 import { E2eeCard } from "./components/E2eeCard";
 import { USERNAME_REGEX } from "../../utils/auth";
 import { useIsMobile } from "../../hooks/useIsMobile";
+import { PAGE_CONTAINER_STANDARD } from "../../constants/layout";
 
 export interface AccountViewProps {
   onSavingChange?: (saving: boolean) => void;
@@ -148,7 +149,7 @@ export const AccountView: React.FC<AccountViewProps> = ({ onSavingChange, toaste
     return <div className="p-8 text-center">{t("common.loading")}</div>;
 
   return (
-    <div className={clsx("max-w-5xl mx-auto space-y-8", isMobile ? "p-0" : "px-8")}>
+    <div className={clsx(PAGE_CONTAINER_STANDARD, "mx-auto space-y-8", isMobile ? "p-0" : "px-8")}>
       <div className="flex justify-between items-start sm:items-end gap-3 flex-wrap sm:flex-nowrap">
         <div>
           <h2 className="bp6-heading">{t("account.title")}</h2>

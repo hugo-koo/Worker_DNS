@@ -19,6 +19,7 @@ import { PASSWORD_REGEX, USERNAME_REGEX } from "../../utils/validator";
 import { verifyTurnstile } from "./utils";
 import { getDefaultUpstreamUrl } from "../../constants/presets";
 import { syncProfileKeysToDo } from "../../lib/accessKeyRegistry";
+import { ensureDemoDataSeeded } from "../../lib/demoMode";
 
 /**
  * Handle user registration requests (signup)
@@ -144,6 +145,7 @@ export async function handleAuthRegisterRequest(request: Request, env: Env): Pro
       }
     });
     await syncProfileKeysToDo(env.DB, env, defaultProfileId);
+    await ensureDemoDataSeeded(env, userId);
 
     // Generate zero-knowledge Recovery Key; store ONLY irreversible hash in DB
     const recoveryKey = generateRecoveryKey();

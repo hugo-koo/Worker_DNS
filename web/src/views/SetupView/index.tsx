@@ -7,12 +7,13 @@ import { setSystemTimeZone } from "../../utils/date";
 
 import type { SetupViewProps, ClientInfo } from "./types";
 import { useIsMobile } from "../../hooks/useIsMobile";
-import { useDeploymentMode } from "../../hooks/useDeploymentMode";
+import { useDeploymentMode, getDisplayOrigin } from "../../hooks/useDeploymentMode";
 import { SetupHeader } from "./components/SetupHeader";
 import { VerifyConnectionCard } from "./components/VerifyConnectionCard";
 import { AccessPointCard } from "./components/AccessPointCard";
 import { DohUrlCard } from "./components/DohUrlCard";
 import { SetupTabs } from "./components/SetupTabs";
+import { PAGE_CONTAINER_STANDARD } from "../../constants/layout";
 import type { AccessPoint } from "../../types/auth";
 import {
   getClientInfo,
@@ -26,7 +27,8 @@ import {
 
 export const SetupView: React.FC<SetupViewProps> = ({ profiles, toasterRef }) => {
   const isMobile = useIsMobile();
-  const { isServerfull } = useDeploymentMode();
+  const { isServerfull, isDemoMode, demoDomain } = useDeploymentMode();
+  const displayOrigin = getDisplayOrigin(isDemoMode, demoDomain);
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -71,7 +73,7 @@ export const SetupView: React.FC<SetupViewProps> = ({ profiles, toasterRef }) =>
 
   const activeToken = activeAp?.token || "";
   const activeName = activeAp?.name;
-  const dohUrl = activeToken ? `${window.location.origin}/${activeToken}` : "";
+  const dohUrl = activeToken ? `${displayOrigin}/${activeToken}` : "";
 
   const [clientInfo, setClientInfo] = useState<ClientInfo | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
@@ -94,10 +96,29 @@ export const SetupView: React.FC<SetupViewProps> = ({ profiles, toasterRef }) =>
     setIsVerifying(true);
     setVerifyResult(null);
     try {
-      const [clientData, traceResult] = await Promise.all([
-        getClientInfo(),
-        isServerfull ? Promise.resolve(null) : getTraceInfo(),
-      ]);
+      const clientData = await getClientInfo();
+      const traceResult =
+        isServerfull || clientData.isDemoMode ? null : await getTraceInfo();
+
+      if (clientData.isDemoMode) {
+        setClientInfo(clientData);
+        setTraceInfo(null);
+        setEdgeLocation([clientData.city, clientData.country].filter(Boolean).join(", "));
+        try {
+          const sub = await getSubstituteInfo();
+          setDomainIps({
+            ipv4: sub.ipv4List && sub.ipv4List.length > 0 ? sub.ipv4List : sub.ip ? [sub.ip] : [],
+            ipv6: sub.ipv6List && sub.ipv6List.length > 0 ? sub.ipv6List : sub.ipv6 ? [sub.ipv6] : [],
+          });
+        } catch {
+          setDomainIps({ ipv4: [], ipv6: [] });
+        }
+        setVerifyResult({
+          success: Boolean(targetProfileId),
+          profileMatch: Boolean(targetProfileId),
+        });
+        return;
+      }
 
       // Fallback GeoIP lookup if country or city is unknown for a public IP
       const isPrivateNetwork = clientData.country === "Private Network";
@@ -214,7 +235,7 @@ export const SetupView: React.FC<SetupViewProps> = ({ profiles, toasterRef }) =>
   }, [domainIps, clientInfo?.substituteDomain]);
 
   return (
-    <div className={`mx-auto space-y-8 pb-24 ${isMobile ? "p-1" : "px-8 max-w-5xl"}`}>
+    <div className={`mx-auto space-y-8 pb-24 ${isMobile ? "p-1" : `px-8 ${PAGE_CONTAINER_STANDARD}`}`}>
       <SetupHeader isMobile={isMobile} />
 
       <VerifyConnectionCard
@@ -257,11 +278,26 @@ export const SetupView: React.FC<SetupViewProps> = ({ profiles, toasterRef }) =>
         </Callout>
       ) : (
         <>
-          <AccessPointCard
-            accessPoints={accessPoints}
-            selectedAp={activeAp}
-            onSelectAp={handleSelectAp}
-          />
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+            <div className={activeToken ? "lg:col-span-5 min-w-0" : "lg:col-span-12 min-w-0"}>
+              <AccessPointCard
+                accessPoints={accessPoints}
+                selectedAp={activeAp}
+                onSelectAp={handleSelectAp}
+              />
+            </div>
+
+            {activeToken && (
+              <div className="lg:col-span-7 min-w-0">
+                <DohUrlCard
+                  dohUrl={dohUrl}
+                  copyToClipboard={copyToClipboard}
+                  isMobile={isMobile}
+                  flashTrigger={apSwitchCount}
+                />
+              </div>
+            )}
+          </div>
 
           {activeAp && !activeAp.profile_id && (
             <Callout
@@ -287,25 +323,16 @@ export const SetupView: React.FC<SetupViewProps> = ({ profiles, toasterRef }) =>
           )}
 
           {activeToken && (
-            <>
-              <DohUrlCard
-                dohUrl={dohUrl}
-                copyToClipboard={copyToClipboard}
-                isMobile={isMobile}
-                flashTrigger={apSwitchCount}
-              />
-
-              <SetupTabs
-                isMobile={isMobile}
-                copyToClipboard={copyToClipboard}
-                dohUrl={dohUrl}
-                profileKey={activeToken}
-                profileName={boundProfile?.name}
-                accessPointName={activeName}
-                currentIps={currentIps}
-                dotDomain={clientInfo?.dotDomain}
-              />
-            </>
+            <SetupTabs
+              isMobile={isMobile}
+              copyToClipboard={copyToClipboard}
+              dohUrl={dohUrl}
+              profileKey={activeToken}
+              profileName={boundProfile?.name}
+              accessPointName={activeName}
+              currentIps={currentIps}
+              dotDomain={clientInfo?.dotDomain}
+            />
           )}
         </>
       )}

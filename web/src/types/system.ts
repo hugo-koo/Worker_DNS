@@ -15,6 +15,8 @@ export interface DnsWorkerConfig {
   mode?: DeploymentMode;
   databaseService?: string;
   isTurso?: boolean;
+  isDemoMode?: boolean;
+  demoDomain?: string;
 }
 
 declare global {

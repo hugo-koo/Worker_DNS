@@ -137,14 +137,14 @@ curl -s -b cookies.txt -X POST https://dns.example.com/api/profiles/<profileId>/
 
 | 方法 | 路徑 | 許可權 | 說明 |
 | --- | --- | --- | --- |
-| `GET` | `/api/clientinfo` | Public | 返回探測到的客戶端 IP 與請求網路資訊。 |
-| `GET` | `/api/substitute` | Public | 返回部署元資訊、執行模式（`serverfull` 或 Worker）及版本號。 |
+| `GET` | `/api/clientinfo` | Public | 返回探測到的客戶端 IP、網路資訊與演示模式標記（`isDemoMode`、`demoDomain`）；當 `DEMO_MODE=true` 時統一返回來自 `demoConfig` 的脫敏資料。 |
+| `GET` | `/api/substitute` | Public | 返回輔助域名 IPv4/IPv6 探測結果（`DEMO_MODE=true` 時返回 `demoConfig` 標準演示 IP）。 |
 | `GET` | `/api/presets/upstreams` | Public | 獲取內建上游 DoH/DoT 解析器預設列表。 |
 | `GET` | `/api/presets/filters` | Public | 獲取預設過濾規則列表 URL 與分類。 |
 | `GET` | `/api/presets/ech-fronting-domains` | Public | 獲取預設 ECH / Fronting 域名列表。 |
 | `GET` | `/api/icon/:domain` | Public | 代理獲取目標域名的站點圖示（Favicon）。 |
-| `GET` | `/api/geoip?ip=...` | Public | 查詢指定 IP 的 GeoIP 地理位置與 ASN 資訊。 |
-| `GET` | `/api/resolve?name=...` | Public | 執行 DNS 記錄解析查詢（支援 `name` 或 `domain` 查詢引數）。 |
+| `GET` | `/api/geoip?ip=...` | Public | 查詢指定 IP 的 GeoIP 地理位置與 ASN 資訊（`DEMO_MODE=true` 時返回脫敏固定地區）。 |
+| `GET` | `/api/resolve?name=...` | Public | 執行 DNS 記錄解析查詢（支援 `name` 或 `domain` 引數；`DEMO_MODE=true` 時返回演示 IP）。 |
 
 ---
 
@@ -267,7 +267,7 @@ curl -s -b cookies.txt -X POST https://dns.example.com/api/profiles/<profileId>/
 | `DELETE` | `/api/profiles/:id/logs` | Bearer + CSRF | 清空該配置檔案下儲存的查詢日誌。 |
 | `POST` | `/api/profiles/:id/logs/ws-ticket` | Bearer + CSRF | 簽發一次性短期 Ticket，用於建立即時日誌 WebSocket 連線。 |
 | `GET` (WS) | `/api/profiles/:id/logs/ws` | Ticket | WebSocket 升級端點，用於即時接收 DNS 查詢事件流。 |
-| `GET` | `/api/profiles/:id/analytics` | Bearer | 獲取配置檔案綜合統計分析概覽。 |
+| `GET` | `/api/profiles/:id/analytics` | Bearer | 獲取配置檔案綜合統計分析概覽（開啟 `DEMO_MODE=true` 時，按任意預設或自定義時間區間及接入點篩選動態生成自洽演示分析資料）。 |
 | `GET` | `/api/profiles/:id/analytics/summary` | Bearer | 獲取請求總數、攔截量、快取命中及響應延遲彙總。 |
 | `GET` | `/api/profiles/:id/analytics/trend` | Bearer | 獲取按時間分桶的查詢趨勢與攔截率資料。 |
 | `GET` | `/api/profiles/:id/analytics/top_allowed` | Bearer | 獲取最常放行的域名排行榜。 |

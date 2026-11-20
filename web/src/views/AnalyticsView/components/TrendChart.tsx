@@ -10,9 +10,9 @@ export interface TrendChartProps {
 
 export const TrendChart: React.FC<TrendChartProps> = ({ chartData, range }) => {
   return (
-    <div className="h-64 w-full">
+    <div className="h-64 2xl:h-80 w-full">
       {chartData.length > 0 ? (
-        <ResponsiveContainer width="100%" height={256} minHeight={0} minWidth={0} debounce={50}>
+        <ResponsiveContainer width="100%" height="100%" minHeight={256} minWidth={0} debounce={50}>
           <AreaChart data={chartData}>
             <defs>
               <linearGradient id="colorAllowed" x1="0" y1="0" x2="0" y2="1">

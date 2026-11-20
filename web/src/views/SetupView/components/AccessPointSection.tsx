@@ -4,6 +4,7 @@ import { Trash2, Edit2, RefreshCw, MonitorSmartphone, Copy, Download } from "luc
 import { useTranslation } from "react-i18next";
 import type { AccessPoint, Profile } from "../../../types/auth";
 import { formatDateTime } from "../../../utils/date";
+import { useDeploymentMode, getDisplayOrigin } from "../../../hooks/useDeploymentMode";
 
 export interface AccessPointSectionProps {
   ap: AccessPoint;
@@ -39,6 +40,8 @@ export const AccessPointSection: React.FC<AccessPointSectionProps> = ({
   handleDelete,
 }) => {
   const { t } = useTranslation();
+  const { isDemoMode, demoDomain } = useDeploymentMode();
+  const displayOrigin = getDisplayOrigin(isDemoMode, demoDomain);
   const boundProfile = profiles.find((p) => p.id === ap.profile_id) || null;
 
   return (
@@ -84,12 +87,12 @@ export const AccessPointSection: React.FC<AccessPointSectionProps> = ({
             <div
               className="flex items-center gap-2 text-sm font-mono bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400 px-2 py-1 rounded cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors break-all"
               onClick={() => {
-                navigator.clipboard.writeText(`${window.location.origin}/${ap.token}`);
+                navigator.clipboard.writeText(`${displayOrigin}/${ap.token}`);
                 toasterRef.current?.show({ message: t("setup.copied"), intent: Intent.SUCCESS });
               }}
               title={t("setup.copyUrl")}
             >
-              <span className="select-all">{`${window.location.origin}/${ap.token}`}</span>
+              <span className="select-all">{`${displayOrigin}/${ap.token}`}</span>
               <Copy size={14} className="shrink-0" />
             </div>
           </div>

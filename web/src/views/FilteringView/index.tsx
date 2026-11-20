@@ -10,6 +10,7 @@ import { AddListCard } from "./components/AddListCard";
 import { ListsTable } from "./components/ListsTable";
 import { ListDetailsDialog } from "./components/ListDetailsDialog";
 import { SyncProgressButton } from "./components/SyncProgressButton";
+import { PAGE_CONTAINER_STANDARD } from "../../constants/layout";
 import { getProfileLists, addCustomProfileList, deleteCustomProfileList, syncProfileLists, syncSingleProfileList, getProfileSyncStatus, toggleProfileList, addProfileRule } from "../../services";
 
 /**
@@ -370,7 +371,7 @@ export const FilteringView: React.FC<FilteringViewProps> = ({ profileId, toaster
   }, [profileId]);
 
   return (
-    <div className={clsx("md:px-8 w-full min-w-0 max-w-5xl mx-auto", isMobile ? "p-1" : "px-8")}>
+    <div className={clsx("md:px-8 w-full min-w-0 mx-auto", PAGE_CONTAINER_STANDARD, isMobile ? "p-1" : "px-8")}>
       <div className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
         <div className="w-full md:w-auto flex-1">
           {isMobile ? (

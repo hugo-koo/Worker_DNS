@@ -56,7 +56,8 @@
     "unknown": "Không xác định",
     "system": "Hệ thống",
     "created": "Ngày tạo",
-    "renameProfile": "Đổi tên hồ sơ"
+    "renameProfile": "Đổi tên hồ sơ",
+    "modeDemo": "Chế độ Demo"
   },
   "nav": {
     "setup": "Thiết lập",

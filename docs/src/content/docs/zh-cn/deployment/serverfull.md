@@ -168,6 +168,29 @@ SERVERFULL_DISABLE_HTTPS=false
 
 ---
 
+## 常用环境变量
+
+除监听端口与 TLS 证书路径外，`.env` 还支持解析兜底、配额保留及可选演示开关等配置：
+
+```ini
+# 未绑定接入点（profile_id = null）或紧急降级时使用的兜底上游解析器
+FAIL_OPEN_UPSTREAM=tls://no-ads-malware-typo.freedns.controld.com
+
+# 配额、保留策略与内存 DNS 缓存上限
+MAX_PROFILES_PER_USER=10
+MAX_ACCESS_POINTS_PER_PROFILE=100
+MAX_LOG_RETENTION_DAYS=30
+DNS_CACHE_SIZE=20000
+
+# 演示模式开关（环境变量名须保持全大写）
+# 开启后页眉切换为演示状态标签、屏蔽真实网络遥测、统一替换域名为 DEMO_DOMAIN，
+# 并自动填充多设备接入点、规则、外部列表、示例日志以及全时间窗口统计数据。
+DEMO_MODE=false
+DEMO_DOMAIN=dns.worker.domain
+```
+
+---
+
 ## 使用 Caddy 或 Nginx 反向代理 HTTP（10080 端口）
 
 在实际生产部署中，除了直接暴露 `10080` 端口或在 DNS Worker 内部配置证书监听 `10443`（HTTPS）外，**强烈推荐使用 Caddy 或 Nginx 等成熟的反向代理服务**置于 DNS Worker 前端。由反向代理统一监听标准 `443` 端口并处理自动化 SSL 证书申请与续期，随后将流量转发至内网 `http://127.0.0.1:10080`。

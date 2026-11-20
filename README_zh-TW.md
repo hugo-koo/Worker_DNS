@@ -79,13 +79,17 @@ docker run -d \
 |:---:|:---:|
 | ![統計分析](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns.obex-stats.webp) | ![解析目的地](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns.obex-stats_dest.webp) |
 
-| 多接入點與端點設定 | 規則設定 |
+| 多接入點與端點設定 | 多平台接入引導 |
 |:---:|:---:|
-| ![多接入點](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns.obex-endpoints.webp) | ![規則設定](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns.obex-rules.webp) |
+| ![多接入點](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns.obex-endpoints.webp) | ![接入引導](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns.obex-setup.webp) |
 
-| 外部攔截列表 | 解析日誌 |
+| 規則設定 | 外部攔截列表 |
 |:---:|:---:|
-| ![過濾列表](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns.obex-filter.webp) | ![解析日誌](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns.obex-log.webp) |
+| ![規則設定](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns.obex-rules.webp) | ![過濾列表](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns.obex-filter.webp) |
+
+| 解析日誌 | 日誌詳情檢視 |
+|:---:|:---:|
+| ![解析日誌](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns.obex-log.webp) | ![日誌詳情](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns.obex-log_detail.webp) |
 
 | 行動端統計 | 行動端日誌 |
 |:---:|:---:|

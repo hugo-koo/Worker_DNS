@@ -9,6 +9,7 @@ import { useImportProfile } from "./hooks";
 import { CreateProfileCard } from "./components/CreateProfileCard";
 import { RenameProfileDialog } from "./components/RenameProfileDialog";
 import { ProfileList } from "./components/ProfileList";
+import { PAGE_CONTAINER_COLLECTIONS } from "../../constants/layout";
 
 interface DashboardHomeProps {
   profiles: Profile[];
@@ -103,7 +104,7 @@ export const DashboardHomeView = ({
   };
 
   return (
-    <div className="w-full max-w-2xl mx-auto p-2 md:px-6 pb-24">
+    <div className={`w-full ${PAGE_CONTAINER_COLLECTIONS} mx-auto p-2 md:px-6 pb-24`}>
       <input
         type="file"
         ref={fileInputRef}

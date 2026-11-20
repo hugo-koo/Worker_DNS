@@ -137,14 +137,14 @@ curl -s -b cookies.txt -X POST https://dns.example.com/api/profiles/<profileId>/
 
 | 方法 | 路径 | 权限 | 说明 |
 | --- | --- | --- | --- |
-| `GET` | `/api/clientinfo` | Public | 返回探测到的客户端 IP 与请求网络信息。 |
-| `GET` | `/api/substitute` | Public | 返回部署元信息、运行模式（`serverfull` 或 Worker）及版本号。 |
+| `GET` | `/api/clientinfo` | Public | 返回探测到的客户端 IP、网络信息与演示模式标记（`isDemoMode`、`demoDomain`）；当 `DEMO_MODE=true` 时统一返回来自 `demoConfig` 的脱敏数据。 |
+| `GET` | `/api/substitute` | Public | 返回辅助域名 IPv4/IPv6 探测结果（`DEMO_MODE=true` 时返回 `demoConfig` 标准演示 IP）。 |
 | `GET` | `/api/presets/upstreams` | Public | 获取内置上游 DoH/DoT 解析器预设列表。 |
 | `GET` | `/api/presets/filters` | Public | 获取预设过滤规则列表 URL 与分类。 |
 | `GET` | `/api/presets/ech-fronting-domains` | Public | 获取预设 ECH / Fronting 域名列表。 |
 | `GET` | `/api/icon/:domain` | Public | 代理获取目标域名的站点图标（Favicon）。 |
-| `GET` | `/api/geoip?ip=...` | Public | 查询指定 IP 的 GeoIP 地理位置与 ASN 信息。 |
-| `GET` | `/api/resolve?name=...` | Public | 执行 DNS 记录解析查询（支持 `name` 或 `domain` 查询参数）。 |
+| `GET` | `/api/geoip?ip=...` | Public | 查询指定 IP 的 GeoIP 地理位置与 ASN 信息（`DEMO_MODE=true` 时返回脱敏固定地区）。 |
+| `GET` | `/api/resolve?name=...` | Public | 执行 DNS 记录解析查询（支持 `name` 或 `domain` 参数；`DEMO_MODE=true` 时返回演示 IP）。 |
 
 ---
 
@@ -267,7 +267,7 @@ curl -s -b cookies.txt -X POST https://dns.example.com/api/profiles/<profileId>/
 | `DELETE` | `/api/profiles/:id/logs` | Bearer + CSRF | 清空该配置文件下存储的查询日志。 |
 | `POST` | `/api/profiles/:id/logs/ws-ticket` | Bearer + CSRF | 签发一次性短期 Ticket，用于建立实时日志 WebSocket 连接。 |
 | `GET` (WS) | `/api/profiles/:id/logs/ws` | Ticket | WebSocket 升级端点，用于实时接收 DNS 查询事件流。 |
-| `GET` | `/api/profiles/:id/analytics` | Bearer | 获取配置文件综合统计分析概览。 |
+| `GET` | `/api/profiles/:id/analytics` | Bearer | 获取配置文件综合统计分析概览（开启 `DEMO_MODE=true` 时，按任意预设或自定义时间区间及接入点筛选动态生成自洽演示分析数据）。 |
 | `GET` | `/api/profiles/:id/analytics/summary` | Bearer | 获取请求总数、拦截量、缓存命中及响应延迟汇总。 |
 | `GET` | `/api/profiles/:id/analytics/trend` | Bearer | 获取按时间分桶的查询趋势与拦截率数据。 |
 | `GET` | `/api/profiles/:id/analytics/top_allowed` | Bearer | 获取最常放行的域名排行榜。 |

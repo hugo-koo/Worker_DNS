@@ -3,6 +3,7 @@ import { Card, Elevation, H5, InputGroup, Button, Intent, OverlayToaster } from 
 import { Shield } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type {  Profile  } from "../types";
+import { useDeploymentMode, getDisplayOrigin } from "../../../hooks/useDeploymentMode";
 
 export interface SecurityAccessCardProps {
   profileId: string;
@@ -20,6 +21,8 @@ export const SecurityAccessCard: React.FC<SecurityAccessCardProps> = ({
   toasterRef,
 }) => {
   const { t } = useTranslation();
+  const { isDemoMode, demoDomain } = useDeploymentMode();
+  const displayOrigin = getDisplayOrigin(isDemoMode, demoDomain);
 
   return (
     <Card elevation={Elevation.ONE} className="dark:bg-gray-900 dark:border-gray-800">
@@ -31,14 +34,14 @@ export const SecurityAccessCard: React.FC<SecurityAccessCardProps> = ({
           <div className="font-bold mb-2">{t("settings.rotateKeyTitle", "Access URL")}</div>
           <InputGroup
             readOnly
-            value={`${window.location.origin}/${profile?.profile_key || profileId}`}
+            value={`${displayOrigin}/${profile?.profile_key || profileId}`}
             className="mb-2 font-mono text-sm"
             rightElement={
               <Button
                 icon="duplicate"
                 minimal
                 onClick={() => {
-                  navigator.clipboard.writeText(`${window.location.origin}/${profile?.profile_key || profileId}`);
+                  navigator.clipboard.writeText(`${displayOrigin}/${profile?.profile_key || profileId}`);
                   toasterRef?.current?.show({ message: t("settings.copied", "Copied to clipboard"), intent: Intent.SUCCESS });
                 }}
               />

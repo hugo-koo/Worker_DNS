@@ -4,6 +4,8 @@ import { syncDeploymentModeFromClientInfo } from "../hooks/useDeploymentMode";
 export interface SubstituteInfo {
   ip: string | null;
   ipv6: string | null;
+  ipv4List?: string[];
+  ipv6List?: string[];
 }
 
 export interface TraceInfo {
@@ -15,7 +17,7 @@ export async function getClientInfo(): Promise<ClientInfo> {
   const res = await fetch("/api/clientinfo");
   if (!res.ok) throw new Error("Failed to fetch client info");
   const data = (await res.json()) as ClientInfo;
-  syncDeploymentModeFromClientInfo(data.isServerfull, data.mode);
+  syncDeploymentModeFromClientInfo(data.isServerfull, data.mode, data.isDemoMode, data.demoDomain);
   return data;
 }
 
@@ -51,10 +53,47 @@ export async function getTraceInfo(): Promise<TraceInfo | null> {
   }
 }
 
+const MAP_TOPOLOGY_URL = "/world-110m.json?v=3";
+
+function isValidMapTopologyPayload(data: unknown): boolean {
+  if (!data || typeof data !== "object") return false;
+  const topo = data as {
+    type?: unknown;
+    objects?: { countries?: { geometries?: unknown[] } };
+  };
+  return (
+    topo.type === "Topology" &&
+    Array.isArray(topo.objects?.countries?.geometries) &&
+    topo.objects.countries.geometries.length > 0
+  );
+}
+
+/**
+ * Fetches world TopoJSON topology with cache-busting fallback if a cached entry was corrupted.
+ */
 export async function getMapTopology(): Promise<any> {
-  const res = await fetch("/world-110m.json");
-  if (!res.ok) throw new Error("Failed to load map topology");
-  return res.json();
+  const res = await fetch(MAP_TOPOLOGY_URL);
+  if (!res.ok) throw new Error(`Failed to load map topology (${res.status})`);
+  try {
+    const data = await res.json();
+    if (isValidMapTopologyPayload(data)) {
+      return data;
+    }
+  } catch {
+    // Fall through to cache-bypass reload
+  }
+
+  const freshRes = await fetch(`${MAP_TOPOLOGY_URL}&_ts=${Date.now()}`, {
+    cache: "reload",
+  });
+  if (!freshRes.ok) {
+    throw new Error(`Failed to reload map topology (${freshRes.status})`);
+  }
+  const freshData = await freshRes.json();
+  if (!isValidMapTopologyPayload(freshData)) {
+    throw new Error("Invalid map topology payload");
+  }
+  return freshData;
 }
 
 export async function queryDnsJson(server: string, name: string, type: string): Promise<any> {

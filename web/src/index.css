@@ -53,6 +53,19 @@
     color: var(--text-color);
   }
 
+  /* Progressive typography and rem-unit scaling for QHD / 4K displays at low OS scale */
+  @media (min-width: 2400px) {
+    html {
+      font-size: 18px;
+    }
+  }
+
+  @media (min-width: 3200px) {
+    html {
+      font-size: 20px;
+    }
+  }
+
   /* 确保 Blueprint 组件在深色模式下有正确的对比度 */
   .bp6-dark {
     color: #f5f8fa;

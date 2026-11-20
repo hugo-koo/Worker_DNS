@@ -11,6 +11,7 @@ import { useAccessPoints } from "../SetupView/hooks/useAccessPoints";
 import { AddAccessPointDialog } from "../SetupView/components/AddAccessPointDialog";
 import { RenameAccessPointDialog } from "../SetupView/components/RenameAccessPointDialog";
 import { AccessPointSection } from "../SetupView/components/AccessPointSection";
+import { PAGE_CONTAINER_WIDE } from "../../constants/layout";
 
 export interface AccessPointsManageViewProps {
   profiles: Profile[];
@@ -95,7 +96,7 @@ export const AccessPointsManageView: React.FC<AccessPointsManageViewProps> = ({
   });
 
   return (
-    <div className={clsx("md:px-8 w-full min-w-0 max-w-5xl mx-auto pb-24", isMobile ? "p-1" : "px-8")}>
+    <div className={clsx("md:px-8 w-full min-w-0 mx-auto pb-24", PAGE_CONTAINER_WIDE, isMobile ? "p-1" : "px-8")}>
       <div className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="bp6-heading m-0">{t("setup.manageAccessPoints", "Manage Access Points")}</h1>
@@ -117,7 +118,7 @@ export const AccessPointsManageView: React.FC<AccessPointsManageViewProps> = ({
       </div>
 
       {accessPoints.length > 0 && (
-        <div className="mb-6 max-w-sm">
+        <div className="mb-6 max-w-sm 2xl:max-w-md">
           <InputGroup
             leftIcon="search"
             placeholder={t("setup.searchAccessPoints", "Search...")}
@@ -158,7 +159,7 @@ export const AccessPointsManageView: React.FC<AccessPointsManageViewProps> = ({
           />
         </div>
       ) : (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 min-[2200px]:grid-cols-4 gap-4 2xl:gap-5">
           {filteredAccessPoints.map((ap) => (
             <AccessPointSection
               key={ap.id}

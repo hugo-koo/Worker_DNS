@@ -27,6 +27,7 @@ import { clsx } from "clsx";
 import LogoIcon from "../assets/obex_cat_eye_logo-256.webp";
 import type { Profile, UserInfo } from "../types/auth";
 import { useUpstreamUpdate } from "../hooks/useUpstreamUpdate";
+import { useDeploymentMode, getDisplayHost } from "../hooks/useDeploymentMode";
 import { createSpaLinkClickHandler } from "../utils/navigation";
 
 /**
@@ -75,6 +76,8 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
   currentUser,
 }) => {
   const { t } = useTranslation();
+  const { isDemoMode, demoDomain } = useDeploymentMode();
+  const displayHost = getDisplayHost(isDemoMode, demoDomain);
   const { hasUpdate, latestTag, appVersion, gitTag, gitCommit } = useUpstreamUpdate();
 
   const touchStartRef = React.useRef<{ x: number; y: number; time: number } | null>(null);
@@ -355,9 +358,9 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                 </div>
                 <span
                   className="text-xs text-gray-500 dark:text-gray-400 font-mono leading-tight mt-0.5 truncate select-all"
-                  title={typeof window !== "undefined" ? window.location.host || window.location.hostname : ""}
+                  title={displayHost}
                 >
-                  {typeof window !== "undefined" ? window.location.host || window.location.hostname : ""}
+                  {displayHost}
                 </span>
               </div>
             )}

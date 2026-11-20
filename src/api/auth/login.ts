@@ -23,6 +23,7 @@ import { cacheUtils } from "../../utils/cache";
 import { verifyTurnstile } from "./utils";
 import { withTokenLock } from "../../lib/preauth";
 import { generateWebAuthnChallenge, verifyAuthenticationResponse } from "../../lib/webauthn";
+import { ensureDemoDataSeeded } from "../../lib/demoMode";
 
 /**
  * Handle prelogin and login requests
@@ -338,6 +339,7 @@ export async function handleLoginRequest(request: Request, env: Env): Promise<Re
       await activityLog.record(userId, 'recovery_key_used', clientIp, userAgent, { remaining: recoveryRemaining }, sessionHash);
     }
     await activityLog.record(userId, 'login_success', clientIp, userAgent, undefined, sessionHash);
+    await ensureDemoDataSeeded(env, userId);
 
     const csrfToken = generateId(32);
     const csrfCookie = createCsrfCookie(csrfToken, env, !!keepLoggedIn);

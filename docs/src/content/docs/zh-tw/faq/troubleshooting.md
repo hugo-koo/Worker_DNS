@@ -49,3 +49,30 @@ certbot certonly -d *.your.domain -d your.domain --manual --preferred-challenges
 
 ### 原因
 通過 `systemd` 託管的 Service 模式下，系統載入的環境變數檔案固定為 **/etc/dns-worker/.env**。請確保配置已寫入 `/etc/dns-worker/.env`。
+
+---
+
+## 4. 裝置接入正常，但過濾規則未生效且沒有查詢日誌？
+
+### 現象
+客戶端使用分配的 DoH 地址或 DoT 域名可以正常上網，但配置的攔截規則不生效，且在 **解析日誌** 頁面看不到對應請求記錄。
+
+### 原因
+接入點與配置檔案採用解耦設計。當某個接入點處於 **未繫結** 狀態（例如新建時未繫結，或原本繫結的配置檔案被刪除導致 `profile_id` 置空）時，系統為保障不斷網會將其路由至 `FAIL_OPEN_UPSTREAM` 應急上游，跳過規則過濾且不寫入日誌。
+
+### 解決方法
+進入左側 **接入點 > 管理**（`/access-points/manage`），找到對應裝置卡片，在 **繫結配置** 下拉框中重新繫結目標配置檔案即可立即生效。
+
+---
+
+## 5. `npm run dev` 本地開發時統計頁世界地圖不顯示（僅見零星圓點）？
+
+### 現象
+統計頁地圖區域能看到微縮地區圓點與圖例、縮放按鈕，但各大洲地理輪廓未渲染。
+
+### 原因
+世界地圖資料依賴 `/world-110m.json`（由服務代理上游並攜帶 `Cache-Control: max-age=2592000` 快取）。若本地 `.wrangler/state/v3/cache` 快取塊損壞、瀏覽器命中此前 30 天舊快取或開發服務尚未完全啟動時請求超時，會導致地圖輪廓資料未能載入。
+
+### 解決方法
+1. 停止 `npm run dev`，清理 `.wrangler/state/v3/cache` 目錄（保留 `.wrangler/state/v3/d1` 與 `.wrangler/state/v3/do` 資料庫資料），重新啟動 `npm run dev`。
+2. 在瀏覽器執行一次強制重新整理（`Ctrl + Shift + R` / `Cmd + Shift + R`），跳過舊快取重新拉取 `/world-110m.json?v=3`。

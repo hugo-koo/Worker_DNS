@@ -137,14 +137,14 @@ curl -s -b cookies.txt -X POST https://dns.example.com/api/profiles/<profileId>/
 
 | Method | Endpoint | Auth | Description |
 | --- | --- | --- | --- |
-| `GET` | `/api/clientinfo` | Public | Returns detected client IP and request network metadata. |
-| `GET` | `/api/substitute` | Public | Returns deployment metadata, runtime mode (`serverfull` vs Worker), and version info. |
+| `GET` | `/api/clientinfo` | Public | Returns detected client IP, network metadata, and Demo Mode flags (`isDemoMode`, `demoDomain`). When `DEMO_MODE=true`, returns canonical sanitized telemetry from `demoConfig`. |
+| `GET` | `/api/substitute` | Public | Returns substitute domain IPv4/IPv6 probe results (`demoConfig` sample IPs when `DEMO_MODE=true`). |
 | `GET` | `/api/presets/upstreams` | Public | Lists built-in upstream DoH/DoT resolver presets. |
 | `GET` | `/api/presets/filters` | Public | Lists curated preset filter-list URLs and categories. |
 | `GET` | `/api/presets/ech-fronting-domains` | Public | Lists preset ECH/fronting domains. |
 | `GET` | `/api/icon/:domain` | Public | Fetches/proxies the favicon for a domain. |
-| `GET` | `/api/geoip?ip=...` | Public | Resolves GeoIP location / ASN metadata for an IP address. |
-| `GET` | `/api/resolve?name=...` | Public | Queries DNS record resolution (`name` or `domain` query parameter). |
+| `GET` | `/api/geoip?ip=...` | Public | Resolves GeoIP location / ASN metadata for an IP address (returns canonical sanitized GeoIP when `DEMO_MODE=true`). |
+| `GET` | `/api/resolve?name=...` | Public | Queries DNS record resolution (`name` or `domain` query parameter; returns canonical sample IPs when `DEMO_MODE=true`). |
 
 ---
 
@@ -267,7 +267,7 @@ For backward compatibility and profile-scoped client attribution filters (Logs /
 | `DELETE` | `/api/profiles/:id/logs` | Bearer + CSRF | Clears stored query logs for the profile. |
 | `POST` | `/api/profiles/:id/logs/ws-ticket` | Bearer + CSRF | Issues a short-lived single-use ticket for upgrading to the live log WebSocket. |
 | `GET` (WS) | `/api/profiles/:id/logs/ws` | Ticket | WebSocket upgrade endpoint streaming live DNS query events in real time. |
-| `GET` | `/api/profiles/:id/analytics` | Bearer | Returns combined profile analytics overview. |
+| `GET` | `/api/profiles/:id/analytics` | Bearer | Returns combined profile analytics overview (when `DEMO_MODE=true`, dynamically synthesizes consistent sample analytics for any requested preset or `custom` range and Access Point filter). |
 | `GET` | `/api/profiles/:id/analytics/summary` | Bearer | Returns total/blocked/cached counters and latency summary. |
 | `GET` | `/api/profiles/:id/analytics/trend` | Bearer | Returns time-series query volume and block rate buckets. |
 | `GET` | `/api/profiles/:id/analytics/top_allowed` | Bearer | Lists top allowed domains. |

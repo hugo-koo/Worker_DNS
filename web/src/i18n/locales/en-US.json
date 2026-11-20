@@ -56,7 +56,8 @@
     "unknown": "Unknown",
     "system": "System",
     "created": "Created",
-    "renameProfile": "Rename Profile"
+    "renameProfile": "Rename Profile",
+    "modeDemo": "Demo Mode"
   },
   "nav": {
     "setup": "Setup",

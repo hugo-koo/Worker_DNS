@@ -288,3 +288,7 @@ NORMAL_USER_DEFAULT_LOG_RETENTION_DAYS=1
 # Hard cap on log row count per profile. Acts as a circuit-breaker when write
 # rate temporarily exceeds cleanup rate (e.g. high-traffic profiles).
 MAX_LOGS_PER_PROFILE=500000
+
+# Demo Mode (optional): replaces displayed hostnames with DEMO_DOMAIN and seeds sample UI data
+# DEMO_MODE = "false"
+# DEMO_DOMAIN = "dns.worker.domain"

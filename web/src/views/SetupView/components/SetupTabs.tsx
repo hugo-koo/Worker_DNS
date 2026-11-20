@@ -5,7 +5,7 @@ import { clsx } from "clsx";
 import { useTranslation } from "react-i18next";
 import { generateMobileConfig, formatProfileLabel, extractDomain } from "../../../utils/mobileconfig";
 import { StepStampWatermark } from "./StepStampWatermark";
-import { useDeploymentMode } from "../../../hooks/useDeploymentMode";
+import { useDeploymentMode, getDisplayOrigin, getDisplayHostname } from "../../../hooks/useDeploymentMode";
 import { isDummyOrPlaceholderDomain } from "../../../services";
 
 export interface SetupTabsProps {
@@ -32,8 +32,10 @@ export const SetupTabs: React.FC<SetupTabsProps> = ({
   dotDomain,
 }) => {
   const { t } = useTranslation();
-  const { isCloudflare } = useDeploymentMode();
-  const resolvedDohUrl = dohUrl || `${window.location.origin}/${profileKey}`;
+  const { isCloudflare, isDemoMode, demoDomain } = useDeploymentMode();
+  const displayOrigin = getDisplayOrigin(isDemoMode, demoDomain);
+  const displayHostname = getDisplayHostname(isDemoMode, demoDomain);
+  const resolvedDohUrl = dohUrl || `${displayOrigin}/${profileKey}`;
 
   /**
    * Renders a localized setup instruction while replacing the `{{dohUrl}}` placeholder
@@ -136,14 +138,14 @@ export const SetupTabs: React.FC<SetupTabsProps> = ({
                     profileKey,
                     profileName,
                     accessPointName,
-                    origin: window.location.origin,
+                    origin: displayOrigin,
                   });
                   const blob = new Blob([xml], { type: "application/x-apple-aspen-config" });
                   const url = URL.createObjectURL(blob);
                   const a = document.createElement("a");
                   a.href = url;
                   const label = formatProfileLabel(profileName, accessPointName);
-                  const domain = extractDomain(window.location.origin);
+                  const domain = extractDomain(displayOrigin);
                   const fileTag = (label || domain)
                     .replace(/[^a-zA-Z0-9_\-\u4e00-\u9fa5]/g, "_")
                     .replace(/_+/g, "_")
@@ -213,7 +215,7 @@ export const SetupTabs: React.FC<SetupTabsProps> = ({
               <p className="text-sm font-bold mb-2">{t("setup.linuxStep1")}</p>
               <div className="relative group">
                 <pre className="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg overflow-x-auto text-xs font-mono border border-gray-200 dark:border-gray-700">
-                  <code>{`curl -sL "${window.location.origin}/setup.sh?key=${profileKey}&origin=${window.location.origin}" | sudo bash`}</code>
+                  <code>{`curl -sL "${displayOrigin}/setup.sh?key=${profileKey}&origin=${displayOrigin}" | sudo bash`}</code>
                 </pre>
                 <Button
                   className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -221,7 +223,7 @@ export const SetupTabs: React.FC<SetupTabsProps> = ({
                   minimal
                   small
                   onClick={() => {
-                    copyToClipboard(`curl -sL "${window.location.origin}/setup.sh?key=${profileKey}&origin=${window.location.origin}" | sudo bash`);
+                    copyToClipboard(`curl -sL "${displayOrigin}/setup.sh?key=${profileKey}&origin=${displayOrigin}" | sudo bash`);
                   }}
                 />
               </div>
@@ -251,7 +253,7 @@ export const SetupTabs: React.FC<SetupTabsProps> = ({
               <p className="text-sm font-bold mb-2">{t("setup.routerosStep1")}</p>
               <div className="relative group">
                 <pre className="bg-gray-100 dark:bg-gray-800 p-4 rounded-lg overflow-x-auto text-xs font-mono border border-gray-200 dark:border-gray-700">
-                  <code>{`/ip dns set use-doh-server="${window.location.origin}/${profileKey}" verify-doh-cert=yes`}</code>
+                  <code>{`/ip dns set use-doh-server="${displayOrigin}/${profileKey}" verify-doh-cert=yes`}</code>
                 </pre>
                 <Button
                   className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -259,7 +261,7 @@ export const SetupTabs: React.FC<SetupTabsProps> = ({
                   minimal
                   small
                   onClick={() => {
-                    copyToClipboard(`/ip dns set use-doh-server="${window.location.origin}/${profileKey}" verify-doh-cert=yes`);
+                    copyToClipboard(`/ip dns set use-doh-server="${displayOrigin}/${profileKey}" verify-doh-cert=yes`);
                   }}
                 />
               </div>
@@ -299,13 +301,15 @@ export const SetupTabs: React.FC<SetupTabsProps> = ({
               </Callout>
             ) : (
               (() => {
-                const isIpAddress = /^(\d{1,3}\.){3}\d{1,3}$/.test(window.location.hostname) ||
-                                    window.location.hostname === "localhost" ||
-                                    window.location.hostname === "127.0.0.1" ||
-                                    window.location.hostname.includes(":");
+                const isIpAddress = /^(\d{1,3}\.){3}\d{1,3}$/.test(displayHostname) ||
+                                    displayHostname === "localhost" ||
+                                    displayHostname === "127.0.0.1" ||
+                                    displayHostname.includes(":");
                 const cleanBaseDomain = (dotDomain || "").trim().replace(/^\*\./, "");
                 const isDummy = isDummyOrPlaceholderDomain(cleanBaseDomain);
-                const effectiveDotDomain = (!isDummy && cleanBaseDomain) || (!isIpAddress ? window.location.hostname : "");
+                const effectiveDotDomain = isDemoMode
+                  ? demoDomain
+                  : (!isDummy && cleanBaseDomain) || (!isIpAddress ? displayHostname : "");
 
                 return (
                   <div className="p-4 bg-gray-50 dark:bg-gray-800/60 rounded-xl border border-gray-200 dark:border-gray-700 space-y-3">

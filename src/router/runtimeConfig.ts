@@ -6,6 +6,7 @@
 import { Env } from '../types';
 import { DatabaseServiceType, TursoHealthResult, isTursoConfigured, verifyTursoConnection } from '../lib/turso';
 import { isUsableJwtSecret } from '../lib/jwt';
+import { getDemoDomain, isDemoMode } from '../lib/demoConfig';
 
 export interface DbConfigStatus {
   isDbMissing: boolean;
@@ -127,6 +128,7 @@ export async function buildRuntimeConfigJson(
   const isJwtSecretMissing = !isUsableJwtSecret(env.JWT_SECRET);
 
   try {
+    const demoMode = isDemoMode(env);
     return JSON.stringify({
       nonce: runtimeCtx.nonce,
       isDbMissing,
@@ -137,7 +139,9 @@ export async function buildRuntimeConfigJson(
       isServerfull: runtimeCtx.isServerfull,
       databaseService: runtimeCtx.dbService,
       isTurso: runtimeCtx.dbService === 'Turso',
-      mode: runtimeCtx.isServerfull ? 'serverfull' : 'cloudflare'
+      mode: runtimeCtx.isServerfull ? 'serverfull' : 'cloudflare',
+      isDemoMode: demoMode,
+      demoDomain: demoMode ? getDemoDomain(env) : undefined
     });
   } catch {
     return '{}';

@@ -79,13 +79,17 @@ docker run -d \
 |:---:|:---:|
 | ![Analytics](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns.obex-stats.webp) | ![Destinations](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns.obex-stats_dest.webp) |
 
-| Multi-Access Points & Endpoints | Rules Configuration |
+| Multi-Access Points & Endpoints | Setup Guide |
 |:---:|:---:|
-| ![Access Points](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns.obex-endpoints.webp) | ![Rules](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns.obex-rules.webp) |
+| ![Access Points](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns.obex-endpoints.webp) | ![Setup Guide](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns.obex-setup.webp) |
 
-| Filter Subscriptions | Query Logs |
+| Rules Configuration | Filter Subscriptions |
 |:---:|:---:|
-| ![Filters](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns.obex-filter.webp) | ![Query Logs](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns.obex-log.webp) |
+| ![Rules](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns.obex-rules.webp) | ![Filters](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns.obex-filter.webp) |
+
+| Query Logs | Log Detail Inspector |
+|:---:|:---:|
+| ![Query Logs](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns.obex-log.webp) | ![Log Detail](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns.obex-log_detail.webp) |
 
 | Mobile Responsive | Mobile Logs |
 |:---:|:---:|

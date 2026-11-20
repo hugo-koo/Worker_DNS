@@ -16,6 +16,7 @@ import {
   syncProfileKeysToDo,
   syncSingleKeyFromDbToDo
 } from "../../lib/accessKeyRegistry";
+import { ensureDemoDataSeeded } from "../../lib/demoMode";
 
 /**
  * Handle requests to /api/profiles (without specific profile ID)
@@ -31,6 +32,7 @@ export async function handleProfilesCoreCollectionRequest(
 
   // GET /api/profiles
   if (request.method === 'GET') {
+    await ensureDemoDataSeeded(env, user.id);
     const results = await profileModel.listByOwner(user.id);
     return new Response(JSON.stringify(results), { headers: { 'Content-Type': 'application/json' } });
   }

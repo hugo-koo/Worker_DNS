@@ -168,6 +168,29 @@ SERVERFULL_DISABLE_HTTPS=false
 
 ---
 
+## Common `.env` Variables
+
+In addition to listening ports and TLS paths, `.env` supports shared resolver fallback, quotas, retention, and optional demo flags:
+
+```ini
+# Fail-open upstream used for unbound Access Points (profile_id = null) or fallback
+FAIL_OPEN_UPSTREAM=tls://no-ads-malware-typo.freedns.controld.com
+
+# Quotas & retention limits
+MAX_PROFILES_PER_USER=10
+MAX_ACCESS_POINTS_PER_PROFILE=100
+MAX_LOG_RETENTION_DAYS=30
+DNS_CACHE_SIZE=20000
+
+# Demo Mode (uppercase keys required)
+# Enables Demo Mode badge, masks client telemetry, normalizes URLs to DEMO_DOMAIN,
+# and populates multi-device APs, rules, external lists, logs, and all-range /stats analytics.
+DEMO_MODE=false
+DEMO_DOMAIN=dns.worker.domain
+```
+
+---
+
 ## Reverse Proxy with Caddy or Nginx (Port 10080)
 
 In production setups, in addition to binding port `10080` directly or using built-in HTTPS on port `10443`, **we strongly recommend placing a modern reverse proxy like Caddy or Nginx in front of DNS Worker**. The reverse proxy handles automated SSL certificate issuance and renewal on standard port `443` while forwarding requests to `http://127.0.0.1:10080`.

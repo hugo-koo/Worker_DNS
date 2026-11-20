@@ -17,6 +17,7 @@ import { DistributeFilterCard } from "./components/DistributeFilterCard";
 import { SystemSettingsCard } from "./components/SystemSettingsCard";
 import { DatabaseMigrationCard } from "./components/DatabaseMigrationCard";
 import { useIsMobile } from "../../hooks/useIsMobile";
+import { PAGE_CONTAINER_STANDARD } from "../../constants/layout";
 
 export interface SystemViewProps {
   onSavingChange?: (saving: boolean) => void;
@@ -92,7 +93,7 @@ export const SystemView: React.FC<SystemViewProps> = ({ onSavingChange, toasterR
 
   if (me?.role !== "admin") {
     return (
-      <div className={clsx("max-w-5xl mx-auto space-y-6", isMobile ? "p-0" : "px-8")}>
+      <div className={clsx(PAGE_CONTAINER_STANDARD, "mx-auto space-y-6", isMobile ? "p-0" : "px-8")}>
         <Callout intent={Intent.DANGER} icon="error" title={t("system.accessDenied", "访问受限")}>
           {t("system.accessDeniedDesc", "当前页面仅限管理员访问。")}
         </Callout>
@@ -101,7 +102,7 @@ export const SystemView: React.FC<SystemViewProps> = ({ onSavingChange, toasterR
   }
 
   return (
-    <div className={clsx("max-w-5xl mx-auto space-y-8", isMobile ? "p-0" : "px-8")}>
+    <div className={clsx(PAGE_CONTAINER_STANDARD, "mx-auto space-y-8", isMobile ? "p-0" : "px-8")}>
       <div className="flex justify-between items-start sm:items-end gap-3 flex-wrap sm:flex-nowrap">
         <div>
           <h2 className="bp6-heading">{t("system.title", "系统管理")}</h2>

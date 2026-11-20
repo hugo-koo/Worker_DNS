@@ -11,6 +11,7 @@ import { RulesTable } from "./components/RulesTable";
 import { EditRuleDialog } from "./components/EditRuleDialog";
 import { downloadAdGuardRulesList } from "./utils/adguardExport";
 import { useIsMobile } from "../../hooks/useIsMobile";
+import { PAGE_CONTAINER_STANDARD } from "../../constants/layout";
 import {
   getProfileRules,
   getProfileDetails,
@@ -321,7 +322,7 @@ export const RulesView: React.FC<RulesViewProps> = ({ profileId, prefill, onPref
   }, [profileId]);
 
   return (
-    <div className={clsx("md:px-8 w-full min-w-0 max-w-5xl mx-auto", isMobile ? "p-1" : "px-8")}>
+    <div className={clsx("md:px-8 w-full min-w-0 mx-auto", PAGE_CONTAINER_STANDARD, isMobile ? "p-1" : "px-8")}>
       <div className="mb-8">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div className="w-full md:w-auto flex-1">

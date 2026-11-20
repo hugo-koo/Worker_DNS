@@ -6,33 +6,55 @@ export function useMapData(destinations: DestinationItem[]) {
   const [geographyData, setGeographyData] = useState<any>(null);
 
   useEffect(() => {
-    getMapTopology()
-      .then((data: any) => {
-        // Ensure "countries" is the first key in data.objects because react-simple-maps
-        // defaults to parsing the first key returned by Object.keys(data.objects).
-        if (data && data.objects) {
-          const sortedObjects: any = {};
-          if (data.objects.countries) {
-            sortedObjects.countries = data.objects.countries;
-          }
-          if (data.objects.land) {
-            sortedObjects.land = data.objects.land;
-          }
-          data.objects = sortedObjects;
-        }
+    let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+    const maxAttempts = 5;
 
-        // Ensure all country geometry IDs are 3-digit padded strings (e.g. 4 -> "004")
-        // to maintain compatibility with client-side country code mappings.
-        if (data && data.objects && data.objects.countries && Array.isArray(data.objects.countries.geometries)) {
-          data.objects.countries.geometries.forEach((geom: any) => {
-            if (geom.id !== undefined && geom.id !== null) {
-              geom.id = String(geom.id).padStart(3, "0");
+    const loadTopology = (attempt: number) => {
+      getMapTopology()
+        .then((data: any) => {
+          if (cancelled) return;
+          // Ensure "countries" is the first key in data.objects because react-simple-maps
+          // defaults to parsing the first key returned by Object.keys(data.objects).
+          if (data && data.objects) {
+            const sortedObjects: any = {};
+            if (data.objects.countries) {
+              sortedObjects.countries = data.objects.countries;
             }
-          });
-        }
-        setGeographyData(data);
-      })
-      .catch((e: any) => console.error("Failed to load map topology", e));
+            if (data.objects.land) {
+              sortedObjects.land = data.objects.land;
+            }
+            data.objects = sortedObjects;
+          }
+
+          // Ensure all country geometry IDs are 3-digit padded strings (e.g. 4 -> "004")
+          // to maintain compatibility with client-side country code mappings.
+          if (data && data.objects && data.objects.countries && Array.isArray(data.objects.countries.geometries)) {
+            data.objects.countries.geometries.forEach((geom: any) => {
+              if (geom.id !== undefined && geom.id !== null) {
+                geom.id = String(geom.id).padStart(3, "0");
+              }
+            });
+          }
+          setGeographyData(data);
+        })
+        .catch((e: any) => {
+          if (cancelled) return;
+          console.error(`Failed to load map topology (attempt ${attempt}/${maxAttempts})`, e);
+          if (attempt < maxAttempts) {
+            retryTimer = setTimeout(() => loadTopology(attempt + 1), attempt * 1500);
+          }
+        });
+    };
+
+    loadTopology(1);
+
+    return () => {
+      cancelled = true;
+      if (retryTimer) {
+        clearTimeout(retryTimer);
+      }
+    };
   }, []);
 
   const totalQueriesCount = useMemo(() => {

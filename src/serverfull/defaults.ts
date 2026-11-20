@@ -221,6 +221,14 @@ PRESET_EXTERNAL_FILTERS='[{"label":"filtering.presetOisdBig","url":"https://big.
 
 # Preset ECH Fronting (outer SNI) domains (JSON string) / 预设 ECH 前置外层 SNI 域名 (JSON 字符串)
 PRESET_ECH_FRONTING_DOMAINS='["cloudflare-ech.com","crypto.cloudflare.com","one.one.one.one","www.cloudflare.com","encryptedsni.com","cdnjs.com"]'
+
+# ------------------------------------------------------------------------------
+# Demo Mode (Optional) / 演示模式配置 (选填)
+# ------------------------------------------------------------------------------
+# Enable Demo Mode (replaces hostnames with DEMO_DOMAIN and seeds sample APs, rules, lists, stats & logs)
+# 开启演示模式 (统一将对外展示域名替换为 DEMO_DOMAIN，并自动注入多设备 Access Points、规则、列表、统计与日志演示数据)
+# DEMO_MODE=false
+# DEMO_DOMAIN=dns.worker.domain
 `;
 
 /**

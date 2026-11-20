@@ -14,6 +14,7 @@ import { TtlOverrideCard } from "./components/TtlOverrideCard";
 import { PauseFilteringCard } from "./components/PauseFilteringCard";
 import { DnsTestCard } from "./components/DnsTestCard";
 import { ProfileDangerZone } from "./components/ProfileDangerZone";
+import { PAGE_CONTAINER_STANDARD } from "../../constants/layout";
 import {
   getProfileDetails,
   renameProfile,
@@ -287,7 +288,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ profileId, toasterRe
     );
 
   return (
-    <div className="p-0 sm:px-4 lg:px-8 max-w-5xl mx-auto space-y-8 pb-20">
+    <div className={`p-0 sm:px-4 lg:px-8 ${PAGE_CONTAINER_STANDARD} mx-auto space-y-8 pb-20`}>
       <SettingsHeader
         profile={profile}
         isEditingName={isEditingName}
@@ -298,7 +299,7 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ profileId, toasterRe
         exportProfile={exportProfile}
       />
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-6">
         <UpstreamCard settings={settings} setSettings={handleSettingsChange} />
         <DefaultPolicyCard settings={settings} setSettings={handleSettingsChange} />
         <LogRetentionCard settings={settings} setSettings={handleSettingsChange} isAdmin={currentUser?.role === "admin"} maxRetentionDays={currentUser?.max_log_retention_days ?? (currentUser?.role === "admin" ? 30 : 7)} />

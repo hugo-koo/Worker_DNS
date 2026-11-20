@@ -56,7 +56,8 @@
     "unknown": "Unbekannt",
     "system": "System",
     "created": "Erstellt",
-    "renameProfile": "Profil umbenennen"
+    "renameProfile": "Profil umbenennen",
+    "modeDemo": "Demo-Modus"
   },
   "nav": {
     "setup": "Installation",

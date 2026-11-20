@@ -56,7 +56,8 @@
     "unknown": "Desconocido",
     "system": "Sistema",
     "created": "Creado",
-    "renameProfile": "Renombrar perfil"
+    "renameProfile": "Renombrar perfil",
+    "modeDemo": "Modo Demo"
   },
   "nav": {
     "setup": "Instalación",

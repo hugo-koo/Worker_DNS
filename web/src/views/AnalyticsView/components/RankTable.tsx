@@ -26,7 +26,7 @@ export const RankTable: React.FC<RankTableProps> = ({ title, data, intent }) => 
     },
     {
       key: "domain",
-      cellClassName: "font-medium text-sm truncate max-w-50",
+      cellClassName: "font-medium text-sm truncate max-w-50 2xl:max-w-96",
       render: (d: { domain: string; count: number }): React.ReactNode => {
         if (d.domain === "[Encrypted]") {
           return (

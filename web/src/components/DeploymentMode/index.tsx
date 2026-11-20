@@ -1,5 +1,5 @@
 import React from "react";
-import { Server, Cloud } from "lucide-react";
+import { Server, Cloud, FlaskConical } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import clsx from "clsx";
 import { useDeploymentMode } from "../../hooks/useDeploymentMode";
@@ -11,39 +11,56 @@ export interface DeploymentModeBadgeProps {
 }
 
 /**
- * Visual badge indicating whether the application is running in
- * Serverfull (Node.js/VPS) mode or Cloudflare Workers (Serverless) mode.
+ * Visual badge indicating whether the application is running in Demo Mode,
+ * Serverfull (Node.js/VPS) mode, or Cloudflare Workers (Serverless) mode.
  */
 export const DeploymentModeBadge: React.FC<DeploymentModeBadgeProps> = ({
   size = "normal",
   showIcon = true,
   className,
 }) => {
-  const { isServerfull } = useDeploymentMode();
+  const { isServerfull, isDemoMode } = useDeploymentMode();
   const { t } = useTranslation();
 
   const isSmall = size === "small";
+  const badgeStyle = isDemoMode
+    ? "bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800"
+    : isServerfull
+      ? "bg-purple-50 text-purple-700 border border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800"
+      : "bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800";
+
+  const badgeTitle = isDemoMode
+    ? "Demo Mode (Sample Data)"
+    : isServerfull
+      ? "Self-Hosted / Node.js Serverfull"
+      : "Cloudflare Workers Serverless";
+
+  const badgeLabel = isDemoMode
+    ? t("common.modeDemo", "Demo Mode")
+    : isServerfull
+      ? t("common.modeServerfull")
+      : t("common.modeCloudflare");
 
   return (
     <div
       className={clsx(
         "inline-flex items-center gap-1.5 font-medium rounded-full transition-colors select-none",
         isSmall ? "px-2 py-0.5 text-[11px]" : "px-3 py-1 text-xs",
-        isServerfull
-          ? "bg-purple-50 text-purple-700 border border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800"
-          : "bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800",
+        badgeStyle,
         className
       )}
-      title={isServerfull ? "Self-Hosted / Node.js Serverfull" : "Cloudflare Workers Serverless"}
+      title={badgeTitle}
     >
       {showIcon && (
-        isServerfull ? (
+        isDemoMode ? (
+          <FlaskConical size={isSmall ? 12 : 14} className="shrink-0 text-amber-600 dark:text-amber-400" />
+        ) : isServerfull ? (
           <Server size={isSmall ? 12 : 14} className="shrink-0 text-purple-600 dark:text-purple-400" />
         ) : (
           <Cloud size={isSmall ? 12 : 14} className="shrink-0 text-blue-600 dark:text-blue-400" />
         )
       )}
-      <span>{isServerfull ? t("common.modeServerfull") : t("common.modeCloudflare")}</span>
+      <span>{badgeLabel}</span>
     </div>
   );
 };

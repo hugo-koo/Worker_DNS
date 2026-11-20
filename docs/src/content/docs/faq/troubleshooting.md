@@ -49,3 +49,30 @@ Editing `.env` in your user directory has no effect after restarting the service
 
 ### Root Cause
 When managed by `systemd`, the daemon loads environment variables from `/etc/dns-worker/.env`. Ensure your changes are written to `/etc/dns-worker/.env`.
+
+---
+
+## 4. Device Connects Successfully but Rules Are Ignored and No Logs Appear
+
+### Symptom
+DNS resolution succeeds on the client using its DoH URL or DoT hostname, yet custom block rules do not trigger and no queries appear under **Logs**.
+
+### Root Cause
+Access Points are decoupled from Profiles. If an Access Point is in the **Unbound** (`profile_id = null`) state—for example after creating an unbound device or deleting its previously bound Profile—queries deliberately fall back to `FAIL_OPEN_UPSTREAM` with zero filtering and zero logging to prevent network outages.
+
+### Solution
+Open **Access Points > Manage** (`/access-points/manage`), locate the device card, and select a target Profile from the **Bound Profile** dropdown.
+
+---
+
+## 5. Analytics World Map Is Blank or Only Displays Small Dots in `npm run dev`
+
+### Symptom
+On `/dash/:id/stats`, markers for micro-regions or zoom controls appear, while the world continent silhouettes remain missing.
+
+### Root Cause
+The frontend fetches `/world-110m.json`, which is proxied and cached by the Worker (`/world-110m.json`, `Cache-Control: max-age=2592000`). A corrupted `.wrangler/state/v3/cache` blob, browser 30-day HTTP cache, or an upstream timeout during startup can prevent TopoJSON geometry loading.
+
+### Solution
+1. Stop `npm run dev`, delete `.wrangler/state/v3/cache` (preserve `.wrangler/state/v3/d1` and `.wrangler/state/v3/do`), and restart `npm run dev`.
+2. Perform a hard refresh (`Ctrl + Shift + R` / `Cmd + Shift + R`) in the browser so `/world-110m.json?v=3` bypasses old browser cache.

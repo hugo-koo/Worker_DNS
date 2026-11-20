@@ -19,4 +19,6 @@ export interface ClientInfo {
   dotDomain?: string;
   isServerfull?: boolean;
   mode?: "serverfull" | "cloudflare";
+  isDemoMode?: boolean;
+  demoDomain?: string;
 }

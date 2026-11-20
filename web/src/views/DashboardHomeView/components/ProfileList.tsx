@@ -26,7 +26,12 @@ export const ProfileList: React.FC<ProfileListProps> = ({
   const { t } = useTranslation();
 
   return (
-    <div className="grid gap-3">
+    <div
+      className={clsx(
+        "grid gap-3",
+        profiles.length > 1 && "md:grid-cols-2 2xl:grid-cols-3 2xl:gap-4"
+      )}
+    >
       {profiles.map((p: Profile) => {
         const targetPath = `/dash/${p.id}/${targetSection}`;
         const isSelected = selectedProfileId === p.id;

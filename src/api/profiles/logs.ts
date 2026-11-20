@@ -2,6 +2,12 @@ import { Env, User, Profile, ProfileSettings, ExecutionContext } from "../../typ
 import { LogModel } from "../../models/log";
 import { cacheUtils } from "../../utils/cache";
 import { handleProfileLogsWs } from "./logsWs";
+import {
+  buildDemoAnalyticsIspsPayload,
+  buildDemoAnalyticsPayload,
+  getDemoDomain,
+  isDemoMode,
+} from "../../lib/demoConfig";
 
 /**
  * Handle logs and analytics requests to /api/profiles/:id/logs and /api/profiles/:id/analytics
@@ -196,6 +202,64 @@ export async function handleProfileLogsAndAnalyticsRequest(
     }
 
     const subResource = pathParts[4];
+    if (isDemoMode(env)) {
+      const demoDomain = getDemoDomain(env);
+      const demoAnalytics = buildDemoAnalyticsPayload({
+        profileId,
+        range,
+        since,
+        until,
+        accessPointId,
+        demoDomain,
+      });
+
+      if (subResource) {
+        let subData: unknown = null;
+        if (subResource === "summary") subData = demoAnalytics.summary;
+        else if (subResource === "trend") subData = demoAnalytics.trend;
+        else if (subResource === "top_allowed") subData = demoAnalytics.top_allowed;
+        else if (subResource === "top_blocked") subData = demoAnalytics.top_blocked;
+        else if (subResource === "clients") subData = demoAnalytics.clients;
+        else if (subResource === "destinations") {
+          const limitParam = urlParams.get("limit");
+          const limit = limitParam ? parseInt(limitParam, 10) : undefined;
+          subData =
+            limit !== undefined && !isNaN(limit) && limit > 0
+              ? demoAnalytics.destinations.slice(0, limit)
+              : demoAnalytics.destinations;
+        } else if (subResource === "isps") {
+          const countryCode = urlParams.get("country_code") || undefined;
+          const limitParam = urlParams.get("limit");
+          const limit = limitParam ? parseInt(limitParam, 10) : undefined;
+          subData = buildDemoAnalyticsIspsPayload({
+            countryCode,
+            profileId,
+            range,
+            since,
+            until,
+            accessPointId,
+            limit: limit !== undefined && !isNaN(limit) ? limit : undefined,
+          });
+        } else {
+          return new Response("Not Found", { status: 404 });
+        }
+
+        return new Response(JSON.stringify(subData), {
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": "private, no-cache",
+          },
+        });
+      }
+
+      return new Response(JSON.stringify(demoAnalytics), {
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "private, no-cache",
+        },
+      });
+    }
+
     if (subResource) {
       const exact = urlParams.get('exact') === 'true';
       const cache = (caches as any).default;

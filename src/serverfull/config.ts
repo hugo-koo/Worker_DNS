@@ -255,6 +255,8 @@ export function getServerfullConfig(cliArgs?: ServerfullCliArgs): { config: Serv
     SERVERFULL_ECH_ENABLED: echEnabled ? 'true' : 'false',
     SERVERFULL_ECH_CONFIG: echConfig,
     SERVERFULL_ECH_FRONTING_DOMAIN: echFrontingDomain,
+    DEMO_MODE: process.env.DEMO_MODE,
+    DEMO_DOMAIN: process.env.DEMO_DOMAIN,
     ...process.env,
     DNS_CACHE_SIZE: dnsCacheSize
   };

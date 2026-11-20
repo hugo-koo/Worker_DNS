@@ -24,6 +24,7 @@ import { E2eeUnlockBanner } from "../LogsView/components/E2eeUnlockBanner";
 import { UnlockWithRecoveryDialog } from "../LogsView/components/UnlockWithRecoveryDialog";
 import { RotatedKeyNotificationDialog } from "../LogsView/components/RotatedKeyNotificationDialog";
 import { useLogsE2ee } from "../LogsView/hooks/useLogsE2ee";
+import { PAGE_CONTAINER_WIDE } from "../../constants/layout";
 
 // Lazy-load chart components so that recharts and react19-simple-maps
 // are only fetched when the Analytics page is actually rendered.
@@ -107,7 +108,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ profileId, toaster
   const chartData = processTrendData(data, range, customRange);
 
   return (
-    <div className={clsx("max-w-7xl mx-auto space-y-6", isMobile ? "p-0" : "p-6")}>
+    <div className={clsx(PAGE_CONTAINER_WIDE, "mx-auto space-y-6", isMobile ? "p-0" : "p-6")}>
       {/* Time Range & Access Point Selector */}
       <AnalyticsRangeSelector
         range={range}
@@ -169,25 +170,29 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ profileId, toaster
         />
       </div>
 
-      {/* Geolocation & Destinations */}
-      <div className="grid gap-6 grid-cols-1">
-        <Section
-          title={t("analytics.destinationDistribution")}
-          icon={<MapPin size={16} />}
-        >
-          <Suspense fallback={<ChartFallback />}>
-            <DestinationMap
-              destinations={data?.destinations || []}
-              profileId={profileId || ""}
-              range={range}
-              customRange={customRange}
-              accessPointId={accessPointIdFilter || undefined}
-            />
-          </Suspense>
-        </Section>
+      {/* Geolocation & Destinations + Client Activity (side-by-side on 2xl+/4K) */}
+      <div className="grid gap-6 grid-cols-1 2xl:grid-cols-12 items-start">
+        <div className="2xl:col-span-8 min-w-0">
+          <Section
+            title={t("analytics.destinationDistribution")}
+            icon={<MapPin size={16} />}
+          >
+            <Suspense fallback={<ChartFallback />}>
+              <DestinationMap
+                destinations={data?.destinations || []}
+                profileId={profileId || ""}
+                range={range}
+                customRange={customRange}
+                accessPointId={accessPointIdFilter || undefined}
+              />
+            </Suspense>
+          </Section>
+        </div>
 
         {/* Client Activity */}
-        <ClientActivitySection clients={data?.clients} />
+        <div className="2xl:col-span-4 min-w-0">
+          <ClientActivitySection clients={data?.clients} />
+        </div>
       </div>
 
       {/* Recovery Key Dialog */}

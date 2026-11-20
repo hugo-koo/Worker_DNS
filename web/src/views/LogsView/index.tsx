@@ -11,6 +11,7 @@ import { UnlockWithRecoveryDialog } from "./components/UnlockWithRecoveryDialog"
 import { RotatedKeyNotificationDialog } from "./components/RotatedKeyNotificationDialog";
 import { useLogs } from "./hooks/useLogs";
 import { useLogsE2ee } from "./hooks/useLogsE2ee";
+import { PAGE_CONTAINER_WIDE } from "../../constants/layout";
 
 export const LogsView: React.FC<LogsViewProps> = ({ profileId, onQuickAction, toasterRef }) => {
   const isMobile = useIsMobile();
@@ -91,7 +92,7 @@ export const LogsView: React.FC<LogsViewProps> = ({ profileId, onQuickAction, to
   }
 
   return (
-    <div className="h-full flex flex-col overflow-hidden bg-gray-50/30 dark:bg-gray-950/10 max-w-7xl mx-auto w-full pt-14">
+    <div className={`h-full flex flex-col overflow-hidden bg-gray-50/30 dark:bg-gray-950/10 ${PAGE_CONTAINER_WIDE} mx-auto w-full pt-14`}>
       <LogsHeader
         profileId={profileId}
         range={range}

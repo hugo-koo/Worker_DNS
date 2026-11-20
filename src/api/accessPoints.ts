@@ -6,6 +6,7 @@ import { AP_NAME_REGEX } from "../utils/validator";
 import { syncSingleKeyFromDbToDo, upsertAccessKeysInDo } from "../lib/accessKeyRegistry";
 import { invalidateProfileKeyCache } from "../pipeline/cache";
 import { cacheUtils } from "../utils/cache";
+import { ensureDemoDataSeeded } from "../lib/demoMode";
 
 /**
  * Evicts a token from local/cluster L1 memory and L2 Web Cache API.
@@ -36,6 +37,7 @@ export async function handleAccessPointsRequest(
   // GET /api/access_points or POST /api/access_points
   if (pathParts.length === 2) {
     if (request.method === "GET") {
+      await ensureDemoDataSeeded(env, user.id);
       const results = await apModel.getAccessPointsByOwner(user.id);
       return new Response(JSON.stringify(results), {
         headers: { "Content-Type": "application/json" },
