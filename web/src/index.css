@@ -6,7 +6,7 @@
 
 @layer base {
   :root {
-    --bg-color: #f9fafb;
+    --bg-color: #f1f5f9;
     --text-color: #111827;
     --map-bg: #e5e7eb;
     --map-hover: #3b82f6;
@@ -201,4 +201,62 @@ textarea::placeholder,
 .analytics-sync-tooltip.bp6-dark .bp6-popover-arrow-border {
   fill: #334155 !important;
   fill-opacity: 1 !important;
+}
+
+/* Unify Blueprint v6 light card/section surfaces against the #f1f5f9 page canvas */
+html:not(.dark) .bp6-card,
+html:not(.dark) .bp6-section {
+  background-color: #ffffff;
+  border-color: #e2e8f0;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 0 0 1px #e2e8f0;
+}
+
+html:not(.dark) .bp6-section > .bp6-section-header {
+  border-bottom-color: #e2e8f0;
+}
+
+/* Unify Blueprint v6 dark surfaces with Tailwind Slate/Gray palette */
+.bp6-dark .bp6-card,
+.bp6-dark .bp6-section {
+  background-color: #111827 !important;
+  border-color: #1f2937 !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 0 0 1px #1f2937 !important;
+}
+
+.bp6-dark .bp6-section > .bp6-section-header {
+  border-bottom-color: #1f2937 !important;
+}
+
+.bp6-dark .bp6-dialog {
+  background-color: #111827 !important;
+  border: 1px solid #334155 !important;
+}
+
+.bp6-dark .bp6-dialog-header {
+  background-color: #1e293b !important;
+  border-bottom: 1px solid #334155 !important;
+}
+
+.bp6-dark .bp6-popover .bp6-popover-content,
+.bp6-dark .bp6-menu {
+  background-color: #111827 !important;
+  border: 1px solid #334155 !important;
+}
+
+.bp6-dark .bp6-menu-item:hover {
+  background-color: #1e293b !important;
+}
+
+.bp6-dark .bp6-menu-header > h6,
+.bp6-dark .bp6-menu-header > .bp6-heading {
+  color: #94a3b8 !important;
+}
+
+.bp6-dark .bp6-input {
+  background-color: #0f172a !important;
+  box-shadow: inset 0 0 0 1px #334155 !important;
+}
+
+.bp6-dark .bp6-input:focus {
+  box-shadow: inset 0 0 0 1px #3b82f6, 0 0 0 2px rgba(59, 130, 246, 0.25) !important;
 }

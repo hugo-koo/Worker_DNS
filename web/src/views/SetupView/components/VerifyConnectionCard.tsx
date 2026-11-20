@@ -3,6 +3,7 @@ import { Section, SectionCard, Button, Spinner, Intent, PopoverNext } from "@blu
 import { Activity, ShieldCheck, Server, Globe, MapPin, Eye, EyeOff } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import clsx from "clsx";
+import type { AccessPoint, Profile } from "../../../types/auth";
 import type { ClientInfo } from "../types";
 import { useDeploymentMode } from "../../../hooks/useDeploymentMode";
 
@@ -18,6 +19,9 @@ export interface VerifyConnectionCardProps {
   setShowLocation: (show: boolean) => void;
   traceInfo?: { colo: string; raw: string } | null;
   edgeLocation?: string | null;
+  profiles?: Profile[];
+  activeAp?: AccessPoint | null;
+  boundProfile?: Profile | null;
 }
 
 export const VerifyConnectionCard: React.FC<VerifyConnectionCardProps> = ({
@@ -32,10 +36,53 @@ export const VerifyConnectionCard: React.FC<VerifyConnectionCardProps> = ({
   setShowLocation,
   traceInfo,
   edgeLocation,
+  profiles = [],
+  activeAp = null,
+  boundProfile = null,
 }) => {
   const { t } = useTranslation();
   const { isServerfull } = useDeploymentMode();
   const [isTraceOpen, setIsTraceOpen] = useState(false);
+
+  const connectedProfile = clientInfo?.connectedProfileId
+    ? profiles.find((p) => p.id === clientInfo.connectedProfileId) || null
+    : null;
+
+  const statusDescription = (() => {
+    if (!verifyResult?.success) {
+      return t("setup.verifyHint");
+    }
+    if (verifyResult.profileMatch) {
+      if (boundProfile) {
+        return t("setup.connectedToProfile", {
+          profile: boundProfile.name,
+          defaultValue: `Using DNS Worker — active profile "${boundProfile.name}" matches this Access Point.`,
+        });
+      }
+      return t("setup.profileMatch");
+    }
+    if (activeAp && !activeAp.profile_id) {
+      if (connectedProfile) {
+        return t("setup.connectedApUnboundWithActive", {
+          ap: activeAp.name,
+          activeProfile: connectedProfile.name,
+          defaultValue: `Using DNS Worker ("${connectedProfile.name}"), while "${activeAp.name}" is currently Unbound.`,
+        });
+      }
+      return t("setup.connectedApUnbound", {
+        ap: activeAp.name,
+        defaultValue: `Using DNS Worker, while "${activeAp.name}" is not bound to any Profile.`,
+      });
+    }
+    if (connectedProfile && boundProfile) {
+      return t("setup.connectedProfileOther", {
+        activeProfile: connectedProfile.name,
+        targetProfile: boundProfile.name,
+        defaultValue: `Currently connected via "${connectedProfile.name}", whereas "${activeAp?.name || "this Access Point"}" binds to "${boundProfile.name}".`,
+      });
+    }
+    return t("setup.profileMismatch");
+  })();
 
   const edgeServerCardNode = (
     <div
@@ -46,7 +93,7 @@ export const VerifyConnectionCard: React.FC<VerifyConnectionCardProps> = ({
     >
       <Server size={18} className="text-purple-500 mt-1 shrink-0" />
       <div className="min-w-0 flex-1">
-        <div className="text-[10px] uppercase font-bold opacity-40">
+        <div className="text-[10px] uppercase font-bold opacity-65">
           {isServerfull ? t("setup.serverLocation", "服务器位置") : t("setup.edgeServer")}
         </div>
         <div
@@ -78,12 +125,8 @@ export const VerifyConnectionCard: React.FC<VerifyConnectionCardProps> = ({
                 <div className="font-bold text-lg">
                   {isVerifying ? t("setup.verifying") : verifyResult?.success ? t("setup.connected") : t("setup.notConnected")}
                 </div>
-                <div className="text-sm opacity-60">
-                  {verifyResult?.success
-                    ? verifyResult.profileMatch
-                      ? t("setup.profileMatch")
-                      : t("setup.profileMismatch")
-                    : t("setup.verifyHint")}
+                <div className="text-sm opacity-75">
+                  {statusDescription}
                 </div>
               </div>
             </div>
@@ -104,7 +147,7 @@ export const VerifyConnectionCard: React.FC<VerifyConnectionCardProps> = ({
                 <Globe size={18} className="text-blue-500 mt-1" />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
-                    <div className="text-[10px] uppercase font-bold opacity-40">{t("setup.egressIp")}</div>
+                    <div className="text-[10px] uppercase font-bold opacity-65">{t("setup.egressIp")}</div>
                     <button onClick={() => setShowIp(!showIp)} className="text-gray-400 hover:text-blue-500 transition-colors">
                       {showIp ? <Eye size={16} /> : <EyeOff size={16} />}
                     </button>
@@ -120,7 +163,7 @@ export const VerifyConnectionCard: React.FC<VerifyConnectionCardProps> = ({
                 <MapPin size={18} className="text-red-500 mt-1" />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between">
-                    <div className="text-[10px] uppercase font-bold opacity-40">{t("setup.currentLocation")}</div>
+                    <div className="text-[10px] uppercase font-bold opacity-65">{t("setup.currentLocation")}</div>
                     <button onClick={() => setShowLocation(!showLocation)} className="text-gray-400 hover:text-red-500 transition-colors">
                       {showLocation ? <Eye size={16} /> : <EyeOff size={16} />}
                     </button>

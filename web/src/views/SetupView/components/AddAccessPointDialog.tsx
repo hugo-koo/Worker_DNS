@@ -8,10 +8,12 @@ import {
   Intent,
   Position,
   FormGroup,
-  HTMLSelect,
 } from "@blueprintjs/core";
 import { useTranslation } from "react-i18next";
 import type { Profile } from "../../../types/auth";
+import { MinimalSelect } from "../../../components/MinimalSelect";
+import { DeviceTypeSelect } from "../../../components/DeviceTypeSelect";
+import { DEFAULT_ACCESS_POINT_DEVICE_TYPE } from "../../../constants/deviceTypes";
 
 export interface AddAccessPointDialogProps {
   isOpen: boolean;
@@ -26,6 +28,8 @@ export interface AddAccessPointDialogProps {
   profiles?: Profile[];
   selectedProfileId?: string;
   onSelectProfileId?: (id: string) => void;
+  deviceType?: string;
+  onSelectDeviceType?: (deviceType: string) => void;
 }
 
 export const AddAccessPointDialog: React.FC<AddAccessPointDialogProps> = ({
@@ -41,6 +45,8 @@ export const AddAccessPointDialog: React.FC<AddAccessPointDialogProps> = ({
   profiles = [],
   selectedProfileId = "",
   onSelectProfileId,
+  deviceType = DEFAULT_ACCESS_POINT_DEVICE_TYPE,
+  onSelectDeviceType,
 }) => {
   const { t } = useTranslation();
 
@@ -80,13 +86,22 @@ export const AddAccessPointDialog: React.FC<AddAccessPointDialogProps> = ({
             </Tooltip>
           </FormGroup>
 
+          {onSelectDeviceType && (
+            <FormGroup label={t("setup.deviceType", "Device Type")} className="mb-0">
+              <DeviceTypeSelect
+                fill
+                value={deviceType}
+                onChange={onSelectDeviceType}
+              />
+            </FormGroup>
+          )}
+
           {onSelectProfileId && (
             <FormGroup label={t("setup.boundProfile", "Bound Profile")} className="mb-0">
-              <HTMLSelect
+              <MinimalSelect
                 fill
-                large
                 value={selectedProfileId}
-                onChange={(e) => onSelectProfileId(e.target.value)}
+                onChange={onSelectProfileId}
                 options={[
                   { label: t("setup.unboundProfile", "Unbound"), value: "" },
                   ...profiles.map((p) => ({ label: `${p.name} (${p.id})`, value: p.id })),

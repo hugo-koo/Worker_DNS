@@ -7,6 +7,7 @@ import { generateMobileConfig, formatProfileLabel, extractDomain } from "../../.
 import { StepStampWatermark } from "./StepStampWatermark";
 import { useDeploymentMode, getDisplayOrigin, getDisplayHostname } from "../../../hooks/useDeploymentMode";
 import { isDummyOrPlaceholderDomain } from "../../../services";
+import type { SetupTabId } from "../../../constants/deviceTypes";
 
 export interface SetupTabsProps {
   isMobile: boolean;
@@ -17,6 +18,8 @@ export interface SetupTabsProps {
   accessPointName?: string;
   currentIps: { ip: string; area: string | null }[];
   dotDomain?: string;
+  selectedTabId?: SetupTabId;
+  onTabChange?: (tabId: SetupTabId) => void;
 }
 
 const DOH_URL_PLACEHOLDER_TOKEN = "__DNS_WORKER_DOH_URL__";
@@ -30,6 +33,8 @@ export const SetupTabs: React.FC<SetupTabsProps> = ({
   accessPointName,
   currentIps,
   dotDomain,
+  selectedTabId,
+  onTabChange,
 }) => {
   const { t } = useTranslation();
   const { isCloudflare, isDemoMode, demoDomain } = useDeploymentMode();
@@ -68,6 +73,8 @@ export const SetupTabs: React.FC<SetupTabsProps> = ({
       <StepStampWatermark step={3} />
       <Tabs
         id="setup-tabs"
+        selectedTabId={selectedTabId}
+        onChange={(newTabId) => onTabChange?.(String(newTabId) as SetupTabId)}
         renderActiveTabPanelOnly={true}
         vertical={!isMobile} // 移动端使用水平 Tab
         size="large"

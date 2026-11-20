@@ -20,11 +20,12 @@ import {
 } from "./sw-log-cache.ts";
 // TypeScript declaration for Service Worker global scope
 declare const self: ServiceWorkerGlobalScope & {
-  __WB_MANIFEST: any;
+  __WB_MANIFEST: Array<{ url: string; revision: string | null }>;
+  __dnsWorkerManifest?: Array<{ url: string; revision: string | null }>;
 };
 
-// Access the manifest placeholder to satisfy vite-plugin-pwa compilation requirements
-void self.__WB_MANIFEST;
+// Retain the Workbox manifest placeholder against bundler dead-code elimination
+self.__dnsWorkerManifest = self.__WB_MANIFEST;
 
 self.addEventListener("install", () => {
   self.skipWaiting();

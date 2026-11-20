@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { useParams } from "react-router-dom";
+import type { OverlayToaster } from "@blueprintjs/core";
 import { useIsMobile } from "../hooks/useIsMobile";
 import type { Profile, UserInfo } from "../types/auth";
 import { DesktopSidebar } from "./DesktopSidebar";
@@ -35,6 +36,8 @@ interface MainLayoutProps {
   currentUser: UserInfo | null;
   /** True if a background saving operation is active. */
   isSaving?: boolean;
+  /** Shared OverlayToaster ref for global notifications. */
+  toasterRef?: React.RefObject<OverlayToaster | null>;
 }
 
 /**
@@ -55,6 +58,7 @@ export const MainLayout = ({
   handleLogout,
   currentUser,
   isSaving,
+  toasterRef,
 }: MainLayoutProps) => {
   const { profileId: urlProfileId } = useParams();
   const isMobile = useIsMobile();
@@ -73,7 +77,7 @@ export const MainLayout = ({
   }, [urlProfileId, profiles, selectedProfile, setSelectedProfile]);
 
   return (
-    <div className="flex h-screen w-full bg-white dark:bg-gray-950 overflow-hidden flex-col md:flex-row">
+    <div className="flex h-screen w-full bg-slate-100 dark:bg-gray-950 overflow-hidden flex-col md:flex-row">
       <DesktopSidebar
         isSidebarOpen={isSidebarOpen}
         setIsSidebarOpen={setIsSidebarOpen}
@@ -86,9 +90,10 @@ export const MainLayout = ({
         navigate={navigate}
         handleLogout={handleLogout}
         currentUser={currentUser}
+        toasterRef={toasterRef}
       />
 
-      <main className="flex-1 min-w-0 h-full relative bg-gray-50/20 dark:bg-gray-950/20 flex flex-col overflow-hidden">
+      <main className="flex-1 min-w-0 h-full relative bg-slate-100/80 dark:bg-gray-950/20 flex flex-col overflow-hidden">
         <HeaderNavbar
           theme={theme}
           setTheme={setTheme}

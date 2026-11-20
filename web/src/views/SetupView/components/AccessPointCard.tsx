@@ -2,21 +2,26 @@ import React from "react";
 import { Section, SectionCard, Button, PopoverNext, Menu, MenuItem, Intent, Tag } from "@blueprintjs/core";
 import { MonitorSmartphone, ChevronDown, Check } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import type { AccessPoint } from "../../../types/auth";
+import type { AccessPoint, Profile } from "../../../types/auth";
 import { StepStampWatermark } from "./StepStampWatermark";
+import { DeviceTypeEmblem } from "../../../components/DeviceTypeEmblem";
 
 export interface AccessPointCardProps {
   accessPoints: AccessPoint[];
   selectedAp: AccessPoint | null;
   onSelectAp: (id: string) => void;
+  profiles?: Profile[];
 }
 
 export const AccessPointCard: React.FC<AccessPointCardProps> = ({
   accessPoints,
   selectedAp,
   onSelectAp,
+  profiles = [],
 }) => {
   const { t } = useTranslation();
+  const profileMap = React.useMemo(() => new Map(profiles.map((p) => [p.id, p])), [profiles]);
+  const selectedBoundProfile = selectedAp?.profile_id ? profileMap.get(selectedAp.profile_id) || null : null;
 
   return (
     <Section
@@ -26,27 +31,41 @@ export const AccessPointCard: React.FC<AccessPointCardProps> = ({
     >
       <StepStampWatermark step={1} />
       <SectionCard>
-        <div className="flex flex-col gap-1.5 w-full sm:w-auto">
-          <span className="text-xs opacity-50 font-medium">
+        <div className="flex flex-col gap-2 w-full sm:w-auto">
+          <span className="text-xs opacity-65 font-medium">
             {t("setup.selectAccessPointToConfigure")}
           </span>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {accessPoints.length > 0 && selectedAp ? (
               <PopoverNext
                 placement="bottom-start"
                 animation="minimal"
                 arrow={false}
+                usePortal={true}
+                portalClassName="z-20000"
                 content={
-                  <Menu className="max-h-72 overflow-y-auto">
+                  <Menu className="max-h-72 overflow-y-auto min-w-64">
                     {accessPoints.map((ap) => {
                       const isCurrent = ap.id === selectedAp.id;
+                      const apProfile = ap.profile_id ? profileMap.get(ap.profile_id) || null : null;
+                      const bindingText = apProfile ? apProfile.name : t("setup.unboundProfile", "Unbound");
                       return (
                         <MenuItem
                           key={ap.id}
                           text={ap.name}
-                          label={ap.token}
+                          labelElement={
+                            <span className="text-xs opacity-65 font-mono">
+                              {bindingText} · {ap.token}
+                            </span>
+                          }
                           active={isCurrent}
-                          icon={isCurrent ? <Check size={14} /> : <span className="inline-block w-3.5" />}
+                          icon={
+                            isCurrent ? (
+                              <Check size={14} />
+                            ) : (
+                              <DeviceTypeEmblem deviceType={ap.device_type} size={14} className="opacity-70" />
+                            )
+                          }
                           onClick={() => onSelectAp(ap.id)}
                         />
                       );
@@ -57,9 +76,10 @@ export const AccessPointCard: React.FC<AccessPointCardProps> = ({
                 <Button
                   variant="minimal"
                   className="font-bold! text-blue-600! dark:text-blue-400! px-2!"
+                  icon={<DeviceTypeEmblem deviceType={selectedAp.device_type} size={14} className="opacity-85" />}
                   endIcon={<ChevronDown size={14} />}
                 >
-                  <span className="truncate max-w-48 md:max-w-xs inline-block align-middle">
+                  <span className="truncate max-w-44 md:max-w-xs inline-block align-middle">
                     {selectedAp.name}
                   </span>
                 </Button>
@@ -72,6 +92,20 @@ export const AccessPointCard: React.FC<AccessPointCardProps> = ({
             {accessPoints.length > 0 && (
               <Tag minimal round intent={Intent.PRIMARY} className="text-xs shrink-0">
                 {accessPoints.length}
+              </Tag>
+            )}
+            {selectedAp && (
+              <Tag
+                minimal
+                intent={selectedBoundProfile ? Intent.SUCCESS : Intent.WARNING}
+                className="text-xs shrink-0 font-normal"
+              >
+                {selectedBoundProfile
+                  ? t("setup.boundToProfile", {
+                      profile: selectedBoundProfile.name,
+                      defaultValue: `Bound: ${selectedBoundProfile.name}`,
+                    })
+                  : t("setup.unboundProfile", "Unbound")}
               </Tag>
             )}
           </div>

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Intent } from "@blueprintjs/core";
 import { useTranslation } from "react-i18next";
 import type { AccessPoint } from "../../../types/auth";
+import { DEFAULT_ACCESS_POINT_DEVICE_TYPE } from "../../../constants/deviceTypes";
 import { AP_NAME_REGEX } from "../../../utils/auth";
 import {
   createAccessPoint,
@@ -28,6 +29,7 @@ export function useAccessPoints({
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [newApName, setNewApName] = useState("");
   const [newApProfileId, setNewApProfileId] = useState<string>(defaultProfileId || "");
+  const [newApDeviceType, setNewApDeviceType] = useState<string>(DEFAULT_ACCESS_POINT_DEVICE_TYPE);
   const [isAdding, setIsAdding] = useState(false);
 
   const [renameApId, setRenameApId] = useState<string | null>(null);
@@ -35,6 +37,7 @@ export function useAccessPoints({
   const [isRenaming, setIsRenaming] = useState(false);
 
   const [updatingBindingApId, setUpdatingBindingApId] = useState<string | null>(null);
+  const [updatingDeviceTypeApId, setUpdatingDeviceTypeApId] = useState<string | null>(null);
   const [rotatingApId, setRotatingApId] = useState<string | null>(null);
   const [deletingApId, setDeletingApId] = useState<string | null>(null);
 
@@ -44,18 +47,24 @@ export function useAccessPoints({
 
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [profileFilterId, setProfileFilterId] = useState<string>("__all__");
 
-  const filteredAccessPoints = accessPoints.filter(
-    (ap) =>
+  const filteredAccessPoints = accessPoints.filter((ap) => {
+    const matchesSearch =
       ap.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      ap.token.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+      ap.token.toLowerCase().includes(searchQuery.toLowerCase());
+    if (!matchesSearch) return false;
+    if (profileFilterId === "__all__") return true;
+    if (profileFilterId === "__unbound__") return !ap.profile_id;
+    return ap.profile_id === profileFilterId;
+  });
 
   const isValidApName = (name: string): boolean => AP_NAME_REGEX.test(name);
 
   const openAddDialog = (preferredProfileId?: string | null) => {
     setNewApName("");
     setNewApProfileId(preferredProfileId ?? defaultProfileId ?? "");
+    setNewApDeviceType(DEFAULT_ACCESS_POINT_DEVICE_TYPE);
     setIsAddDialogOpen(true);
   };
 
@@ -73,7 +82,7 @@ export function useAccessPoints({
 
     setIsAdding(true);
     try {
-      await createAccessPoint(trimmedName, newApProfileId || null);
+      await createAccessPoint(trimmedName, newApProfileId || null, newApDeviceType);
       toasterRef.current?.show({ message: t("setup.accessPointCreated"), intent: Intent.SUCCESS });
       setIsAddDialogOpen(false);
       setNewApName("");
@@ -144,6 +153,25 @@ export function useAccessPoints({
     }
   };
 
+  const handleChangeDeviceType = async (apId: string, nextDeviceType: string): Promise<boolean> => {
+    setUpdatingDeviceTypeApId(apId);
+    try {
+      await updateAccessPoint(apId, { device_type: nextDeviceType });
+      toasterRef.current?.show({
+        message: t("setup.deviceTypeUpdated", "Device type updated"),
+        intent: Intent.SUCCESS,
+      });
+      onRefresh();
+      return true;
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "Failed to update device type";
+      toasterRef.current?.show({ message: msg, intent: Intent.DANGER });
+      return false;
+    } finally {
+      setUpdatingDeviceTypeApId(null);
+    }
+  };
+
   const handleRotate = async (apId: string) => {
     setRotatingApId(apId);
     try {
@@ -179,6 +207,8 @@ export function useAccessPoints({
     setNewApName,
     newApProfileId,
     setNewApProfileId,
+    newApDeviceType,
+    setNewApDeviceType,
     isAdding,
     renameApId,
     setRenameApId,
@@ -186,6 +216,7 @@ export function useAccessPoints({
     setRenameApName,
     isRenaming,
     updatingBindingApId,
+    updatingDeviceTypeApId,
     rotatingApId,
     deletingApId,
     newApNameFocused,
@@ -198,11 +229,14 @@ export function useAccessPoints({
     setIsSearchOpen,
     searchQuery,
     setSearchQuery,
+    profileFilterId,
+    setProfileFilterId,
     filteredAccessPoints,
     isValidApName,
     handleAdd,
     handleRename,
     handleChangeBinding,
+    handleChangeDeviceType,
     handleRotate,
     handleDelete,
   };

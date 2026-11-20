@@ -7,6 +7,7 @@ import { syncSingleKeyFromDbToDo, upsertAccessKeysInDo } from "../lib/accessKeyR
 import { invalidateProfileKeyCache } from "../pipeline/cache";
 import { cacheUtils } from "../utils/cache";
 import { ensureDemoDataSeeded } from "../lib/demoMode";
+import { DEFAULT_ACCESS_POINT_DEVICE_TYPE, isValidAccessPointDeviceType } from "../constants/deviceTypes";
 
 /**
  * Evicts a token from local/cluster L1 memory and L2 Web Cache API.
@@ -45,9 +46,9 @@ export async function handleAccessPointsRequest(
     }
 
     if (request.method === "POST") {
-      let body: { name?: unknown; profile_id?: unknown };
+      let body: { name?: unknown; profile_id?: unknown; device_type?: unknown };
       try {
-        body = (await request.json()) as { name?: unknown; profile_id?: unknown };
+        body = (await request.json()) as { name?: unknown; profile_id?: unknown; device_type?: unknown };
       } catch {
         return new Response("Invalid JSON payload", { status: 400 });
       }
@@ -56,6 +57,14 @@ export async function handleAccessPointsRequest(
       if (!name) return new Response("Name is required", { status: 400 });
       if (!AP_NAME_REGEX.test(name)) {
         return new Response("Invalid Access Point name format", { status: 400 });
+      }
+
+      let deviceType: string = DEFAULT_ACCESS_POINT_DEVICE_TYPE;
+      if (body.device_type !== undefined && body.device_type !== null && body.device_type !== "") {
+        if (!isValidAccessPointDeviceType(body.device_type)) {
+          return new Response("Invalid device_type parameter", { status: 400 });
+        }
+        deviceType = body.device_type;
       }
 
       let boundProfileId: string | null = null;
@@ -77,7 +86,7 @@ export async function handleAccessPointsRequest(
         return new Response(`Access point limit exceeded (max ${maxAps})`, { status: 400 });
       }
 
-      const created = await apModel.addAccessPointForOwner(user.id, name, boundProfileId);
+      const created = await apModel.addAccessPointForOwner(user.id, name, boundProfileId, deviceType);
       ctx.waitUntil(
         upsertAccessKeysInDo(env, [
           {
@@ -127,14 +136,14 @@ export async function handleAccessPointsRequest(
     }
 
     if (request.method === "PATCH") {
-      let body: { name?: unknown; profile_id?: unknown };
+      let body: { name?: unknown; profile_id?: unknown; device_type?: unknown };
       try {
-        body = (await request.json()) as { name?: unknown; profile_id?: unknown };
+        body = (await request.json()) as { name?: unknown; profile_id?: unknown; device_type?: unknown };
       } catch {
         return new Response("Invalid JSON payload", { status: 400 });
       }
 
-      const updates: { name?: string; profile_id?: string | null } = {};
+      const updates: { name?: string; profile_id?: string | null; device_type?: string } = {};
 
       if (body.name !== undefined) {
         const trimmedName = typeof body.name === "string" ? body.name.trim() : "";
@@ -167,7 +176,17 @@ export async function handleAccessPointsRequest(
         }
       }
 
-      if (updates.name === undefined && updates.profile_id === undefined) {
+      if (body.device_type !== undefined) {
+        if (body.device_type === null || body.device_type === "") {
+          updates.device_type = DEFAULT_ACCESS_POINT_DEVICE_TYPE;
+        } else if (isValidAccessPointDeviceType(body.device_type)) {
+          updates.device_type = body.device_type;
+        } else {
+          return new Response("Invalid device_type parameter", { status: 400 });
+        }
+      }
+
+      if (updates.name === undefined && updates.profile_id === undefined && updates.device_type === undefined) {
         return new Response("No fields to update", { status: 400 });
       }
 

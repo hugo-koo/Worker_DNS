@@ -30,6 +30,7 @@ export interface AccessPoint {
   profile_id: string | null;
   name: string;
   token: string;
+  device_type?: string;
   created_at: number;
   updated_at?: number;
 }

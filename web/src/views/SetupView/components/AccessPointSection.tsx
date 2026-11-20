@@ -1,10 +1,15 @@
 import React from "react";
-import { Section, SectionCard, Button, Intent, PopoverNext, HTMLSelect, Tag } from "@blueprintjs/core";
-import { Trash2, Edit2, RefreshCw, MonitorSmartphone, Copy, Download } from "lucide-react";
+import { Section, SectionCard, Button, Intent, PopoverNext } from "@blueprintjs/core";
+import { Trash2, Edit2, RefreshCw, Copy, Download } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { AccessPoint, Profile } from "../../../types/auth";
 import { formatDateTime } from "../../../utils/date";
 import { useDeploymentMode, getDisplayOrigin } from "../../../hooks/useDeploymentMode";
+import { MinimalSelect } from "../../../components/MinimalSelect";
+import { DeviceTypeSelect } from "../../../components/DeviceTypeSelect";
+import { DeviceTypeEmblem } from "../../../components/DeviceTypeEmblem";
+import { DeviceTypeStamp } from "../../../components/DeviceTypeStamp";
+import { DEFAULT_ACCESS_POINT_DEVICE_TYPE } from "../../../constants/deviceTypes";
 
 export interface AccessPointSectionProps {
   ap: AccessPoint;
@@ -12,6 +17,8 @@ export interface AccessPointSectionProps {
   profiles: Profile[];
   updatingBindingApId: string | null;
   onChangeBinding: (apId: string, profileId: string | null) => void;
+  updatingDeviceTypeApId?: string | null;
+  onChangeDeviceType?: (apId: string, deviceType: string) => void;
   onGoToSetup?: (apId: string) => void;
   toasterRef: React.MutableRefObject<any>;
   onRenameTrigger: (apId: string, apName: string) => void;
@@ -29,6 +36,8 @@ export const AccessPointSection: React.FC<AccessPointSectionProps> = ({
   profiles,
   updatingBindingApId,
   onChangeBinding,
+  updatingDeviceTypeApId,
+  onChangeDeviceType,
   onGoToSetup,
   toasterRef,
   onRenameTrigger,
@@ -42,48 +51,51 @@ export const AccessPointSection: React.FC<AccessPointSectionProps> = ({
   const { t } = useTranslation();
   const { isDemoMode, demoDomain } = useDeploymentMode();
   const displayOrigin = getDisplayOrigin(isDemoMode, demoDomain);
-  const boundProfile = profiles.find((p) => p.id === ap.profile_id) || null;
+  const currentDeviceType = ap.device_type || DEFAULT_ACCESS_POINT_DEVICE_TYPE;
 
   return (
     <Section
       title={
-        <div className="flex items-center justify-between gap-2 w-full">
-          <div className="flex items-center gap-2 min-w-0">
-            <MonitorSmartphone size={16} className="shrink-0" />
-            <span className="truncate">{ap.name}</span>
-          </div>
-          {boundProfile ? (
-            <Tag minimal intent={Intent.PRIMARY} className="shrink-0 font-normal">
-              {boundProfile.name}
-            </Tag>
-          ) : (
-            <Tag minimal intent={Intent.WARNING} className="shrink-0 font-normal">
-              {t("setup.unboundProfile", "Unbound")}
-            </Tag>
-          )}
+        <div className="flex items-center gap-2 min-w-0">
+          <DeviceTypeEmblem deviceType={currentDeviceType} size={16} className="shrink-0 opacity-85" />
+          <span className="truncate">{ap.name}</span>
         </div>
       }
-      className="shadow-none! rounded-lg!"
+      className="group relative overflow-hidden rounded-lg! [&_.bp6-section-header]:relative [&_.bp6-section-header]:z-10 [&_.bp6-section-card]:relative [&_.bp6-section-card]:z-10"
     >
+      <DeviceTypeStamp deviceType={currentDeviceType} />
       <SectionCard>
         <div className="space-y-3">
+          {onChangeDeviceType && (
+            <div className="flex justify-between items-center gap-4">
+              <span className="text-xs opacity-65 shrink-0">
+                {t("setup.deviceType", "Device Type")}
+              </span>
+              <DeviceTypeSelect
+                value={currentDeviceType}
+                disabled={updatingDeviceTypeApId === ap.id}
+                onChange={(deviceType) => onChangeDeviceType(ap.id, deviceType)}
+                alignRight
+              />
+            </div>
+          )}
           <div className="flex justify-between items-center gap-4">
-            <span className="text-xs opacity-50 shrink-0">
+            <span className="text-xs opacity-65 shrink-0">
               {t("setup.boundProfile", "Bound Profile")}
             </span>
-            <HTMLSelect
+            <MinimalSelect
               value={ap.profile_id || ""}
               disabled={updatingBindingApId === ap.id}
-              onChange={(e) => onChangeBinding(ap.id, e.target.value || null)}
+              onChange={(val) => onChangeBinding(ap.id, val || null)}
               options={[
                 { label: t("setup.unboundProfile", "Unbound"), value: "" },
                 ...profiles.map((p) => ({ label: p.name, value: p.id })),
               ]}
-              className="max-w-52 font-medium"
+              alignRight
             />
           </div>
           <div className="flex justify-between items-start gap-4">
-            <span className="text-xs opacity-50 mt-1 shrink-0">DoH URL</span>
+            <span className="text-xs opacity-65 mt-1 shrink-0">DoH URL</span>
             <div
               className="flex items-center gap-2 text-sm font-mono bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400 px-2 py-1 rounded cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors break-all"
               onClick={() => {
@@ -97,13 +109,13 @@ export const AccessPointSection: React.FC<AccessPointSectionProps> = ({
             </div>
           </div>
           <div className="flex justify-between items-start gap-4">
-            <span className="text-xs opacity-50 mt-1">{t("setup.accessPointToken")}</span>
+            <span className="text-xs opacity-65 mt-1">{t("setup.accessPointToken")}</span>
             <span className="text-sm font-mono bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded select-all break-all">
               {ap.token}
             </span>
           </div>
           <div className="flex justify-between items-start gap-4">
-            <span className="text-xs opacity-50 mt-1">{t("common.created", "Created")}</span>
+            <span className="text-xs opacity-65 mt-1">{t("common.created", "Created")}</span>
             <span className="text-sm">{formatDateTime(new Date(ap.created_at * 1000))}</span>
           </div>
         </div>

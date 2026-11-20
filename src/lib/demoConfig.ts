@@ -1,4 +1,5 @@
 import { DEFAULT_SUBSTITUTE_DOMAIN } from "../constants/presets";
+import type { AccessPointDeviceType } from "../constants/deviceTypes";
 import type { Env, ListMetadataStats } from "../types";
 
 /** Default domain displayed across UI endpoints and instructions when demo mode is active. */
@@ -39,20 +40,21 @@ export const DEMO_SUBSTITUTE_IPS: Readonly<{
 export interface DemoAccessPointSpec {
   name: string;
   targetProfileRole: "primary" | "office" | "kids" | "unbound";
+  deviceType: AccessPointDeviceType;
 }
 
 /** Canonical demo Access Point devices across desktop, mobile, tablet, router, NAS, TV, and browser. */
 export const DEMO_ACCESS_POINT_SPECS: readonly DemoAccessPointSpec[] = [
-  { name: "OpenWrt-Router", targetProfileRole: "primary" },
-  { name: "MacBook-Pro", targetProfileRole: "primary" },
-  { name: "TrueNAS-NAS", targetProfileRole: "office" },
-  { name: "Windows-11-Desktop", targetProfileRole: "primary" },
-  { name: "iPhone-16", targetProfileRole: "primary" },
-  { name: "Pixel-9-Android", targetProfileRole: "primary" },
-  { name: "Linux-Workstation", targetProfileRole: "office" },
-  { name: "Chrome-Browser-Work", targetProfileRole: "office" },
-  { name: "Kids-iPad", targetProfileRole: "kids" },
-  { name: "Smart-TV-LivingRoom", targetProfileRole: "unbound" },
+  { name: "OpenWrt-Router", targetProfileRole: "primary", deviceType: "openwrt" },
+  { name: "MacBook-Pro", targetProfileRole: "primary", deviceType: "macos" },
+  { name: "TrueNAS-NAS", targetProfileRole: "office", deviceType: "nas" },
+  { name: "Windows-11-Desktop", targetProfileRole: "primary", deviceType: "windows" },
+  { name: "iPhone-16", targetProfileRole: "primary", deviceType: "ios" },
+  { name: "Pixel-9-Android", targetProfileRole: "primary", deviceType: "android" },
+  { name: "Linux-Workstation", targetProfileRole: "office", deviceType: "linux" },
+  { name: "Chrome-Browser-Work", targetProfileRole: "office", deviceType: "chrome" },
+  { name: "Kids-iPad", targetProfileRole: "kids", deviceType: "ios" },
+  { name: "Smart-TV-LivingRoom", targetProfileRole: "unbound", deviceType: "android_tv" },
 ];
 
 export interface DemoRuleSpec {

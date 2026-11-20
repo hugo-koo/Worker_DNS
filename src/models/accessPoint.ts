@@ -1,6 +1,7 @@
 import { D1Database } from "@cloudflare/workers-types";
 import { AccessPoint } from "../types";
 import { generateId, generateZBase32Token } from "../lib/auth";
+import { DEFAULT_ACCESS_POINT_DEVICE_TYPE, normalizeAccessPointDeviceType } from "../constants/deviceTypes";
 
 export class AccessPointModel {
   constructor(private db: D1Database) {}
@@ -44,10 +45,12 @@ export class AccessPointModel {
   async addAccessPointForOwner(
     ownerId: string,
     name: string,
-    profileId: string | null = null
+    profileId: string | null = null,
+    deviceType: string = DEFAULT_ACCESS_POINT_DEVICE_TYPE
   ): Promise<AccessPoint> {
     const now = Math.floor(Date.now() / 1000);
     const id = generateId(12);
+    const resolvedDeviceType = normalizeAccessPointDeviceType(deviceType);
     const MAX_RETRIES = 5;
 
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
@@ -55,9 +58,9 @@ export class AccessPointModel {
       try {
         await this.db
           .prepare(
-            "INSERT INTO access_points (id, owner_id, profile_id, name, token, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+            "INSERT INTO access_points (id, owner_id, profile_id, name, token, device_type, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
           )
-          .bind(id, ownerId, profileId, name, token, now, now)
+          .bind(id, ownerId, profileId, name, token, resolvedDeviceType, now, now)
           .run();
         return {
           id,
@@ -65,6 +68,7 @@ export class AccessPointModel {
           profile_id: profileId,
           name,
           token,
+          device_type: resolvedDeviceType,
           created_at: now,
           updated_at: now,
         };
@@ -83,12 +87,12 @@ export class AccessPointModel {
   }
 
   /**
-   * Updates an Access Point's name and/or bound profile ID (owner-scoped).
+   * Updates an Access Point's name, bound profile ID, and/or device type (owner-scoped).
    */
   async updateAccessPointByOwner(
     id: string,
     ownerId: string,
-    updates: { name?: string; profile_id?: string | null }
+    updates: { name?: string; profile_id?: string | null; device_type?: string }
   ): Promise<boolean> {
     const sets: string[] = [];
     const params: unknown[] = [];
@@ -100,6 +104,10 @@ export class AccessPointModel {
     if (updates.profile_id !== undefined) {
       sets.push("profile_id = ?");
       params.push(updates.profile_id);
+    }
+    if (updates.device_type !== undefined) {
+      sets.push("device_type = ?");
+      params.push(normalizeAccessPointDeviceType(updates.device_type));
     }
     if (sets.length === 0) {
       return false;

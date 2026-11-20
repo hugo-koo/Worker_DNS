@@ -6,14 +6,15 @@ import {
   H5,
   FormGroup,
   InputGroup,
-  HTMLSelect,
   Spinner,
   Intent
 } from "@blueprintjs/core";
-import { Calendar } from "lucide-react";
+import { Calendar, MonitorSmartphone } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { TimeRange } from "../types";
 import type { AccessPoint } from "../../../services";
+import { MinimalSelect } from "../../../components/MinimalSelect";
+import { DeviceTypeEmblem } from "../../../components/DeviceTypeEmblem";
 
 export interface AnalyticsRangeSelectorProps {
   range: TimeRange;
@@ -119,14 +120,23 @@ export const AnalyticsRangeSelector: React.FC<AnalyticsRangeSelectorProps> = ({
       </ButtonGroup>
       <div className="flex items-center gap-2">
         {accessPoints.length > 0 && (
-          <HTMLSelect
+          <MinimalSelect
             value={accessPointIdFilter || ""}
-            onChange={(e) => setAccessPointIdFilter(e.target.value || null)}
+            onChange={(val) => setAccessPointIdFilter(val || null)}
+            leadingIcon={<MonitorSmartphone size={14} />}
+            alignRight
             options={[
-              { label: `${t("logs.allAccessPoint")}`, value: "" },
-              ...accessPoints.map((ap) => ({ label: ap.name, value: ap.id }))
+              {
+                label: t("logs.allAccessPoint"),
+                value: "",
+                icon: <MonitorSmartphone size={14} className="opacity-70" />,
+              },
+              ...accessPoints.map((ap) => ({
+                label: ap.name,
+                value: ap.id,
+                icon: <DeviceTypeEmblem deviceType={ap.device_type} size={14} className="opacity-80" />,
+              })),
             ]}
-            minimal
           />
         )}
         {loading && <Spinner size={16} />}

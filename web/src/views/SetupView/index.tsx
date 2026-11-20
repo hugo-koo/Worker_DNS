@@ -14,6 +14,7 @@ import { AccessPointCard } from "./components/AccessPointCard";
 import { DohUrlCard } from "./components/DohUrlCard";
 import { SetupTabs } from "./components/SetupTabs";
 import { PAGE_CONTAINER_STANDARD } from "../../constants/layout";
+import { resolveSetupTabForDeviceType, type SetupTabId } from "../../constants/deviceTypes";
 import type { AccessPoint } from "../../types/auth";
 import {
   getClientInfo,
@@ -37,12 +38,18 @@ export const SetupView: React.FC<SetupViewProps> = ({ profiles, toasterRef }) =>
   const [loadingAccessPoints, setLoadingAccessPoints] = useState(true);
   const [selectedApId, setSelectedApId] = useState<string | null>(() => searchParams.get("ap"));
   const [apSwitchCount, setApSwitchCount] = useState(0);
+  const [activeTabId, setActiveTabId] = useState<SetupTabId>("browsers");
 
   const handleSelectAp = (id: string) => {
     if (id === selectedApId) return;
     setSelectedApId(id);
     setApSwitchCount((count) => count + 1);
     setSearchParams({ ap: id }, { replace: true });
+    const nextAp = accessPoints.find((ap) => ap.id === id) || null;
+    const mappedTab = resolveSetupTabForDeviceType(nextAp?.device_type);
+    if (mappedTab) {
+      setActiveTabId(mappedTab);
+    }
   };
 
   const fetchAccessPoints = useCallback(async () => {
@@ -50,6 +57,12 @@ export const SetupView: React.FC<SetupViewProps> = ({ profiles, toasterRef }) =>
     try {
       const data = await getAccessPoints();
       setAccessPoints(data);
+      const urlApId = new URLSearchParams(window.location.search).get("ap");
+      const initialAp = (urlApId ? data.find((ap) => ap.id === urlApId) : undefined) || data[0] || null;
+      const mappedTab = resolveSetupTabForDeviceType(initialAp?.device_type);
+      if (mappedTab) {
+        setActiveTabId(mappedTab);
+      }
     } catch (e) {
       console.error("Failed to fetch access points:", e);
     } finally {
@@ -250,6 +263,9 @@ export const SetupView: React.FC<SetupViewProps> = ({ profiles, toasterRef }) =>
         setShowLocation={setShowLocation}
         traceInfo={traceInfo}
         edgeLocation={edgeLocation}
+        profiles={profiles}
+        activeAp={activeAp}
+        boundProfile={boundProfile}
       />
 
       {loadingAccessPoints ? (
@@ -284,6 +300,7 @@ export const SetupView: React.FC<SetupViewProps> = ({ profiles, toasterRef }) =>
                 accessPoints={accessPoints}
                 selectedAp={activeAp}
                 onSelectAp={handleSelectAp}
+                profiles={profiles}
               />
             </div>
 
@@ -332,6 +349,8 @@ export const SetupView: React.FC<SetupViewProps> = ({ profiles, toasterRef }) =>
               accessPointName={activeName}
               currentIps={currentIps}
               dotDomain={clientInfo?.dotDomain}
+              selectedTabId={activeTabId}
+              onTabChange={setActiveTabId}
             />
           )}
         </>

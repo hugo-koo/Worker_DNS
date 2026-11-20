@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { Button, Intent, InputGroup, Spinner, NonIdealState, OverlayToaster } from "@blueprintjs/core";
-import { Plus, MonitorSmartphone } from "lucide-react";
+import { Plus, MonitorSmartphone, Filter } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { clsx } from "clsx";
@@ -11,6 +11,7 @@ import { useAccessPoints } from "../SetupView/hooks/useAccessPoints";
 import { AddAccessPointDialog } from "../SetupView/components/AddAccessPointDialog";
 import { RenameAccessPointDialog } from "../SetupView/components/RenameAccessPointDialog";
 import { AccessPointSection } from "../SetupView/components/AccessPointSection";
+import { MinimalSelect } from "../../components/MinimalSelect";
 import { PAGE_CONTAINER_WIDE } from "../../constants/layout";
 
 export interface AccessPointsManageViewProps {
@@ -62,6 +63,8 @@ export const AccessPointsManageView: React.FC<AccessPointsManageViewProps> = ({
     setNewApName,
     newApProfileId,
     setNewApProfileId,
+    newApDeviceType,
+    setNewApDeviceType,
     isAdding,
     renameApId,
     setRenameApId,
@@ -69,6 +72,7 @@ export const AccessPointsManageView: React.FC<AccessPointsManageViewProps> = ({
     setRenameApName,
     isRenaming,
     updatingBindingApId,
+    updatingDeviceTypeApId,
     rotatingApId,
     deletingApId,
     newApNameFocused,
@@ -79,11 +83,14 @@ export const AccessPointsManageView: React.FC<AccessPointsManageViewProps> = ({
     setRotateConfirmApId,
     searchQuery,
     setSearchQuery,
+    profileFilterId,
+    setProfileFilterId,
     filteredAccessPoints,
     isValidApName,
     handleAdd,
     handleRename,
     handleChangeBinding,
+    handleChangeDeviceType,
     handleRotate,
     handleDelete,
   } = useAccessPoints({
@@ -118,17 +125,30 @@ export const AccessPointsManageView: React.FC<AccessPointsManageViewProps> = ({
       </div>
 
       {accessPoints.length > 0 && (
-        <div className="mb-6 max-w-sm 2xl:max-w-md">
-          <InputGroup
-            leftIcon="search"
-            placeholder={t("setup.searchAccessPoints", "Search...")}
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            rightElement={
-              searchQuery ? (
-                <Button icon="cross" variant="minimal" onClick={() => setSearchQuery("")} />
-              ) : undefined
-            }
+        <div className="mb-6 flex flex-col sm:flex-row sm:items-center gap-3">
+          <div className="w-full sm:max-w-sm 2xl:max-w-md">
+            <InputGroup
+              leftIcon="search"
+              placeholder={t("setup.searchAccessPoints", "Search...")}
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              rightElement={
+                searchQuery ? (
+                  <Button icon="cross" variant="minimal" onClick={() => setSearchQuery("")} />
+                ) : undefined
+              }
+            />
+          </div>
+          <MinimalSelect
+            value={profileFilterId}
+            onChange={setProfileFilterId}
+            leadingIcon={<Filter size={14} />}
+            options={[
+              { label: t("setup.allProfiles", "All Profiles"), value: "__all__" },
+              { label: t("setup.unboundProfile", "Unbound"), value: "__unbound__" },
+              ...profiles.map((p) => ({ label: p.name, value: p.id })),
+            ]}
+            placeholder={t("setup.filterByProfile", "Filter by Profile")}
           />
         </div>
       )}
@@ -142,12 +162,12 @@ export const AccessPointsManageView: React.FC<AccessPointsManageViewProps> = ({
           <NonIdealState
             icon={<MonitorSmartphone size={44} className="text-gray-300" />}
             title={
-              searchQuery
+              searchQuery || profileFilterId !== "__all__"
                 ? t("setup.noMatchingAccessPoints", "No matching access points")
                 : t("setup.noAccessPoints", "No access points found")
             }
             action={
-              !searchQuery ? (
+              !searchQuery && profileFilterId === "__all__" ? (
                 <Button
                   intent={Intent.PRIMARY}
                   icon={<Plus size={16} />}
@@ -169,6 +189,10 @@ export const AccessPointsManageView: React.FC<AccessPointsManageViewProps> = ({
               updatingBindingApId={updatingBindingApId}
               onChangeBinding={(apId, profileId) => {
                 void handleChangeBinding(apId, profileId);
+              }}
+              updatingDeviceTypeApId={updatingDeviceTypeApId}
+              onChangeDeviceType={(apId, deviceType) => {
+                void handleChangeDeviceType(apId, deviceType);
               }}
               onGoToSetup={(apId) => navigate(`/access-points/setup?ap=${encodeURIComponent(apId)}`)}
               toasterRef={effectiveToasterRef}
@@ -200,6 +224,8 @@ export const AccessPointsManageView: React.FC<AccessPointsManageViewProps> = ({
         profiles={profiles}
         selectedProfileId={newApProfileId}
         onSelectProfileId={setNewApProfileId}
+        deviceType={newApDeviceType}
+        onSelectDeviceType={setNewApDeviceType}
       />
 
       <RenameAccessPointDialog

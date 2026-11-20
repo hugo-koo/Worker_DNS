@@ -257,12 +257,17 @@ export async function getAccessPoints(): Promise<AccessPoint[]> {
 
 export async function createAccessPoint(
   name: string,
-  profileId?: string | null
+  profileId?: string | null,
+  deviceType?: string
 ): Promise<AccessPoint> {
   const res = await fetch("/api/access_points", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name, profile_id: profileId ?? null }),
+    body: JSON.stringify({
+      name,
+      profile_id: profileId ?? null,
+      ...(deviceType ? { device_type: deviceType } : {}),
+    }),
   });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
@@ -270,7 +275,7 @@ export async function createAccessPoint(
 
 export async function updateAccessPoint(
   apId: string,
-  updates: { name?: string; profile_id?: string | null }
+  updates: { name?: string; profile_id?: string | null; device_type?: string }
 ): Promise<AccessPoint> {
   const res = await fetch(`/api/access_points/${apId}`, {
     method: "PATCH",

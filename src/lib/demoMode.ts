@@ -136,7 +136,12 @@ async function ensureDemoAccessPoints(
       else if (spec.targetProfileRole === "kids") targetProfileId = profiles.kids.id;
       else if (spec.targetProfileRole === "unbound") targetProfileId = null;
 
-      const created = await apModel.addAccessPointForOwner(userId, spec.name, targetProfileId);
+      const created = await apModel.addAccessPointForOwner(
+        userId,
+        spec.name,
+        targetProfileId,
+        spec.deviceType
+      );
       createdForDo.push({
         accessKey: created.token,
         profileId: targetProfileId || "default",
@@ -152,6 +157,20 @@ async function ensureDemoAccessPoints(
     }
     currentAps = await apModel.getAccessPointsByOwner(userId);
   }
+  // Backfill device_type on previously seeded Demo APs upgraded across migration 0075
+  const specByName = new Map(DEMO_ACCESS_POINT_SPECS.map((s) => [s.name.toLowerCase(), s]));
+  let updatedExistingDeviceType = false;
+  for (const ap of currentAps) {
+    const matched = specByName.get(ap.name.toLowerCase());
+    if (matched && (!ap.device_type || ap.device_type === "other_device") && matched.deviceType !== "other_device") {
+      await apModel.updateAccessPointByOwner(ap.id, userId, { device_type: matched.deviceType });
+      updatedExistingDeviceType = true;
+    }
+  }
+  if (updatedExistingDeviceType) {
+    currentAps = await apModel.getAccessPointsByOwner(userId);
+  }
+
   return currentAps;
 }
 
