@@ -1,7 +1,7 @@
 import { Context, Env, ExecutionContext } from '../types';
 import { parseDNSQuery } from '../utils/dns';
 import { pipeline } from '../pipeline';
-import { ProfileModel, ProfileWithBloom } from '../models/profile';
+import { ProfileModel, ProfileWithBloom, ResolvedProfileByKey } from '../models/profile';
 import { UserModel } from '../models/user';
 import { cacheUtils } from '../utils/cache';
 import {
@@ -87,9 +87,17 @@ export async function resolveProfileByKey(
       throw new Error('Database not configured');
     }
     const profileModel = new ProfileModel(env.DB);
-    const profile = await profileModel.findByKey(profileKey);
+    const profile: ResolvedProfileByKey | null = await profileModel.findByKey(profileKey);
 
     if (profile) {
+      if (profile.unbound_access_point && env.FAIL_OPEN_UPSTREAM) {
+        profile.settings = JSON.stringify({
+          upstream: [env.FAIL_OPEN_UPSTREAM],
+          default_policy: "ALLOW",
+          log_retention_days: 0,
+          ecs: { enabled: true, use_client_ip: true }
+        });
+      }
       profileKeyMemoryMap.set(profileKey, { data: profile, ts: now });
       if (cache) {
         ctx.waitUntil(cacheUtils.set(cache, cacheKey, profile, 3600));

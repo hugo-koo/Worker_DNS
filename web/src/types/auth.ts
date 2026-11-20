@@ -26,10 +26,12 @@ export interface UserInfo {
 
 export interface AccessPoint {
   id: string;
-  profile_id: string;
+  owner_id?: string;
+  profile_id: string | null;
   name: string;
   token: string;
   created_at: number;
+  updated_at?: number;
 }
 
 export interface Passkey {

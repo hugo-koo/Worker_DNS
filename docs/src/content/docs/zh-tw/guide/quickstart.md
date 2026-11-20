@@ -71,5 +71,5 @@ dns-worker
 
 - [瀏覽架構選型與雙引擎對比](/DNS-Worker/zh-tw/deployment/matrix/)
 - [深入瞭解 Cloudflare Workers 邊緣模式](/DNS-Worker/zh-tw/deployment/cloudflare/)
-- [建立接入點與配置各平臺客戶端](/DNS-Worker/zh-tw/networking/endpoints/)
+- [管理接入點、繫結 Profile 與配置各平臺客戶端](/DNS-Worker/zh-tw/networking/endpoints/)
 - [獨立伺服器 TLS 證書申請與配置](/DNS-Worker/zh-tw/advanced/tls-certs/)

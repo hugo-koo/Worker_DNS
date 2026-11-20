@@ -65,7 +65,7 @@ docker run -d \
 
 ### 核心功能
 - ⚡ **全栈协议**：UDP 53、DoT 853 (兼容 DoQ RFC 9250)、DoH (兼容 HTTP/2 与 HTTP/3)、ECH 与 DDR (RFC 9460)。
-- 🔀 **多配置与多接入点支持**：支持按用户、家庭成员或使用场景建立多套独立配置（Profiles），每套配置可派生多个专用接入点（Access Points）并配发专属 Token，实现精准的设备级识别、策略隔离与独立统计。
+- 🔀 **策略配置与接入点（Access Point）解耦设计**：支持按场景建立独立 DNS 策略配置与用户级设备端点凭证（**Access Points**），无需修改客户端配置即可随时动态切换或解绑接入点所绑定的策略配置（未绑定策略配置的接入点自动回退至 `FAIL_OPEN` 上游直连，保障不断网），兼顾策略复用、设备级识别与独立统计。
 - 🗄️ **多数据库自由切换**：支持 `D1`、`Turso`、`File` 多种数据库后端（通过 `DATABASE_SERVICE` 一键无缝切换），破解原生 D1 免费层用量限制。
 - 🛡️ **后量子零知识 E2EE**：NIST FIPS 203 **P256-MLKEM768** 混合格密码学 + 硬件通行密钥（Passkey / WebAuthn）。
 - 🚀 **本地优先 (Local-First)**：浏览器端 WebAssembly SQLite + OPFS，0ms 瞬间日志查询与统计分析。

@@ -24,6 +24,7 @@ import { checkNodeVersion, parseCli, getActiveRuntimeDescription } from './cli';
 import { tuneV8Engine } from './v8';
 import { getClusterInfo, forkClusterWorkers, shutdownClusterWorkers } from './cluster';
 import { registerActiveDnsSyncPublisher, applySyncedActiveDnsConnection } from '../lib/activeDns';
+import { registerProfileKeyInvalidatePublisher, invalidateProfileKeyCache } from '../pipeline/cache';
 
 export * from './cli';
 
@@ -300,12 +301,20 @@ async function bootstrap(): Promise<void> {
       }
     });
 
+    registerProfileKeyInvalidatePublisher((profileKey) => {
+      try {
+        process.send?.({ type: 'PROFILE_KEY_INVALIDATE', profileKey });
+      } catch {
+        // Ignore IPC send errors during worker shutdown
+      }
+    });
+
     process.on('message', (message: unknown) => {
-      if (
-        message &&
-        typeof message === 'object' &&
-        (message as { type?: string }).type === 'ACTIVE_DNS_SYNC'
-      ) {
+      if (!message || typeof message !== 'object') {
+        return;
+      }
+      const msgType = (message as { type?: string }).type;
+      if (msgType === 'ACTIVE_DNS_SYNC') {
         const payload = message as { ip?: unknown; profileId?: unknown; expiresAt?: unknown };
         if (
           typeof payload.ip === 'string' &&
@@ -313,6 +322,11 @@ async function bootstrap(): Promise<void> {
           typeof payload.expiresAt === 'number'
         ) {
           applySyncedActiveDnsConnection(payload.ip, payload.profileId, payload.expiresAt);
+        }
+      } else if (msgType === 'PROFILE_KEY_INVALIDATE') {
+        const payload = message as { profileKey?: unknown };
+        if (typeof payload.profileKey === 'string') {
+          invalidateProfileKeyCache(payload.profileKey, false);
         }
       }
     });

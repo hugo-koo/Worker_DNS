@@ -1,0 +1,217 @@
+import React, { useEffect, useState, useCallback } from "react";
+import { Button, Intent, InputGroup, Spinner, NonIdealState, OverlayToaster } from "@blueprintjs/core";
+import { Plus, MonitorSmartphone } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
+import { clsx } from "clsx";
+import type { AccessPoint, Profile } from "../../types/auth";
+import { getAccessPoints } from "../../services";
+import { useIsMobile } from "../../hooks/useIsMobile";
+import { useAccessPoints } from "../SetupView/hooks/useAccessPoints";
+import { AddAccessPointDialog } from "../SetupView/components/AddAccessPointDialog";
+import { RenameAccessPointDialog } from "../SetupView/components/RenameAccessPointDialog";
+import { AccessPointSection } from "../SetupView/components/AccessPointSection";
+
+export interface AccessPointsManageViewProps {
+  profiles: Profile[];
+  selectedProfile: Profile | null;
+  toasterRef?: React.RefObject<OverlayToaster | null>;
+}
+
+/**
+ * Top-level Access Points Management view (`/access-points/manage`).
+ * Migrated from the former per-profile drawer so Access Points are user-owned
+ * and can be bound or switched across any Profile.
+ */
+export const AccessPointsManageView: React.FC<AccessPointsManageViewProps> = ({
+  profiles,
+  selectedProfile,
+  toasterRef,
+}) => {
+  const { t } = useTranslation();
+  const isMobile = useIsMobile();
+  const navigate = useNavigate();
+  const [accessPoints, setAccessPoints] = useState<AccessPoint[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchAccessPoints = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await getAccessPoints();
+      setAccessPoints(data);
+    } catch (e) {
+      console.error("Failed to fetch access points:", e);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void fetchAccessPoints();
+  }, [fetchAccessPoints]);
+
+  const fallbackToasterRef = React.useRef<OverlayToaster | null>(null);
+  const effectiveToasterRef = (toasterRef || fallbackToasterRef) as React.MutableRefObject<any>;
+
+  const {
+    isAddDialogOpen,
+    setIsAddDialogOpen,
+    openAddDialog,
+    newApName,
+    setNewApName,
+    newApProfileId,
+    setNewApProfileId,
+    isAdding,
+    renameApId,
+    setRenameApId,
+    renameApName,
+    setRenameApName,
+    isRenaming,
+    updatingBindingApId,
+    rotatingApId,
+    deletingApId,
+    newApNameFocused,
+    setNewApNameFocused,
+    renameApNameFocused,
+    setRenameApNameFocused,
+    rotateConfirmApId,
+    setRotateConfirmApId,
+    searchQuery,
+    setSearchQuery,
+    filteredAccessPoints,
+    isValidApName,
+    handleAdd,
+    handleRename,
+    handleChangeBinding,
+    handleRotate,
+    handleDelete,
+  } = useAccessPoints({
+    accessPoints,
+    onRefresh: () => {
+      void fetchAccessPoints();
+    },
+    toasterRef: effectiveToasterRef,
+    defaultProfileId: selectedProfile?.id || profiles[0]?.id || "",
+  });
+
+  return (
+    <div className={clsx("md:px-8 w-full min-w-0 max-w-5xl mx-auto pb-24", isMobile ? "p-1" : "px-8")}>
+      <div className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="bp6-heading m-0">{t("setup.manageAccessPoints", "Manage Access Points")}</h1>
+          <p className="bp6-text-muted mt-2!">
+            {t(
+              "setup.manageAccessPointsSubtitle",
+              "Manage your endpoint tokens and switch their bound DNS Profiles."
+            )}
+          </p>
+        </div>
+        <div className="flex items-center gap-3 self-start sm:self-auto">
+          <Button
+            intent={Intent.PRIMARY}
+            icon={<Plus size={16} />}
+            text={t("setup.addAccessPoint")}
+            onClick={() => openAddDialog(selectedProfile?.id || profiles[0]?.id || "")}
+          />
+        </div>
+      </div>
+
+      {accessPoints.length > 0 && (
+        <div className="mb-6 max-w-sm">
+          <InputGroup
+            leftIcon="search"
+            placeholder={t("setup.searchAccessPoints", "Search...")}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            rightElement={
+              searchQuery ? (
+                <Button icon="cross" variant="minimal" onClick={() => setSearchQuery("")} />
+              ) : undefined
+            }
+          />
+        </div>
+      )}
+
+      {loading ? (
+        <div className="flex justify-center p-16">
+          <Spinner size={36} />
+        </div>
+      ) : filteredAccessPoints.length === 0 ? (
+        <div className="py-16">
+          <NonIdealState
+            icon={<MonitorSmartphone size={44} className="text-gray-300" />}
+            title={
+              searchQuery
+                ? t("setup.noMatchingAccessPoints", "No matching access points")
+                : t("setup.noAccessPoints", "No access points found")
+            }
+            action={
+              !searchQuery ? (
+                <Button
+                  intent={Intent.PRIMARY}
+                  icon={<Plus size={16} />}
+                  text={t("setup.addAccessPoint")}
+                  onClick={() => openAddDialog(selectedProfile?.id || profiles[0]?.id || "")}
+                />
+              ) : undefined
+            }
+          />
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {filteredAccessPoints.map((ap) => (
+            <AccessPointSection
+              key={ap.id}
+              ap={ap}
+              totalApCount={accessPoints.length}
+              profiles={profiles}
+              updatingBindingApId={updatingBindingApId}
+              onChangeBinding={(apId, profileId) => {
+                void handleChangeBinding(apId, profileId);
+              }}
+              onGoToSetup={(apId) => navigate(`/access-points/setup?ap=${encodeURIComponent(apId)}`)}
+              toasterRef={effectiveToasterRef}
+              onRenameTrigger={(id, name) => {
+                setRenameApId(id);
+                setRenameApName(name);
+              }}
+              rotateConfirmApId={rotateConfirmApId}
+              setRotateConfirmApId={setRotateConfirmApId}
+              rotatingApId={rotatingApId}
+              handleRotate={handleRotate}
+              deletingApId={deletingApId}
+              handleDelete={handleDelete}
+            />
+          ))}
+        </div>
+      )}
+
+      <AddAccessPointDialog
+        isOpen={isAddDialogOpen}
+        onClose={() => setIsAddDialogOpen(false)}
+        newApName={newApName}
+        setNewApName={setNewApName}
+        newApNameFocused={newApNameFocused}
+        setNewApNameFocused={setNewApNameFocused}
+        handleAdd={handleAdd}
+        isAdding={isAdding}
+        isValidApName={isValidApName}
+        profiles={profiles}
+        selectedProfileId={newApProfileId}
+        onSelectProfileId={setNewApProfileId}
+      />
+
+      <RenameAccessPointDialog
+        isOpen={!!renameApId}
+        onClose={() => setRenameApId(null)}
+        renameApName={renameApName}
+        setRenameApName={setRenameApName}
+        renameApNameFocused={renameApNameFocused}
+        setRenameApNameFocused={setRenameApNameFocused}
+        handleRename={handleRename}
+        isRenaming={isRenaming}
+        isValidApName={isValidApName}
+      />
+    </div>
+  );
+};

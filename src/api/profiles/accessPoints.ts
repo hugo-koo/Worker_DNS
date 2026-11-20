@@ -52,7 +52,7 @@ export async function handleProfileAccessPointsRequest(
     const maxAps = Number(env.MAX_ACCESS_POINTS_PER_PROFILE) || 100;
     if (currentAps.length >= maxAps) return new Response(`Access point limit exceeded (max ${maxAps})`, { status: 400 });
     
-    const result = await apModel.addAccessPoint(profileId, body.name);
+    const result = await apModel.addAccessPoint(profileId, body.name, user.id);
     ctx.waitUntil(
       upsertAccessKeysInDo(env, [
         {

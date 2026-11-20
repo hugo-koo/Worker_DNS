@@ -1,26 +1,20 @@
 import React from "react";
-import { Section, SectionCard, Button, HTMLSelect, Intent, Tag } from "@blueprintjs/core";
-import { MonitorSmartphone, Settings2 } from "lucide-react";
+import { Section, SectionCard, Button, PopoverNext, Menu, MenuItem, Intent, Tag } from "@blueprintjs/core";
+import { MonitorSmartphone, ChevronDown, Check } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { AccessPoint } from "../../../types/auth";
 import { StepStampWatermark } from "./StepStampWatermark";
 
 export interface AccessPointCardProps {
   accessPoints: AccessPoint[];
-  selectedApId: string | null;
+  selectedAp: AccessPoint | null;
   onSelectAp: (id: string) => void;
-  accessPointName?: string;
-  onManageAccessPoints: () => void;
-  isMobile: boolean;
 }
 
 export const AccessPointCard: React.FC<AccessPointCardProps> = ({
   accessPoints,
-  selectedApId,
+  selectedAp,
   onSelectAp,
-  accessPointName,
-  onManageAccessPoints,
-  isMobile,
 }) => {
   const { t } = useTranslation();
 
@@ -32,41 +26,55 @@ export const AccessPointCard: React.FC<AccessPointCardProps> = ({
     >
       <StepStampWatermark step={1} />
       <SectionCard>
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex flex-col gap-1.5 w-full sm:w-auto">
-            <span className="text-xs opacity-50 font-medium">
-              {t("setup.selectAccessPointToConfigure")}
-            </span>
-            <div className="flex items-center gap-3">
-              {accessPoints.length > 0 ? (
-                <HTMLSelect
-                  value={selectedApId || ""}
-                  onChange={(e) => onSelectAp(e.target.value)}
-                  options={accessPoints.map((ap) => ({ label: ap.name, value: ap.id }))}
-                  className="font-semibold text-gray-900 dark:text-gray-100"
-                />
-              ) : (
-                <div className="font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                  {accessPointName || t("setup.defaultAccessPointName", "设备-1")}
-                </div>
-              )}
-              {accessPoints.length > 0 && (
-                <Tag minimal round intent={Intent.PRIMARY} className="text-xs">
-                  {accessPoints.length}
-                </Tag>
-              )}
-            </div>
+        <div className="flex flex-col gap-1.5 w-full sm:w-auto">
+          <span className="text-xs opacity-50 font-medium">
+            {t("setup.selectAccessPointToConfigure")}
+          </span>
+          <div className="flex items-center gap-2">
+            {accessPoints.length > 0 && selectedAp ? (
+              <PopoverNext
+                placement="bottom-start"
+                animation="minimal"
+                arrow={false}
+                content={
+                  <Menu className="max-h-72 overflow-y-auto">
+                    {accessPoints.map((ap) => {
+                      const isCurrent = ap.id === selectedAp.id;
+                      return (
+                        <MenuItem
+                          key={ap.id}
+                          text={ap.name}
+                          label={ap.token}
+                          active={isCurrent}
+                          icon={isCurrent ? <Check size={14} /> : <span className="inline-block w-3.5" />}
+                          onClick={() => onSelectAp(ap.id)}
+                        />
+                      );
+                    })}
+                  </Menu>
+                }
+              >
+                <Button
+                  variant="minimal"
+                  className="font-bold! text-blue-600! dark:text-blue-400! px-2!"
+                  endIcon={<ChevronDown size={14} />}
+                >
+                  <span className="truncate max-w-48 md:max-w-xs inline-block align-middle">
+                    {selectedAp.name}
+                  </span>
+                </Button>
+              </PopoverNext>
+            ) : (
+              <div className="font-semibold text-gray-500 dark:text-gray-400">
+                {t("setup.noAccessPoints", "No access points found")}
+              </div>
+            )}
+            {accessPoints.length > 0 && (
+              <Tag minimal round intent={Intent.PRIMARY} className="text-xs shrink-0">
+                {accessPoints.length}
+              </Tag>
+            )}
           </div>
-
-          <Button
-            variant="outlined"
-            intent={Intent.NONE}
-            icon={<Settings2 size={14} />}
-            text={t("setup.manageAccessPoints", "管理接入点")}
-            onClick={onManageAccessPoints}
-            fill={isMobile}
-            className="shrink-0"
-          />
         </div>
       </SectionCard>
     </Section>

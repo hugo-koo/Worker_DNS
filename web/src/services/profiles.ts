@@ -249,6 +249,53 @@ export async function getProfileAccessPoints(profileId: string): Promise<AccessP
   return res.json();
 }
 
+export async function getAccessPoints(): Promise<AccessPoint[]> {
+  const res = await fetch("/api/access_points");
+  if (!res.ok) throw new Error("Failed to fetch access points");
+  return res.json();
+}
+
+export async function createAccessPoint(
+  name: string,
+  profileId?: string | null
+): Promise<AccessPoint> {
+  const res = await fetch("/api/access_points", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name, profile_id: profileId ?? null }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function updateAccessPoint(
+  apId: string,
+  updates: { name?: string; profile_id?: string | null }
+): Promise<AccessPoint> {
+  const res = await fetch(`/api/access_points/${apId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(updates),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function rotateAccessPointToken(apId: string): Promise<{ token: string }> {
+  const res = await fetch(`/api/access_points/${apId}/rotate_token`, {
+    method: "POST",
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function deleteAccessPoint(apId: string): Promise<void> {
+  const res = await fetch(`/api/access_points/${apId}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error(await res.text());
+}
+
 export async function addProfileAccessPoint(profileId: string, name: string): Promise<AccessPoint> {
   const res = await profileFetch(`/api/profiles/${profileId}/access_points`, {
     method: "POST",

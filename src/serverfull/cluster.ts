@@ -57,12 +57,11 @@ export function forkClusterWorkers(count: number): void {
   }
 
   cluster.on('message', (senderWorker, message: unknown) => {
-    if (
-      !message ||
-      typeof message !== 'object' ||
-      (message as { type?: string }).type !== 'ACTIVE_DNS_SYNC' ||
-      !cluster.workers
-    ) {
+    if (!message || typeof message !== 'object' || !cluster.workers) {
+      return;
+    }
+    const msgType = (message as { type?: string }).type;
+    if (msgType !== 'ACTIVE_DNS_SYNC' && msgType !== 'PROFILE_KEY_INVALIDATE') {
       return;
     }
 

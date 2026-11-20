@@ -54,7 +54,9 @@
     "modeServerfull": "Serverfull 模式",
     "modeCloudflare": "Cloudflare Worker 模式",
     "unknown": "未知",
-    "system": "系统"
+    "system": "系统",
+    "created": "创建时间",
+    "renameProfile": "重命名配置"
   },
   "nav": {
     "setup": "安装",
@@ -63,7 +65,12 @@
     "logs": "日志",
     "filter": "过滤项",
     "settings": "设置",
-    "noActiveProfileHint": "未选择配置，点击前往配置列表"
+    "noActiveProfileHint": "未选择配置，点击前往配置列表",
+    "groupAccessPoints": "接入点",
+    "groupProfiles": "配置",
+    "groupPreferences": "偏好设置",
+    "manage": "管理",
+    "collections": "配置集"
   },
   "theme": {
     "light": "浅色",
@@ -314,7 +321,16 @@
     "detecting": "正在检测...",
     "dotUnavailableCfTitle": "DoT / DoQ 在 Cloudflare Worker 模式下不可用",
     "dotUnavailableCfDesc": "当前运行于 Cloudflare Worker (Serverless) 模式。受边缘无服务器运行环境网络限制，不支持监听原生 TCP/UDP 853 端口。若需使用 DoT 或 DoQ，请部署在独立服务器 (Serverfull 模式) 下；在当前模式下请使用 DoH (DNS over HTTPS)。",
-    "privateNetwork": "专用网络"
+    "privateNetwork": "专用网络",
+    "manageAccessPointsSubtitle": "管理您的接入点令牌并随时切换绑定的 DNS 配置。",
+    "boundProfile": "绑定配置",
+    "unboundProfile": "未绑定",
+    "bindProfileUpdated": "已切换绑定配置",
+    "noAccessPoints": "暂无接入点",
+    "noMatchingAccessPoints": "未找到匹配的接入点",
+    "createAccessPointHint": "请先创建一个接入点并绑定配置以获取连接凭证。",
+    "unboundProfileWarningTitle": "接入点未绑定配置",
+    "unboundProfileWarningDesc": "当前接入点尚未绑定任何 Profile，使用此接入点发起的 DNS 查询将回退至 FAIL_OPEN 上游直连（不应用过滤规则且不记录日志）。请前往接入点管理页进行绑定。"
   },
   "rules": {
     "title": "自定义规则",

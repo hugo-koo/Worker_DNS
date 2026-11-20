@@ -11,13 +11,13 @@ Aside from frontend pages, static assets, and SPA fallback (`handleAssetsRouter`
 
 | Path / Transport | Method / Protocol | Parameters & Format | Description |
 | --- | --- | --- | --- |
-| `/:key` | `GET`, `POST`, `OPTIONS` (HTTPS / HTTP/2+) | `key` matches `^[a-zA-Z0-9]{5,12}$`; `GET ?dns=<base64url>` or `Accept: application/dns-message`; `POST` raw wire DNS packet (`application/dns-message`, max 64 KB in Serverfull) | **DoH endpoint (RFC 8484)**. Resolves `key` first against `access_points.token` (for per-device attribution), then `profiles.profile_key` or `profiles.id`. Bare `/dns-query` is intentionally unsupported. Returns `application/dns-message` with `Cache-Control: max-age=<ttl>` and permissive CORS (`*`). |
+| `/:key` | `GET`, `POST`, `OPTIONS` (HTTPS / HTTP/2+) | `key` matches `^[a-zA-Z0-9]{5,12}$`; `GET ?dns=<base64url>` or `Accept: application/dns-message`; `POST` raw wire DNS packet (`application/dns-message`, max 64 KB in Serverfull) | **DoH endpoint (RFC 8484)**. Resolves `key` first against user-owned `access_points.token` (for device attribution and dynamic Profile binding), then `profiles.profile_key` or `profiles.id`. If a matching Access Point is currently unbound (`profile_id IS NULL`), queries fall back to `FAIL_OPEN_UPSTREAM` with zero logging rather than matching `profile_key` or returning `404`. Bare `/dns-query` is intentionally unsupported. Returns `application/dns-message` with `Cache-Control: max-age=<ttl>` and permissive CORS (`*`). |
 | `/setup.sh` | `GET` | Query parameter `key` matching `^[a-zA-Z0-9]{5,12}$` (and valid HTTP/HTTPS `Host` header) | Generates a `text/plain` bash installer script (`cloudflared` + `systemd` `cloudflared-dns.service`) preconfigured with `--upstream <origin>/<key>` on local port `53`. |
 | `/world-110m.json` | `GET` | None | Edge-cached (`max-age=2592000`, 30 days) GeoIP TopoJSON world map proxy with 3-digit zero-padded country IDs and `Access-Control-Allow-Origin: *`. |
 
 ### DoH Protocol Behavior (`/:key`)
 
-- **Access Key Verification & Durable Objects Fail-Open**: Legitimate Access Keys (`access_points.token`, `profiles.profile_key`, and `profiles.id`) are synchronized into SQLite-backed Durable Objects (`ACCESS_KEY_DO`, partitioned into 16 deterministic shards). If D1 or Turso goes offline or hits read quota (`FAIL_OPEN` state), valid Access Keys remain usable via `FAIL_OPEN_UPSTREAM` with profile/access-point attribution preserved, while unregistered or revoked keys are rejected (`404 Invalid Profile Key`).
+- **Access Key Verification & Durable Objects Fail-Open**: Legitimate Access Keys (`access_points.token`, `profiles.profile_key`, and `profiles.id`) are synchronized into SQLite-backed Durable Objects (`ACCESS_KEY_DO`, partitioned into 16 deterministic shards). Bound keys resolve to their assigned Profile, unbound Access Points (`profile_id = null`) resolve directly through `FAIL_OPEN_UPSTREAM` with zero logging, and during D1/Turso outages valid keys continue resolving via DO `FAIL_OPEN`, while unregistered or revoked keys are rejected (`404 Invalid Profile Key`).
 - **HTTP/2+ Requirement (RFC 8484 §5.2)**: Requests arriving over `HTTP/1.0` or `HTTP/1.1` (via `request.cf.httpProtocol` or `X-Http-Version`) are rejected with `505 HTTP Version Not Supported`.
 - **CORS Preflight (`OPTIONS`)**: Returns `204 No Content` with `Access-Control-Allow-Origin: *`, `Access-Control-Allow-Methods: GET, POST, OPTIONS`, `Access-Control-Allow-Headers: Content-Type, Accept`, and `Access-Control-Max-Age: 86400`.
 - **Error & Fail-Open Responses**:
@@ -215,21 +215,25 @@ curl -s -b cookies.txt -X POST https://dns.example.com/api/profiles/<profileId>/
 | `GET` | `/api/profiles` | Bearer | Lists all DNS profiles owned by the authenticated user. |
 | `POST` | `/api/profiles` | Bearer + CSRF | Creates a new DNS profile with its DoH key. |
 | `GET` | `/api/profiles/:id` | Bearer | Fetches full configuration for a profile. |
-| `PATCH` | `/api/profiles/:id` | Bearer + CSRF | Updates profile metadata (such as name). |
-| `DELETE` | `/api/profiles/:id` | Bearer + CSRF | Deletes a profile and its associated rules, lists, and logs. |
+| `PATCH` | `/api/profiles/:id` | Bearer + CSRF | Updates profile metadata (such as renaming with per-owner duplicate check). |
+| `DELETE` | `/api/profiles/:id` | Bearer + CSRF | Deletes a profile along with its rules, lists, and logs; detaches bound Access Points (`profile_id = NULL`, Fail-Open fallback) and evicts cached routing keys. |
 | `POST` | `/api/profiles/:id/rotate_key` | Bearer + CSRF | Rotates the profile's primary DoH endpoint key (`/:key`). |
 | `PATCH` | `/api/profiles/:id/settings` | Bearer + CSRF | Updates resolver settings (upstream DoH/DoT, ECS, ECH, logging toggles, cache, etc.). |
 | `POST` | `/api/profiles/:id/test` | Bearer + CSRF | Simulates DNS rule/list evaluation for `{ "domain": "...", "type": "A" }` (`domain` max 253 chars, `type` defaults to `A`). |
 
-### Access Points
+### Access Points (User-Owned & Dynamic Profile Binding)
+
+Access Points belong to the authenticated user (`owner_id`) and can bind, switch, or unbind their target `profile_id` (`string | null`) at any time:
 
 | Method | Endpoint | Auth | Description |
 | --- | --- | --- | --- |
-| `GET` | `/api/profiles/:id/access_points` | Bearer | Lists per-device/named DoH access points under a profile. |
-| `POST` | `/api/profiles/:id/access_points` | Bearer + CSRF | Creates a new named access point token for client attribution. |
-| `POST` | `/api/profiles/:id/access_points/:apId/rotate_token` | Bearer + CSRF | Rotates an access point's DoH token. |
-| `PATCH` | `/api/profiles/:id/access_points/:apId` | Bearer + CSRF | Updates an access point's label or enabled state. |
-| `DELETE` | `/api/profiles/:id/access_points/:apId` | Bearer + CSRF | Deletes an access point. |
+| `GET` | `/api/access_points` | Bearer | Lists all Access Points owned by the user, including their current `profile_id` (`null` if unbound). |
+| `POST` | `/api/access_points` | Bearer + CSRF | Creates a new Access Point (`{ "name": "...", "profile_id"?: string \| null }`) for the user, optionally bound to an owned Profile. |
+| `PATCH` | `/api/access_points/:apId` | Bearer + CSRF | Updates the Access Point `name` and/or switches/unbinds its `profile_id` (`string \| null`), evicting L1/L2/cluster & DO caches. |
+| `POST` | `/api/access_points/:apId/rotate_token` | Bearer + CSRF | Rotates an Access Point token and revokes prior cached tokens. |
+| `DELETE` | `/api/access_points/:apId` | Bearer + CSRF | Permanently deletes an Access Point owned by the user and revokes its caches. |
+
+For backward compatibility and profile-scoped client attribution filters (Logs / Analytics), `/api/profiles/:id/access_points` (`GET`, `POST`, `PATCH /:apId`, `POST /:apId/rotate_token`, `DELETE /:apId`) remains available for listing and managing Access Points currently bound to `:id`.
 
 ### Custom Rules
 

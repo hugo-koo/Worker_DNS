@@ -11,13 +11,13 @@ DNS Worker 在与控制台 / Worker 相同的域名下同时提供 **根路径 `
 
 | 路径 / 传输方式 | 方法 / 协议 | 参数与格式要求 | 说明 |
 | --- | --- | --- | --- |
-| `/:key` | `GET`、`POST`、`OPTIONS`（HTTPS / HTTP/2+） | `key` 匹配 `^[a-zA-Z0-9]{5,12}$`；`GET ?dns=<base64url>` 或携带 `Accept: application/dns-message`；`POST` 请求体为原始 DNS 二进制报文（`application/dns-message`，Serverfull 模式上限 64 KB） | **DoH 接入端点（RFC 8484）**。优先匹配 `access_points.token`（实现按设备归因），其次匹配 `profiles.profile_key` 或 `profiles.id`；系统刻意不开放无密钥的 `/dns-query` 路径。响应返回 `application/dns-message`、`Cache-Control: max-age=<ttl>` 与全放行 CORS 头（`*`）。 |
+| `/:key` | `GET`、`POST`、`OPTIONS`（HTTPS / HTTP/2+） | `key` 匹配 `^[a-zA-Z0-9]{5,12}$`；`GET ?dns=<base64url>` 或携带 `Accept: application/dns-message`；`POST` 请求体为原始 DNS 二进制报文（`application/dns-message`，Serverfull 模式上限 64 KB） | **DoH 接入端点（RFC 8484）**。优先匹配用户级 `access_points.token`（用于设备归因与动态 Profile 绑定路由），其次匹配 `profiles.profile_key` 或 `profiles.id`。若匹配的接入点处于未绑定状态（`profile_id IS NULL`），将直接回退至 `FAIL_OPEN_UPSTREAM` 解析（不匹配 `profile_key`，也不返回 `404` 且不记日志）；系统刻意不开放无密钥的 `/dns-query` 路径。响应返回 `application/dns-message`、`Cache-Control: max-age=<ttl>` 与全放行 CORS 头（`*`）。 |
 | `/setup.sh` | `GET` | 查询参数 `key` 需匹配 `^[a-zA-Z0-9]{5,12}$`，且 `Host` 须为合法 HTTP/HTTPS 来源 | 动态生成 `text/plain` 格式的 Linux 一键安装脚本（安装 `cloudflared` 并注册 `systemd` 服务 `cloudflared-dns.service`，将 `--upstream <origin>/<key>` 映射到本地 `53` 端口）。 |
 | `/world-110m.json` | `GET` | 无 | GeoIP 世界地图 TopoJSON 代理接口，自动补全 3 位国家数字 ID 并启用边缘缓存（`max-age=2592000`，30 天），响应带 `Access-Control-Allow-Origin: *`。 |
 
 ### DoH 协议约束与响应说明（`/:key`）
 
-- **Access Key 校验与 Durable Objects 容灾**：合法的 Access Key（含 `access_points.token`、`profiles.profile_key` 与 `profiles.id`）会同步写入基于 SQLite 的 Durable Objects（`ACCESS_KEY_DO`，分为 16 个确定性分片）。当 D1 或 Turso 下线或达到读取配额进入 `FAIL_OPEN` 状态时，合法 Access Key 仍可通过 `FAIL_OPEN_UPSTREAM` 继续完成解析并保留配置文件 / 接入点归属信息，而未注册或已吊销的无效 Key 将被拒绝（`404 Invalid Profile Key`）。
+- **Access Key 校验与 Durable Objects 容灾**：合法的 Access Key（含 `access_points.token`、`profiles.profile_key` 与 `profiles.id`）会同步写入基于 SQLite 的 Durable Objects（`ACCESS_KEY_DO`，分为 16 个确定性分片）。已绑定的接入点按其当前 `profile_id` 路由，未绑定接入点（`profile_id = null`）直接回退至 `FAIL_OPEN_UPSTREAM`（零日志）；当 D1 或 Turso 下线或达到读取配额进入 `FAIL_OPEN` 状态时，合法 Access Key 仍可通过 DO 容灾继续完成解析，而未注册或已吊销的无效 Key 将被拒绝（`404 Invalid Profile Key`）。
 - **HTTP/2+ 强制校验（RFC 8484 §5.2）**：若请求以 `HTTP/1.0` 或 `HTTP/1.1` 到达（通过 `request.cf.httpProtocol` 或 `X-Http-Version` 检测），服务端将返回 `505 HTTP Version Not Supported`。
 - **CORS 预检（`OPTIONS`）**：返回 `204 No Content`，携带 `Access-Control-Allow-Origin: *`、`Access-Control-Allow-Methods: GET, POST, OPTIONS`、`Access-Control-Allow-Headers: Content-Type, Accept` 与 `Access-Control-Max-Age: 86400`。
 - **异常与故障开放（Fail-Open）**：
@@ -215,21 +215,25 @@ curl -s -b cookies.txt -X POST https://dns.example.com/api/profiles/<profileId>/
 | `GET` | `/api/profiles` | Bearer | 列出当前用户拥有的所有 DNS 配置文件。 |
 | `POST` | `/api/profiles` | Bearer + CSRF | 创建新的 DNS 配置文件并生成默认 DoH 密钥。 |
 | `GET` | `/api/profiles/:id` | Bearer | 获取指定配置文件的完整配置详情。 |
-| `PATCH` | `/api/profiles/:id` | Bearer + CSRF | 更新配置文件基本信息（如名称）。 |
-| `DELETE` | `/api/profiles/:id` | Bearer + CSRF | 删除配置文件及其关联的规则、列表与日志。 |
+| `PATCH` | `/api/profiles/:id` | Bearer + CSRF | 更新配置文件基本信息（如重命名，带同用户重名校验）。 |
+| `DELETE` | `/api/profiles/:id` | Bearer + CSRF | 删除配置文件及其规则、列表与日志；原绑定的接入点保留并解绑（`profile_id = NULL`，自动回退 Fail-Open）并清理缓存。 |
 | `POST` | `/api/profiles/:id/rotate_key` | Bearer + CSRF | 轮换配置文件主 DoH 接入密钥（`/:key`）。 |
 | `PATCH` | `/api/profiles/:id/settings` | Bearer + CSRF | 更新解析器高级设置（上游 DoH/DoT、ECS、ECH、日志隐私与缓存选项等）。 |
 | `POST` | `/api/profiles/:id/test` | Bearer + CSRF | 模拟测试 `{ "domain": "...", "type": "A" }` 的规则与列表命中结果（`domain` 最长 253 字符，`type` 默认为 `A`）。 |
 
-### 接入点（Access Points）
+### 接入点（用户级解耦管理与动态绑定）
+
+接入点（Access Points）直接归属于当前认证用户（`owner_id`），可随时绑定、切换或解绑目标 `profile_id`（`string | null`）：
 
 | 方法 | 路径 | 权限 | 说明 |
 | --- | --- | --- | --- |
-| `GET` | `/api/profiles/:id/access_points` | Bearer | 列出配置文件下按设备/场景划分的独立 DoH 接入点。 |
-| `POST` | `/api/profiles/:id/access_points` | Bearer + CSRF | 创建新的命名接入点令牌，用于在日志中识别设备来源。 |
-| `POST` | `/api/profiles/:id/access_points/:apId/rotate_token` | Bearer + CSRF | 轮换指定接入点的 DoH 令牌。 |
-| `PATCH` | `/api/profiles/:id/access_points/:apId` | Bearer + CSRF | 更新接入点名称或启用状态。 |
-| `DELETE` | `/api/profiles/:id/access_points/:apId` | Bearer + CSRF | 删除指定接入点。 |
+| `GET` | `/api/access_points` | Bearer | 列出当前用户拥有的所有接入点及其当前绑定的 `profile_id`（未绑定为 `null`）。 |
+| `POST` | `/api/access_points` | Bearer + CSRF | 创建新的用户级接入点（`{ "name": "...", "profile_id"?: string \| null }`），可选初始绑定 Profile。 |
+| `PATCH` | `/api/access_points/:apId` | Bearer + CSRF | 重命名接入点或动态切换/解绑 `profile_id`（`string \| null`），并立即清理 L1/L2、Cluster 与 DO 缓存。 |
+| `POST` | `/api/access_points/:apId/rotate_token` | Bearer + CSRF | 轮换接入点 DoH Token 并吊销旧令牌缓存。 |
+| `DELETE` | `/api/access_points/:apId` | Bearer + CSRF | 永久删除用户拥有的接入点并清理对应缓存。 |
+
+同时保留 `/api/profiles/:id/access_points`（`GET`、`POST`、`PATCH /:apId`、`POST /:apId/rotate_token`、`DELETE /:apId`）作为按当前绑定 Profile 作用域筛选的兼容接口（供日志/统计筛选或按指定 Profile 创建场景使用）。
 
 ### 自定义规则
 

@@ -4,6 +4,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import {
   getProfiles,
   createProfile,
+  renameProfile,
   deleteProfile
 } from "../services";
 import { formatApiErrorMessage } from "../utils/auth";
@@ -78,6 +79,16 @@ export function useProfiles(isLoggedIn: boolean | null) {
     }
   };
 
+  const handleRenameProfile = async (id: string, name: string): Promise<void> => {
+    const trimmed = name.trim();
+    await renameProfile(id, trimmed);
+    setProfiles((prev) => prev.map((p) => (p.id === id ? { ...p, name: trimmed } : p)));
+    if (selectedProfile?.id === id) {
+      setSelectedProfile({ ...selectedProfile, name: trimmed });
+    }
+    await fetchProfiles();
+  };
+
   const handleDeleteProfile = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
     if (!confirm(t("common.confirmDelete"))) return;
@@ -118,6 +129,7 @@ export function useProfiles(isLoggedIn: boolean | null) {
     setPrefilledRule,
     fetchProfiles,
     handleCreateProfile,
+    handleRenameProfile,
     handleDeleteProfile,
     handleQuickAction,
     loaded,

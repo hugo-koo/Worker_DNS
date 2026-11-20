@@ -65,7 +65,7 @@ docker run -d \
 
 ### 核心功能
 - ⚡ **全棧協定**：UDP 53、DoT 853 (相容 DoQ RFC 9250)、DoH (相容 HTTP/2 與 HTTP/3)、ECH 與 DDR (RFC 9460)。
-- 🔀 **多設定與多接入點支援**：支援按使用者、家庭成員或使用場景建立多套獨立設定（Profiles），每套設定可衍生多個專用接入點（Access Points）並配發專屬 Token，實現精準的裝置級識別、策略隔離與獨立統計。
+- 🔀 **策略設定與接入點（Access Point）解耦設計**：支援按場景建立獨立 DNS 策略設定與使用者級裝置端點憑證（**Access Points**），無需修改客戶端設定即可隨時動態切換或解綁接入點所綁定的策略設定（未綁定策略設定的接入點自動回退至 `FAIL_OPEN` 上游直連，保障不斷網），兼顧策略複用、裝置級識別與獨立統計。
 - 🗄️ **多資料庫自由切換**：支援 `D1`、`Turso`、`File` 多種資料庫後端（透過 `DATABASE_SERVICE` 一鍵無縫切換），破解原生 D1 免費層用量限制。
 - 🛡️ **後量子零知識 E2EE**：NIST FIPS 203 **P256-MLKEM768** 混合格密碼學 + 硬體通行金鑰（Passkey / WebAuthn）。
 - 🚀 **本地優先 (Local-First)**：瀏覽器端 WebAssembly SQLite + OPFS，0ms 瞬間日誌查詢與統計分析。

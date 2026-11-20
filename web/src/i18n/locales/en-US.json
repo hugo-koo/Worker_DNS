@@ -54,7 +54,9 @@
     "modeServerfull": "Serverfull Mode",
     "modeCloudflare": "Cloudflare Worker Mode",
     "unknown": "Unknown",
-    "system": "System"
+    "system": "System",
+    "created": "Created",
+    "renameProfile": "Rename Profile"
   },
   "nav": {
     "setup": "Setup",
@@ -63,7 +65,12 @@
     "logs": "Logs",
     "filter": "Filters",
     "settings": "Settings",
-    "noActiveProfileHint": "No profile selected, click to view profiles"
+    "noActiveProfileHint": "No profile selected, click to view profiles",
+    "groupAccessPoints": "Access Points",
+    "groupProfiles": "Profiles",
+    "groupPreferences": "Preferences",
+    "manage": "Manage",
+    "collections": "Collections"
   },
   "theme": {
     "light": "Light",
@@ -314,7 +321,16 @@
     "detecting": "Detecting...",
     "dotUnavailableCfTitle": "DoT / DoQ Unavailable in Cloudflare Worker Mode",
     "dotUnavailableCfDesc": "Currently running in Cloudflare Worker (Serverless) mode. Due to edge serverless runtime network limitations, listening on raw TCP/UDP port 853 is unsupported. To use DoT or DoQ, deploy in Standalone (Serverfull) mode; in the current mode, please use DoH (DNS over HTTPS).",
-    "privateNetwork": "Private Network"
+    "privateNetwork": "Private Network",
+    "manageAccessPointsSubtitle": "Manage your endpoint tokens and switch their bound DNS Profiles.",
+    "boundProfile": "Bound Profile",
+    "unboundProfile": "Unbound",
+    "bindProfileUpdated": "Bound profile updated",
+    "noAccessPoints": "No access points found",
+    "noMatchingAccessPoints": "No matching access points",
+    "createAccessPointHint": "Create an Access Point first and bind it to a Profile to obtain endpoint credentials.",
+    "unboundProfileWarningTitle": "Access Point Unbound",
+    "unboundProfileWarningDesc": "This Access Point is not currently bound to any Profile. DNS queries using it fall back to Fail-Open upstream without filtering or logging. Manage bindings in Access Points -> Manage."
   },
   "rules": {
     "title": "Custom Rules",

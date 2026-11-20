@@ -9,6 +9,12 @@ import {
 } from "@blueprintjs/core";
 import { useTranslation } from "react-i18next";
 import {
+  Edit3,
+  BarChart3,
+  Clock,
+  Download,
+  MonitorSmartphone,
+  LayoutGrid,
   ListFilter,
   Settings,
   User as UserIcon,
@@ -19,7 +25,7 @@ import {
 } from "lucide-react";
 import { clsx } from "clsx";
 import LogoIcon from "../assets/obex_cat_eye_logo-256.webp";
-import type { UserInfo } from "../types/auth";
+import type { Profile, UserInfo } from "../types/auth";
 import { useUpstreamUpdate } from "../hooks/useUpstreamUpdate";
 import { createSpaLinkClickHandler } from "../utils/navigation";
 
@@ -37,24 +43,23 @@ interface DesktopSidebarProps {
   isProfileActive: boolean;
   /** Active profile ID, if any. */
   activeId: string | undefined;
+  /** Available profiles list for single-profile auto-selection. */
+  profiles: Profile[];
+  /** Callback to select a profile directly. */
+  setSelectedProfile: (p: Profile) => void;
   /** Router location object. */
-  location: any;
+  location: { pathname: string };
   /** Router navigation function. */
   navigate: (path: string) => void;
   /** Callback to handle user logout action. */
   handleLogout: () => void;
   /** Current logged in user info. */
   currentUser: UserInfo | null;
-  /** Main navigation menu items. */
-  navItems: Array<{ id: string; label: string; icon: React.ReactNode; path: string }>;
 }
 
 /**
- * DesktopSidebar component renders the navigation sidebar on desktop and mobile screens.
- * On mobile, it acts as an off-canvas slide-out drawer that defaults to completely collapsed.
- *
- * @param props - Component props containing sidebar states, active profiles, and router hooks.
- * @returns React elements representing the sidebar and mobile backdrop.
+ * Renders the 3-section sidebar navigation (`Access Points`, `Profiles`, `Preferences`)
+ * on desktop and mobile screens.
  */
 export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
   isSidebarOpen,
@@ -62,19 +67,18 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
   isMobile = false,
   isProfileActive,
   activeId,
+  profiles,
+  setSelectedProfile,
   location,
   navigate,
   handleLogout,
   currentUser,
-  navItems,
 }) => {
   const { t } = useTranslation();
   const { hasUpdate, latestTag, appVersion, gitTag, gitCommit } = useUpstreamUpdate();
 
-  // Swipe-to-close handling on mobile
   const touchStartRef = React.useRef<{ x: number; y: number; time: number } | null>(null);
   const [dragOffset, setDragOffset] = React.useState<number | null>(null);
-  // Swipe-to-open handling on mobile
   const [dragOpenOffset, setDragOpenOffset] = React.useState<number | null>(null);
 
   useEffect(() => {
@@ -96,7 +100,6 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
     const diffX = touch.clientX - touchStartRef.current.x;
     const diffY = touch.clientY - touchStartRef.current.y;
 
-    // Track horizontal swipe left (diffX < 0)
     if (diffX < 0 && Math.abs(diffX) > Math.abs(diffY)) {
       setDragOffset(Math.min(0, diffX));
     }
@@ -107,7 +110,6 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
     const duration = Date.now() - touchStartRef.current.time;
     const offset = dragOffset ?? 0;
 
-    // Swipe left to close: drag left > 50px or quick flick left > 20px
     if (offset < -50 || (duration < 300 && offset < -20)) {
       setIsSidebarOpen(false);
     }
@@ -120,7 +122,6 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
     touchStartRef.current = null;
   };
 
-  // Swipe-to-open gesture from screen edge when sidebar is closed on mobile
   useEffect(() => {
     if (!isMobile || isSidebarOpen) {
       setDragOpenOffset(null);
@@ -133,7 +134,6 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
     const onTouchStart = (e: TouchEvent) => {
       if (e.touches.length !== 1) return;
       const touch = e.touches[0];
-      // Touch must begin near the left edge (<= 35px from screen edge)
       if (touch.clientX <= 35) {
         startTouch = { x: touch.clientX, y: touch.clientY, time: Date.now() };
         isSwiping = false;
@@ -147,11 +147,9 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
       const diffY = touch.clientY - startTouch.y;
 
       if (!isSwiping) {
-        // Only engage when moving right and horizontal motion dominates
         if (diffX > 8 && Math.abs(diffX) > Math.abs(diffY) * 1.2) {
           isSwiping = true;
         } else if (Math.abs(diffY) > 10) {
-          // Primarily vertical scrolling, cancel gesture
           startTouch = null;
           return;
         }
@@ -168,7 +166,6 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
         const touch = e.changedTouches[0];
         const diffX = touch.clientX - startTouch.x;
         const duration = Date.now() - startTouch.time;
-        // Open drawer if dragged right > 70px or quick flick right > 25px
         if (diffX > 70 || (duration < 300 && diffX > 25)) {
           setIsSidebarOpen(true);
         }
@@ -197,7 +194,6 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
     };
   }, [isMobile, isSidebarOpen, setIsSidebarOpen]);
 
-  // On mobile, automatically close drawer on Escape key press
   useEffect(() => {
     if (!isMobile || !isSidebarOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -212,13 +208,60 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
   const showText = isMobile ? true : isSidebarOpen;
   const closeMobileSidebar = isMobile ? () => setIsSidebarOpen(false) : undefined;
 
-  const getProfileHref = (section: string, activePath: string): string => {
-    return isProfileActive ? activePath : `/dash?next=${encodeURIComponent(section)}`;
+  /**
+   * Resolves target href and click handler for Profile-scoped sections (`Analytics`..`Settings`).
+   * Auto-selects the sole Profile when only 1 exists; otherwise directs to Collections (`/dash?next=section`).
+   */
+  const resolveProfileSectionHref = (section: string): string => {
+    if (isProfileActive && activeId) {
+      return `/dash/${activeId}/${section}`;
+    }
+    if (profiles.length === 1) {
+      return `/dash/${profiles[0].id}/${section}`;
+    }
+    return `/dash?next=${encodeURIComponent(section)}`;
   };
+
+  const handleProfileSectionClick = (section: string) => (e: React.MouseEvent<HTMLElement>) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) {
+      return;
+    }
+    e.preventDefault();
+    if (isProfileActive && activeId) {
+      navigate(`/dash/${activeId}/${section}`);
+    } else if (profiles.length === 1) {
+      setSelectedProfile(profiles[0]);
+      navigate(`/dash/${profiles[0].id}/${section}`);
+    } else {
+      navigate(`/dash?next=${encodeURIComponent(section)}`);
+    }
+    closeMobileSidebar?.();
+  };
+
+  const profileMenuItems = [
+    { id: "stats", label: t("nav.stats"), icon: <BarChart3 size={18} /> },
+    { id: "logs", label: t("nav.logs"), icon: <Clock size={18} /> },
+    { id: "rules", label: t("nav.rules"), icon: <Edit3 size={18} /> },
+    { id: "filter", label: t("nav.filter"), icon: <ListFilter size={18} /> },
+    { id: "settings", label: t("nav.settings"), icon: <Settings size={18} /> },
+  ];
+
+  const renderGroupHeader = (label: string, isFirst = false) =>
+    showText ? (
+      <li
+        className={clsx(
+          "px-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500 select-none",
+          isFirst ? "pt-1" : "pt-4"
+        )}
+      >
+        {label}
+      </li>
+    ) : !isFirst ? (
+      <li className="my-2 border-t border-gray-100 dark:border-gray-800" />
+    ) : null;
 
   return (
     <>
-      {/* Mobile Drawer Backdrop */}
       {isMobile && (isSidebarOpen || dragOpenOffset !== null) && (
         <div
           className="fixed inset-0 bg-black/40 backdrop-blur-xs z-40 transition-opacity md:hidden!"
@@ -330,10 +373,37 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
           )}
         </div>
 
-        <div className="flex-1 py-4 px-2 overflow-y-auto overflow-x-hidden">
+        <div className="flex-1 py-3 px-2 overflow-y-auto overflow-x-hidden">
           <Menu className="bg-transparent p-0">
-            {navItems.map((item) => {
-              const targetHref = getProfileHref(item.id, item.path);
+            {/* Group 1: Access Points */}
+            {renderGroupHeader(t("nav.groupAccessPoints", "Access Points"), true)}
+            <MenuItem
+              href="/access-points/manage"
+              icon={<MonitorSmartphone size={18} />}
+              text={showText ? t("nav.manage", "Manage") : ""}
+              active={location.pathname.startsWith("/access-points/manage")}
+              onClick={createSpaLinkClickHandler("/access-points/manage", navigate, closeMobileSidebar)}
+            />
+            <MenuItem
+              href="/access-points/setup"
+              icon={<Download size={18} />}
+              text={showText ? t("nav.setup") : ""}
+              active={location.pathname.startsWith("/access-points/setup")}
+              onClick={createSpaLinkClickHandler("/access-points/setup", navigate, closeMobileSidebar)}
+            />
+
+            {/* Group 2: Profiles */}
+            {renderGroupHeader(t("nav.groupProfiles", "Profiles"))}
+            <MenuItem
+              href="/dash"
+              icon={<LayoutGrid size={18} />}
+              text={showText ? t("nav.collections", "Collections") : ""}
+              active={location.pathname === "/dash"}
+              onClick={createSpaLinkClickHandler("/dash", navigate, closeMobileSidebar)}
+            />
+            {profileMenuItems.map((item) => {
+              const targetHref = resolveProfileSectionHref(item.id);
+              const isSectionActive = isProfileActive && location.pathname.endsWith(`/${item.id}`);
               return (
                 <MenuItem
                   key={item.id}
@@ -341,47 +411,21 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
                   icon={item.icon as any}
                   text={showText ? item.label : ""}
                   className={clsx(
-                    !isProfileActive && "opacity-50 hover:opacity-80 transition-opacity cursor-pointer"
+                    !isProfileActive && profiles.length !== 1 && "opacity-60 hover:opacity-90 transition-opacity cursor-pointer"
                   )}
-                  title={!isProfileActive ? t("nav.noActiveProfileHint", "未选择配置，点击前往配置列表") : undefined}
-                  active={isProfileActive && location.pathname.endsWith(
-                    item.id === "stats" ? "/stats" : `/${item.id}`,
-                  )}
-                  onClick={createSpaLinkClickHandler(targetHref, navigate, closeMobileSidebar)}
+                  title={
+                    !isProfileActive && profiles.length !== 1
+                      ? t("nav.noActiveProfileHint", "未选择配置，点击前往配置列表")
+                      : undefined
+                  }
+                  active={isSectionActive}
+                  onClick={handleProfileSectionClick(item.id)}
                 />
               );
             })}
-            {(() => {
-              const filterHref = getProfileHref("filter", `/dash/${activeId}/filter`);
-              const settingsHref = getProfileHref("settings", `/dash/${activeId}/settings`);
-              return (
-                <>
-                  <MenuItem
-                    href={filterHref}
-                    icon={<ListFilter size={18} />}
-                    text={showText ? t("nav.filter") : ""}
-                    className={clsx(
-                      !isProfileActive && "opacity-50 hover:opacity-80 transition-opacity cursor-pointer"
-                    )}
-                    title={!isProfileActive ? t("nav.noActiveProfileHint", "未选择配置，点击前往配置列表") : undefined}
-                    active={isProfileActive && location.pathname.endsWith("/filter")}
-                    onClick={createSpaLinkClickHandler(filterHref, navigate, closeMobileSidebar)}
-                  />
-                  <MenuItem
-                    href={settingsHref}
-                    icon={<Settings size={18} />}
-                    text={showText ? t("nav.settings") : ""}
-                    className={clsx(
-                      !isProfileActive && "opacity-50 hover:opacity-80 transition-opacity cursor-pointer"
-                    )}
-                    title={!isProfileActive ? t("nav.noActiveProfileHint", "未选择配置，点击前往配置列表") : undefined}
-                    active={isProfileActive && location.pathname.endsWith("/settings")}
-                    onClick={createSpaLinkClickHandler(settingsHref, navigate, closeMobileSidebar)}
-                  />
-                </>
-              );
-            })()}
-            <li className="my-4 border-t border-gray-100 dark:border-gray-800" />
+
+            {/* Group 3: Preferences */}
+            {renderGroupHeader(t("nav.groupPreferences", "Preferences"))}
             <MenuItem
               href="/account"
               icon={<UserIcon size={18} />}

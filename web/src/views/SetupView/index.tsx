@@ -1,6 +1,8 @@
-import React, { useEffect, useState, useMemo } from "react";
-import { Intent } from "@blueprintjs/core";
+import React, { useEffect, useState, useMemo, useCallback } from "react";
+import { Intent, Callout, Button, Spinner } from "@blueprintjs/core";
 import { useTranslation } from "react-i18next";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { Settings2 } from "lucide-react";
 import { setSystemTimeZone } from "../../utils/date";
 
 import type { SetupViewProps, ClientInfo } from "./types";
@@ -11,74 +13,66 @@ import { VerifyConnectionCard } from "./components/VerifyConnectionCard";
 import { AccessPointCard } from "./components/AccessPointCard";
 import { DohUrlCard } from "./components/DohUrlCard";
 import { SetupTabs } from "./components/SetupTabs";
-import { AccessPointDrawer } from "./components/AccessPointDrawer";
 import type { AccessPoint } from "../../types/auth";
 import {
   getClientInfo,
   getTraceInfo,
   getSubstituteInfo,
-  getProfileAccessPoints,
-  getProfileDetails,
+  getAccessPoints,
   getDomainGeoLocation,
   resolveDomainDnsIps,
   isDummyOrPlaceholderDomain,
 } from "../../services";
 
-export const SetupView: React.FC<SetupViewProps> = ({ profileId, profileKey, profileName, toasterRef }) => {
+export const SetupView: React.FC<SetupViewProps> = ({ profiles, toasterRef }) => {
   const isMobile = useIsMobile();
   const { isServerfull } = useDeploymentMode();
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [accessPoints, setAccessPoints] = useState<AccessPoint[]>([]);
-  const [loadingAccessPoints, setLoadingAccessPoints] = useState(false);
-  const [isAccessPointDrawerOpen, setIsAccessPointDrawerOpen] = useState(false);
-  const [selectedApId, setSelectedApId] = useState<string | null>(null);
+  const [loadingAccessPoints, setLoadingAccessPoints] = useState(true);
+  const [selectedApId, setSelectedApId] = useState<string | null>(() => searchParams.get("ap"));
   const [apSwitchCount, setApSwitchCount] = useState(0);
 
   const handleSelectAp = (id: string) => {
     if (id === selectedApId) return;
     setSelectedApId(id);
     setApSwitchCount((count) => count + 1);
+    setSearchParams({ ap: id }, { replace: true });
   };
 
-  const fetchAccessPoints = async () => {
+  const fetchAccessPoints = useCallback(async () => {
     setLoadingAccessPoints(true);
     try {
-      const data = await getProfileAccessPoints(profileId);
+      const data = await getAccessPoints();
       setAccessPoints(data);
     } catch (e) {
-      console.error(e);
+      console.error("Failed to fetch access points:", e);
     } finally {
       setLoadingAccessPoints(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    fetchAccessPoints();
-  }, [profileId]);
-
-  const [currentProfileName, setCurrentProfileName] = useState<string>(profileName || "");
-
-  useEffect(() => {
-    if (profileName) {
-      setCurrentProfileName(profileName);
-    } else if (profileId) {
-      getProfileDetails(profileId)
-        .then((data: any) => {
-          if (data?.name) setCurrentProfileName(data.name);
-        })
-        .catch(() => {});
-    }
-  }, [profileId, profileName]);
+    void fetchAccessPoints();
+  }, [fetchAccessPoints]);
 
   const activeAp = useMemo(() => {
     if (accessPoints.length === 0) return null;
-    return accessPoints.find(ap => ap.id === selectedApId) || accessPoints[0];
+    return accessPoints.find((ap) => ap.id === selectedApId) || accessPoints[0];
   }, [accessPoints, selectedApId]);
 
-  const activeToken = activeAp ? activeAp.token : profileKey;
-  const activeName = activeAp ? activeAp.name : undefined;
-  const dohUrl = `${window.location.origin}/${activeToken}`;
+  const boundProfile = useMemo(() => {
+    if (!activeAp?.profile_id) return null;
+    return profiles.find((p) => p.id === activeAp.profile_id) || null;
+  }, [activeAp, profiles]);
+
+  const activeToken = activeAp?.token || "";
+  const activeName = activeAp?.name;
+  const dohUrl = activeToken ? `${window.location.origin}/${activeToken}` : "";
+
   const [clientInfo, setClientInfo] = useState<ClientInfo | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
   const [showIp, setShowIp] = useState(false);
@@ -96,7 +90,7 @@ export const SetupView: React.FC<SetupViewProps> = ({ profileId, profileKey, pro
     });
   };
 
-  const handleVerify = async () => {
+  const handleVerify = useCallback(async (targetProfileId?: string | null) => {
     setIsVerifying(true);
     setVerifyResult(null);
     try {
@@ -136,31 +130,29 @@ export const SetupView: React.FC<SetupViewProps> = ({ profileId, profileKey, pro
         setSystemTimeZone(clientData.timezone);
       }
 
-      // Determine active target domain for DNS IP resolution & Geo location
-      // Avoid RFC 2606 dummy placeholders (e.g. dns.example.com)
-      const isLocalHost = (
+      const isLocalHost =
         window.location.hostname === "localhost" ||
         window.location.hostname === "127.0.0.1" ||
         window.location.hostname === "::1" ||
         window.location.hostname.startsWith("192.168.") ||
         window.location.hostname.startsWith("10.") ||
-        /^172\.(1[6-9]|2\d|3[01])\./.test(window.location.hostname)
-      );
+        /^172\.(1[6-9]|2\d|3[01])\./.test(window.location.hostname);
 
       const hasValidDotDomain = Boolean(
         clientData.dotDomain && !isDummyOrPlaceholderDomain(clientData.dotDomain)
       );
 
-      const domainToResolve = (isLocalHost && hasValidDotDomain)
-        ? clientData.dotDomain!
-        : (hasValidDotDomain ? clientData.dotDomain! : (window.location.hostname || ""));
+      const domainToResolve =
+        isLocalHost && hasValidDotDomain
+          ? clientData.dotDomain!
+          : hasValidDotDomain
+            ? clientData.dotDomain!
+            : window.location.hostname || "";
 
-      // Fetch geographic location of the current domain from the frontend
       getDomainGeoLocation(domainToResolve)
         .then((loc) => setEdgeLocation(loc))
         .catch((e) => console.warn("Failed fetching domain geo location:", e));
 
-      // Resolve IPv4 and IPv6 addresses for SUBSTITUTE_DOMAIN (for Windows 11 setup)
       const targetSubstituteDomain = clientData.substituteDomain || "www.wto.org";
       getSubstituteInfo()
         .then((sub) => {
@@ -183,21 +175,22 @@ export const SetupView: React.FC<SetupViewProps> = ({ profileId, profileKey, pro
         .catch((e) => console.warn("Failed resolving substitute domain DNS IPs:", e));
 
       setVerifyResult({
-        success: !!clientData.connectedProfileId,
-        profileMatch: clientData.connectedProfileId === profileId,
+        success: Boolean(clientData.connectedProfileId),
+        profileMatch: Boolean(
+          targetProfileId && clientData.connectedProfileId === targetProfileId
+        ),
       });
     } catch (e) {
       console.error("Verification failed", e);
     } finally {
       setIsVerifying(false);
     }
-  };
+  }, [isServerfull]);
 
   useEffect(() => {
-    handleVerify();
-  }, [profileId]); // Ensure it only runs once unless profileId changes
+    void handleVerify(activeAp?.profile_id || null);
+  }, [activeAp?.id, activeAp?.profile_id, handleVerify]);
 
-  // DNS IPs resolved directly from SUBSTITUTE_DOMAIN (capped at max 2 IPv4 and 2 IPv6)
   const currentIps = useMemo(() => {
     const list: { ip: string; area: string | null }[] = [];
     const v4 = (domainIps.ipv4 || []).slice(0, 2);
@@ -227,7 +220,7 @@ export const SetupView: React.FC<SetupViewProps> = ({ profileId, profileKey, pro
       <VerifyConnectionCard
         isVerifying={isVerifying}
         verifyResult={verifyResult}
-        handleVerify={handleVerify}
+        handleVerify={() => void handleVerify(activeAp?.profile_id || null)}
         isMobile={isMobile}
         clientInfo={clientInfo}
         showIp={showIp}
@@ -238,43 +231,84 @@ export const SetupView: React.FC<SetupViewProps> = ({ profileId, profileKey, pro
         edgeLocation={edgeLocation}
       />
 
-      <AccessPointCard
-        accessPoints={accessPoints}
-        selectedApId={activeAp?.id || null}
-        onSelectAp={handleSelectAp}
-        accessPointName={activeName}
-        onManageAccessPoints={() => setIsAccessPointDrawerOpen(true)}
-        isMobile={isMobile}
-      />
+      {loadingAccessPoints ? (
+        <div className="flex justify-center p-8">
+          <Spinner size={28} />
+        </div>
+      ) : accessPoints.length === 0 ? (
+        <Callout
+          intent={Intent.WARNING}
+          title={t("setup.noAccessPoints", "No access points found")}
+          className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+        >
+          <span>
+            {t(
+              "setup.createAccessPointHint",
+              "Create an Access Point first and bind it to a Profile to obtain endpoint credentials."
+            )}
+          </span>
+          <Button
+            intent={Intent.PRIMARY}
+            icon={<Settings2 size={14} />}
+            text={t("setup.manageAccessPoints")}
+            onClick={() => navigate("/access-points/manage")}
+            className="shrink-0 mt-2 sm:mt-0"
+          />
+        </Callout>
+      ) : (
+        <>
+          <AccessPointCard
+            accessPoints={accessPoints}
+            selectedAp={activeAp}
+            onSelectAp={handleSelectAp}
+          />
 
-      <DohUrlCard 
-        dohUrl={dohUrl} 
-        copyToClipboard={copyToClipboard} 
-        isMobile={isMobile}
-        flashTrigger={apSwitchCount}
-      />
+          {activeAp && !activeAp.profile_id && (
+            <Callout
+              intent={Intent.WARNING}
+              title={t("setup.unboundProfileWarningTitle", "Access Point Unbound")}
+              className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+            >
+              <span>
+                {t(
+                  "setup.unboundProfileWarningDesc",
+                  "This Access Point is not currently bound to any Profile. DNS queries using it fall back to Fail-Open upstream without filtering or logging. Manage bindings in Access Points -> Manage."
+                )}
+              </span>
+              <Button
+                intent={Intent.WARNING}
+                variant="outlined"
+                icon={<Settings2 size={14} />}
+                text={t("setup.manageAccessPoints")}
+                onClick={() => navigate("/access-points/manage")}
+                className="shrink-0 mt-2 sm:mt-0"
+              />
+            </Callout>
+          )}
 
-      <SetupTabs
-        isMobile={isMobile}
-        copyToClipboard={copyToClipboard}
-        dohUrl={dohUrl}
-        profileKey={activeToken}
-        profileName={currentProfileName || undefined}
-        accessPointName={activeName}
-        currentIps={currentIps}
-        dotDomain={clientInfo?.dotDomain}
-      />
+          {activeToken && (
+            <>
+              <DohUrlCard
+                dohUrl={dohUrl}
+                copyToClipboard={copyToClipboard}
+                isMobile={isMobile}
+                flashTrigger={apSwitchCount}
+              />
 
-      <AccessPointDrawer
-        isOpen={isAccessPointDrawerOpen}
-        onClose={() => setIsAccessPointDrawerOpen(false)}
-        profileId={profileId}
-        isMobile={isMobile}
-        accessPoints={accessPoints}
-        loading={loadingAccessPoints}
-        onRefresh={fetchAccessPoints}
-        toasterRef={toasterRef as any}
-      />
+              <SetupTabs
+                isMobile={isMobile}
+                copyToClipboard={copyToClipboard}
+                dohUrl={dohUrl}
+                profileKey={activeToken}
+                profileName={boundProfile?.name}
+                accessPointName={activeName}
+                currentIps={currentIps}
+                dotDomain={clientInfo?.dotDomain}
+              />
+            </>
+          )}
+        </>
+      )}
     </div>
   );
 };

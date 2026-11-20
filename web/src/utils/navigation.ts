@@ -5,24 +5,23 @@ import type React from "react";
  * when navigating to `/dash` before selecting a profile.
  */
 export const ALLOWED_PROFILE_SECTIONS = new Set<string>([
-  "setup",
-  "rules",
   "stats",
   "logs",
+  "rules",
   "filter",
   "settings",
 ]);
 
 /**
  * Extracts and validates the target profile sub-route section from a URL search string.
- * Rejects unknown values to prevent open-redirect or invalid route navigation, defaulting to `"setup"`.
+ * Rejects unknown values to prevent open-redirect or invalid route navigation, defaulting to `"stats"`.
  *
  * @param search - Location query string (e.g., `location.search`).
  * @returns Validated profile section slug.
  */
 export function resolveTargetProfileSection(search: string): string {
   const next = new URLSearchParams(search).get("next");
-  return next && ALLOWED_PROFILE_SECTIONS.has(next) ? next : "setup";
+  return next && ALLOWED_PROFILE_SECTIONS.has(next) ? next : "stats";
 }
 
 /**

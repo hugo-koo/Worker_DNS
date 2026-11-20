@@ -71,5 +71,5 @@ dns-worker
 
 - [浏览架构选型与双引擎对比](/DNS-Worker/zh-cn/deployment/matrix/)
 - [深入了解 Cloudflare Workers 边缘模式](/DNS-Worker/zh-cn/deployment/cloudflare/)
-- [创建接入点与配置各平台客户端](/DNS-Worker/zh-cn/networking/endpoints/)
+- [管理接入点、绑定 Profile 与配置各平台客户端](/DNS-Worker/zh-cn/networking/endpoints/)
 - [独立服务器 TLS 证书申请与配置](/DNS-Worker/zh-cn/advanced/tls-certs/)

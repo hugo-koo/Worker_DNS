@@ -8,6 +8,7 @@ import { getCurrentUser, validateCsrf } from '../lib/middleware';
 import { isUsableJwtSecret } from '../lib/jwt';
 import { handleAuthRequest } from '../api/auth';
 import { handleProfilesRequest } from '../api/profiles';
+import { handleAccessPointsRequest } from '../api/accessPoints';
 import { handleAccountRequest } from '../api/account';
 import { handleSystemRequest } from '../api/system';
 import { resolveDbConfigStatus, RouterRuntimeContext } from './runtimeConfig';
@@ -137,6 +138,10 @@ export async function handleApiRouter(
 
   if (url.pathname.startsWith('/api/profiles')) {
     return { currentUser, response: await handleProfilesRequest(request, env, currentUser, ctx) };
+  }
+
+  if (url.pathname === '/api/access_points' || url.pathname.startsWith('/api/access_points/')) {
+    return { currentUser, response: await handleAccessPointsRequest(request, env, currentUser!, ctx) };
   }
 
   if (url.pathname.startsWith('/api/account') || url.pathname.startsWith('/api/admin')) {

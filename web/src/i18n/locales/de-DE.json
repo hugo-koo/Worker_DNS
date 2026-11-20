@@ -54,7 +54,9 @@
     "modeServerfull": "Serverfull-Modus",
     "modeCloudflare": "Cloudflare Worker-Modus",
     "unknown": "Unbekannt",
-    "system": "System"
+    "system": "System",
+    "created": "Erstellt",
+    "renameProfile": "Profil umbenennen"
   },
   "nav": {
     "setup": "Installation",
@@ -63,7 +65,12 @@
     "logs": "Protokolle",
     "filter": "Filterlisten",
     "settings": "Einstellungen",
-    "noActiveProfileHint": "Kein Profil ausgewählt, klicken um zur Übersicht zu gelangen"
+    "noActiveProfileHint": "Kein Profil ausgewählt, klicken um zur Übersicht zu gelangen",
+    "groupAccessPoints": "Zugangspunkte",
+    "groupProfiles": "Profile",
+    "groupPreferences": "Einstellungen",
+    "manage": "Verwalten",
+    "collections": "Sammlungen"
   },
   "theme": {
     "light": "Hell",
@@ -314,7 +321,16 @@
     "detecting": "Wird ermittelt...",
     "dotUnavailableCfTitle": "DoT / DoQ im Cloudflare Worker-Modus nicht verfügbar",
     "dotUnavailableCfDesc": "Wird derzeit im Cloudflare Worker-Modus ausgeführt. Aufgrund von Laufzeitbeschränkungen wird das Abhören von TCP/UDP-Port 853 nicht unterstützt. Verwenden Sie für DoT oder DoQ den Serverfull-Modus; nutzen Sie ansonsten DoH.",
-    "privateNetwork": "Privates Netzwerk"
+    "privateNetwork": "Privates Netzwerk",
+    "manageAccessPointsSubtitle": "Verwalten Sie Ihre Endpunkt-Tokens und wechseln Sie die verknüpften DNS-Profile.",
+    "boundProfile": "Verknüpftes Profil",
+    "unboundProfile": "Nicht verknüpft",
+    "bindProfileUpdated": "Verknüpftes Profil aktualisiert",
+    "noAccessPoints": "Keine Zugangspunkte gefunden",
+    "noMatchingAccessPoints": "Keine passenden Zugangspunkte",
+    "createAccessPointHint": "Erstellen Sie zuerst einen Zugangspunkt und verknüpfen Sie ihn mit einem Profil.",
+    "unboundProfileWarningTitle": "Zugangspunkt nicht verknüpft",
+    "unboundProfileWarningDesc": "Dieser Zugangspunkt ist derzeit keinem Profil zugewiesen. DNS-Anfragen mit diesem Zugangspunkt fallen ohne Profilfilterung oder Protokollierung auf FAIL_OPEN zurück. Verwalten Sie Bindungen unter Access Points -> Manage."
   },
   "rules": {
     "title": "Benutzerdefinierte Regeln",

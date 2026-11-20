@@ -71,5 +71,5 @@ Access the local management dashboard at `http://localhost:10080` and UDP DNS at
 
 - [Explore Architecture & Deployment Matrix](/DNS-Worker/deployment/matrix/)
 - [Cloudflare Workers Edge Deployment Guide](/DNS-Worker/deployment/cloudflare/)
-- [Create Profiles & Configure Client Devices](/DNS-Worker/networking/endpoints/)
+- [Manage Access Points, Bind Profiles & Configure Client Devices](/DNS-Worker/networking/endpoints/)
 - [Configure Let's Encrypt TLS Certificates](/DNS-Worker/advanced/tls-certs/)

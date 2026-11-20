@@ -54,7 +54,9 @@
     "modeServerfull": "Режим Serverfull",
     "modeCloudflare": "Режим Cloudflare Worker",
     "unknown": "Неизвестно",
-    "system": "Система"
+    "system": "Система",
+    "created": "Создано",
+    "renameProfile": "Переименовать профиль"
   },
   "nav": {
     "setup": "Установка",
@@ -63,7 +65,12 @@
     "logs": "Логи",
     "filter": "Фильтры",
     "settings": "Настройки",
-    "noActiveProfileHint": "Профиль не выбран, нажмите для перехода к профилям"
+    "noActiveProfileHint": "Профиль не выбран, нажмите для перехода к профилям",
+    "groupAccessPoints": "Точки доступа",
+    "groupProfiles": "Профили",
+    "groupPreferences": "Параметры",
+    "manage": "Управление",
+    "collections": "Коллекции"
   },
   "theme": {
     "light": "Светлая",
@@ -314,7 +321,16 @@
     "detecting": "Определение...",
     "dotUnavailableCfTitle": "DoT / DoQ недоступен в режиме Cloudflare Worker",
     "dotUnavailableCfDesc": "В настоящее время работает в режиме Cloudflare Worker. Из-за сетевых ограничений прослушивание портов TCP/UDP 853 не поддерживается. Для использования DoT или DoQ выполните развертывание в режиме Serverfull; в текущем режиме используйте DoH.",
-    "privateNetwork": "Частная сеть"
+    "privateNetwork": "Частная сеть",
+    "manageAccessPointsSubtitle": "Управляйте токенами точек доступа и переключайте привязанные профили DNS.",
+    "boundProfile": "Привязанный профиль",
+    "unboundProfile": "Не привязан",
+    "bindProfileUpdated": "Привязанный профиль обновлён",
+    "noAccessPoints": "Точки доступа не найдены",
+    "noMatchingAccessPoints": "Подходящие точки доступа не найдены",
+    "createAccessPointHint": "Сначала создайте точку доступа и привяжите её к профилю для получения параметров подключения.",
+    "unboundProfileWarningTitle": "Точка доступа не привязана",
+    "unboundProfileWarningDesc": "Эта точка доступа сейчас не привязана ни к одному профилю. DNS-запросы через неё переходят в режим Fail-Open без фильтрации и логирования. Управляйте привязками в разделе Access Points -> Manage."
   },
   "rules": {
     "title": "Пользовательские правила",

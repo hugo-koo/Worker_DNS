@@ -54,7 +54,9 @@
     "modeServerfull": "Serverfull モード",
     "modeCloudflare": "Cloudflare Worker モード",
     "unknown": "不明",
-    "system": "システム"
+    "system": "システム",
+    "created": "作成日時",
+    "renameProfile": "プロファイル名を変更"
   },
   "nav": {
     "setup": "インストール",
@@ -63,7 +65,12 @@
     "logs": "ログ",
     "filter": "フィルター",
     "settings": "設定",
-    "noActiveProfileHint": "プロファイルが未選択です。クリックしてプロファイル一覧へ"
+    "noActiveProfileHint": "プロファイルが未選択です。クリックしてプロファイル一覧へ",
+    "groupAccessPoints": "アクセスポイント",
+    "groupProfiles": "プロファイル",
+    "groupPreferences": "設定",
+    "manage": "管理",
+    "collections": "コレクション"
   },
   "theme": {
     "light": "ライト",
@@ -314,7 +321,16 @@
     "detecting": "検出中...",
     "dotUnavailableCfTitle": "Cloudflare Worker モードでは DoT / DoQ を利用できません",
     "dotUnavailableCfDesc": "現在 Cloudflare Worker (Serverless) モードで実行されています。エッジ環境の制約により、ネイティブの TCP/UDP 853 ポートのリッスンはサポートされていません。DoT / DoQ を使用するには Serverfull モードでデプロイしてください。現在は DoH をご利用ください。",
-    "privateNetwork": "プライベートネットワーク"
+    "privateNetwork": "プライベートネットワーク",
+    "manageAccessPointsSubtitle": "アクセスポイントのトークンを管理し、紐付ける DNS プロファイルを切り替えます。",
+    "boundProfile": "紐付けプロファイル",
+    "unboundProfile": "未紐付け",
+    "bindProfileUpdated": "紐付けプロファイルを更新しました",
+    "noAccessPoints": "アクセスポイントがありません",
+    "noMatchingAccessPoints": "一致するアクセスポイントがありません",
+    "createAccessPointHint": "接続情報を取得するには、まずアクセスポイントを作成してプロファイルに紐付けてください。",
+    "unboundProfileWarningTitle": "アクセスポイント未紐付け",
+    "unboundProfileWarningDesc": "このアクセスポイントは現在どのプロファイルにも紐付けられていません。このトークンでの DNS クエリはフィルタリングやログ記録なしで FAIL_OPEN アップストリームにフォールバックします。Access Points -> Manage で紐付けを管理できます。"
   },
   "rules": {
     "title": "カスタムルール",

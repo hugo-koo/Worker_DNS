@@ -1,50 +1,55 @@
-import { useEffect } from "react";
-import { Button, Intent, H3 } from "@blueprintjs/core";
+import { useEffect, useState } from "react";
+import { Button, Intent, H3, OverlayToaster } from "@blueprintjs/core";
 import { Plus, Download } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useIsMobile } from "../../hooks/useIsMobile";
 import { preloadHeavyViews, preloadMainViews } from "../../routes/ProfileRoutes";
-import type { Profile, UserInfo } from "../../types/auth";
+import type { Profile } from "../../types/auth";
 import { useImportProfile } from "./hooks";
-import { Navbar } from "./components/Navbar";
 import { CreateProfileCard } from "./components/CreateProfileCard";
+import { RenameProfileDialog } from "./components/RenameProfileDialog";
 import { ProfileList } from "./components/ProfileList";
 
 interface DashboardHomeProps {
   profiles: Profile[];
+  selectedProfileId?: string | null;
   targetSection?: string;
   onSelect: (p: Profile) => void;
   onCreate: () => void;
+  onRename: (id: string, name: string) => Promise<void>;
   showCreate: boolean;
   setShowCreate: (show: boolean) => void;
   newName: string;
   setNewName: (name: string) => void;
   error: string;
   onDelete: (e: React.MouseEvent, id: string) => void;
-  handleLogout: () => void;
-  navigate: (path: string) => void;
   onRefresh?: () => void;
-  currentUser?: UserInfo | null;
+  toasterRef?: React.RefObject<OverlayToaster | null>;
 }
 
 export const DashboardHomeView = ({
   profiles,
-  targetSection = "setup",
+  selectedProfileId,
+  targetSection = "stats",
   onSelect,
   onCreate,
+  onRename,
   showCreate,
   setShowCreate,
   newName,
   setNewName,
   error,
   onDelete,
-  handleLogout,
-  navigate,
   onRefresh,
-  currentUser,
+  toasterRef,
 }: DashboardHomeProps) => {
   const isMobile = useIsMobile();
   const { t } = useTranslation();
+
+  const [renameTarget, setRenameTarget] = useState<Profile | null>(null);
+  const [renameValue, setRenameValue] = useState("");
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [renameError, setRenameError] = useState("");
 
   const {
     fileInputRef,
@@ -59,8 +64,46 @@ export const DashboardHomeView = ({
     return () => clearTimeout(timer);
   }, []);
 
+  const openRenameDialog = (p: Profile) => {
+    setRenameTarget(p);
+    setRenameValue(p.name);
+    setRenameError("");
+  };
+
+  const closeRenameDialog = () => {
+    setRenameTarget(null);
+    setRenameValue("");
+    setRenameError("");
+  };
+
+  const handleConfirmRename = async () => {
+    if (!renameTarget) return;
+    const trimmed = renameValue.trim();
+    if (!trimmed || trimmed === renameTarget.name) {
+      closeRenameDialog();
+      return;
+    }
+
+    setIsRenaming(true);
+    setRenameError("");
+    try {
+      await onRename(renameTarget.id, trimmed);
+      closeRenameDialog();
+      toasterRef?.current?.show({
+        message: t("common.saveSuccess", "Saved successfully"),
+        intent: Intent.SUCCESS,
+        icon: "tick",
+      });
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : t("common.saveFailed", "Save failed");
+      setRenameError(msg);
+    } finally {
+      setIsRenaming(false);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col">
+    <div className="w-full max-w-2xl mx-auto p-2 md:px-6 pb-24">
       <input
         type="file"
         ref={fileInputRef}
@@ -68,61 +111,65 @@ export const DashboardHomeView = ({
         accept=".json"
         onChange={handleFileChange}
       />
-      
-      {/* 顶部导航栏 - 玻璃拟态 */}
-      <Navbar
-        isMobile={isMobile}
-        navigate={navigate}
-        handleLogout={handleLogout}
-        currentUser={currentUser}
-      />
 
-      <div className="flex-1 flex flex-col items-center justify-start md:justify-center p-4 pt-8 md:pt-4">
-        <div className="w-full max-w-md">
-          <div className="flex justify-between items-center mb-6">
-            <H3
-              className="dark:text-white font-bold"
-              style={{ marginBottom: 0 }}
-            >
-              {t("common.selectProfile")}
-            </H3>
-            <div className="flex gap-1">
-              <Button
-                variant="minimal"
-                icon={<Download size={16} />}
-                onClick={handleImportClick}
-                text={isMobile ? "" : t("common.import", "导入")}
-                loading={importing}
-              />
-              <Button
-                variant="minimal"
-                intent={Intent.PRIMARY}
-                icon={<Plus size={18} />}
-                onClick={() => setShowCreate(true)}
-                text={t("common.add")}
-                disabled={showCreate}
-              />
-            </div>
-          </div>
-
-          {showCreate && (
-            <CreateProfileCard
-              newName={newName}
-              setNewName={setNewName}
-              onCreate={onCreate}
-              setShowCreate={setShowCreate}
-              error={error}
-            />
-          )}
-
-          <ProfileList
-            profiles={profiles}
-            targetSection={targetSection}
-            onSelect={onSelect}
-            onDelete={onDelete}
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <H3 className="dark:text-white font-bold" style={{ marginBottom: 0 }}>
+            {t("nav.collections", "Collections")}
+          </H3>
+          <p className="bp6-text-muted text-sm m-0 mt-1">
+            {t("common.selectProfile")}
+          </p>
+        </div>
+        <div className="flex gap-1">
+          <Button
+            variant="minimal"
+            icon={<Download size={16} />}
+            onClick={handleImportClick}
+            text={isMobile ? "" : t("common.import", "导入")}
+            loading={importing}
+          />
+          <Button
+            variant="minimal"
+            intent={Intent.PRIMARY}
+            icon={<Plus size={18} />}
+            onClick={() => setShowCreate(true)}
+            text={t("common.add")}
+            disabled={showCreate}
           />
         </div>
       </div>
+
+      {showCreate && (
+        <CreateProfileCard
+          newName={newName}
+          setNewName={setNewName}
+          onCreate={onCreate}
+          setShowCreate={setShowCreate}
+          error={error}
+        />
+      )}
+
+      <ProfileList
+        profiles={profiles}
+        selectedProfileId={selectedProfileId}
+        targetSection={targetSection}
+        onSelect={onSelect}
+        onRename={openRenameDialog}
+        onDelete={onDelete}
+      />
+
+      <RenameProfileDialog
+        isOpen={Boolean(renameTarget)}
+        onClose={closeRenameDialog}
+        renameValue={renameValue}
+        setRenameValue={setRenameValue}
+        onSubmit={() => {
+          void handleConfirmRename();
+        }}
+        isRenaming={isRenaming}
+        error={renameError}
+      />
     </div>
   );
 };

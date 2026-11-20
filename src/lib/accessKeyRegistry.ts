@@ -285,9 +285,14 @@ export async function syncSingleKeyFromDbToDo(
   try {
     const match = await db.prepare(`
       SELECT * FROM (
-        SELECT p.id as profile_id, p.owner_id, ap.id as access_point_id, ap.name as access_point_name, 1 as priority
+        SELECT
+          COALESCE(p.id, 'default') as profile_id,
+          COALESCE(p.owner_id, ap.owner_id) as owner_id,
+          ap.id as access_point_id,
+          ap.name as access_point_name,
+          1 as priority
         FROM access_points ap
-        JOIN profiles p ON ap.profile_id = p.id
+        LEFT JOIN profiles p ON ap.profile_id = p.id
         WHERE ap.token = ?
         UNION ALL
         SELECT p.id as profile_id, p.owner_id, NULL as access_point_id, NULL as access_point_name, 2 as priority
@@ -352,9 +357,7 @@ export async function collectOwnerAccessKeys(db: D1Database, ownerId: string): P
   try {
     const [profileRows, apRows] = await Promise.all([
       db.prepare("SELECT id, profile_key FROM profiles WHERE owner_id = ?").bind(ownerId).all<{ id: string; profile_key: string | null }>(),
-      db.prepare(
-        "SELECT ap.token FROM access_points ap JOIN profiles p ON ap.profile_id = p.id WHERE p.owner_id = ?"
-      ).bind(ownerId).all<{ token: string }>()
+      db.prepare("SELECT token FROM access_points WHERE owner_id = ?").bind(ownerId).all<{ token: string }>()
     ]);
     const keys = new Set<string>();
     for (const row of profileRows.results) {
@@ -388,8 +391,8 @@ export async function syncAllAccessKeysSnapshotToDo(env: Partial<Env>): Promise<
       owner_id: string;
     }>(),
     env.DB.prepare(
-      "SELECT ap.token, ap.id as ap_id, ap.name as ap_name, ap.profile_id, p.owner_id " +
-      "FROM access_points ap JOIN profiles p ON ap.profile_id = p.id"
+      "SELECT ap.token, ap.id as ap_id, ap.name as ap_name, COALESCE(ap.profile_id, 'default') as profile_id, COALESCE(p.owner_id, ap.owner_id) as owner_id " +
+      "FROM access_points ap LEFT JOIN profiles p ON ap.profile_id = p.id"
     ).all<{
       token: string;
       ap_id: string;

@@ -16,11 +16,13 @@ export function usePageMeta() {
     );
 
     if (path === "/dash") {
-      moduleName = t("common.selectProfile");
+      moduleName = t("nav.collections", t("common.selectProfile"));
     } else if (path === "/account") {
       moduleName = t("common.account");
     } else if (path === "/system") {
       moduleName = t("common.system");
+    } else if (path === "/access-points/manage") {
+      moduleName = t("setup.manageAccessPoints", "Manage Access Points");
     } else if (path.endsWith("/setup")) {
       moduleName = t("nav.setup");
       description = t("meta.setupDesc", "Configure your devices to use DNS Worker.");

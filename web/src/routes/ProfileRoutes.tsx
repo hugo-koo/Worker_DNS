@@ -1,12 +1,9 @@
 import { Suspense } from "react";
-import { Routes, Route, useParams } from "react-router-dom";
+import { Routes, Route, Navigate, useParams } from "react-router-dom";
 import { Spinner } from "@blueprintjs/core";
 import { lazyWithPreload } from "../utils/lazyWithPreload";
 import { NotFoundView } from "../views/NotFoundView";
 
-const SetupView = lazyWithPreload(() =>
-  import("../views/SetupView").then((m) => ({ default: m.SetupView })),
-);
 const FilteringView = lazyWithPreload(() =>
   import("../views/FilteringView").then((m) => ({ default: m.FilteringView })),
 );
@@ -24,7 +21,7 @@ const LogsView = lazyWithPreload(() =>
 );
 
 export const preloadMainViews = () => {
-  SetupView.preload();
+  AnalyticsView.preload();
   LogsView.preload();
 };
 
@@ -64,17 +61,8 @@ export const ProfileRoutes = ({
       }
     >
       <Routes>
-        <Route
-          path="setup"
-          element={
-            <SetupView
-              profileId={id}
-              profileKey={selectedProfile?.profile_key || id}
-              profileName={selectedProfile?.name}
-              toasterRef={toasterRef}
-            />
-          }
-        />
+        <Route index element={<Navigate to="stats" replace />} />
+        <Route path="setup" element={<Navigate to="/access-points/setup" replace />} />
         <Route
           path="filter"
           element={<FilteringView profileId={id} toasterRef={toasterRef} />}

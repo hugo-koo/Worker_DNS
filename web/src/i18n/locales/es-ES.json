@@ -54,7 +54,9 @@
     "modeServerfull": "Modo Serverfull",
     "modeCloudflare": "Modo Cloudflare Worker",
     "unknown": "Desconocido",
-    "system": "Sistema"
+    "system": "Sistema",
+    "created": "Creado",
+    "renameProfile": "Renombrar perfil"
   },
   "nav": {
     "setup": "Instalación",
@@ -63,7 +65,12 @@
     "logs": "Registros",
     "filter": "Listas de filtro",
     "settings": "Ajustes",
-    "noActiveProfileHint": "Ningún perfil seleccionado, haz clic para ver los perfiles"
+    "noActiveProfileHint": "Ningún perfil seleccionado, haz clic para ver los perfiles",
+    "groupAccessPoints": "Puntos de acceso",
+    "groupProfiles": "Perfiles",
+    "groupPreferences": "Preferencias",
+    "manage": "Gestionar",
+    "collections": "Colecciones"
   },
   "theme": {
     "light": "Claro",
@@ -314,7 +321,16 @@
     "detecting": "Detectando...",
     "dotUnavailableCfTitle": "DoT / DoQ no disponible en modo Cloudflare Worker",
     "dotUnavailableCfDesc": "Actualmente en modo Cloudflare Worker (Serverless). Debido a las restricciones de red, no se admite la escucha en el puerto TCP/UDP 853. Para usar DoT o DoQ, despliegue en modo Serverfull; en este modo, use DoH.",
-    "privateNetwork": "Red privada"
+    "privateNetwork": "Red privada",
+    "manageAccessPointsSubtitle": "Administra tus tokens de acceso y cambia el perfil DNS vinculado.",
+    "boundProfile": "Perfil vinculado",
+    "unboundProfile": "Sin vincular",
+    "bindProfileUpdated": "Perfil vinculado actualizado",
+    "noAccessPoints": "No se encontraron puntos de acceso",
+    "noMatchingAccessPoints": "No hay puntos de acceso coincidentes",
+    "createAccessPointHint": "Crea primero un punto de acceso y vincúlalo a un perfil para obtener credenciales.",
+    "unboundProfileWarningTitle": "Punto de acceso sin vincular",
+    "unboundProfileWarningDesc": "Este punto de acceso no está vinculado a ningún perfil. Las consultas DNS que lo usen pasarán al modo Fail-Open sin filtrado ni registro. Gestiona los vínculos en Access Points -> Manage."
   },
   "rules": {
     "title": "Reglas personalizadas",

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, Suspense } from "react";
+import type React from "react";
 import { Spinner, OverlayToaster } from "@blueprintjs/core";
 import { useTranslation } from "react-i18next";
 import { Helmet } from "react-helmet-async";
@@ -29,22 +30,26 @@ const SystemView = lazyWithPreload(() =>
   import("./views/SystemView").then((m) => ({ default: m.SystemView })),
 );
 
+const AccessPointsManageView = lazyWithPreload(() =>
+  import("./views/AccessPointsManageView").then((m) => ({ default: m.AccessPointsManageView })),
+);
+
+const SetupView = lazyWithPreload(() =>
+  import("./views/SetupView").then((m) => ({ default: m.SetupView })),
+);
+
 function App() {
-  const [isSidebarOpen, setIsSidebarOpen] = useState(() => (typeof window !== "undefined" ? window.innerWidth >= 768 : true));
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth >= 768 : true
+  );
   const navigate = useNavigate();
   const location = useLocation();
   const toasterRef = useRef<OverlayToaster | null>(null);
   const { i18n } = useTranslation();
 
-  // Abstracted hooks for theme, page metadata/SEO, and authentication & profile state
   const { theme, setTheme } = useTheme();
   const pageMeta = usePageMeta();
-  const {
-    isLoggedIn,
-    currentUser,
-    checkAuth,
-    handleLogout,
-  } = useAuth(toasterRef);
+  const { isLoggedIn, currentUser, checkAuth, handleLogout } = useAuth(toasterRef);
 
   const {
     profiles,
@@ -59,6 +64,7 @@ function App() {
     setPrefilledRule,
     fetchProfiles,
     handleCreateProfile,
+    handleRenameProfile,
     handleDeleteProfile,
     handleQuickAction,
   } = useProfiles(isLoggedIn);
@@ -80,7 +86,6 @@ function App() {
     );
   }
 
-  // Check for configuration errors (missing DB / JWT_SECRET) or DB quota block
   const isDbMissing = (window as any).DNS_WORKER_CONFIG?.isDbMissing;
   const isDbQuotaExceeded = (window as any).DNS_WORKER_CONFIG?.isDbQuotaExceeded;
   const isJwtSecretMissing = (window as any).DNS_WORKER_CONFIG?.isJwtSecretMissing;
@@ -118,6 +123,25 @@ function App() {
     );
   }
 
+  const wrapMainLayout = (content: React.ReactNode): React.ReactNode => (
+    <MainLayout
+      isSidebarOpen={isSidebarOpen}
+      setIsSidebarOpen={setIsSidebarOpen}
+      theme={theme}
+      setTheme={setTheme}
+      selectedProfile={selectedProfile}
+      profiles={profiles}
+      setSelectedProfile={setSelectedProfile}
+      location={location}
+      navigate={navigate}
+      handleLogout={handleLogout}
+      currentUser={currentUser}
+      isSaving={isSaving}
+    >
+      {content}
+    </MainLayout>
+  );
+
   return (
     <Suspense
       fallback={
@@ -135,104 +159,70 @@ function App() {
       <OverlayToaster position="bottom" ref={toasterRef} />
       <IdleSessionLock currentUser={currentUser} handleLogout={handleLogout} onUnlock={fetchProfiles}>
         <Routes>
-          <Route path="/" element={<Navigate to="/dash" replace />} />
+          <Route path="/" element={<Navigate to="/access-points/setup" replace />} />
+          <Route path="/access-points" element={<Navigate to="/access-points/manage" replace />} />
+          <Route
+            path="/access-points/manage"
+            element={wrapMainLayout(
+              <AccessPointsManageView
+                profiles={profiles}
+                selectedProfile={selectedProfile}
+                toasterRef={toasterRef}
+              />
+            )}
+          />
+          <Route
+            path="/access-points/setup"
+            element={wrapMainLayout(<SetupView profiles={profiles} toasterRef={toasterRef} />)}
+          />
           <Route
             path="/dash"
             element={(() => {
               const targetSection = resolveTargetProfileSection(location.search);
-              return (
+              return wrapMainLayout(
                 <DashboardHomeView
                   profiles={profiles}
+                  selectedProfileId={selectedProfile?.id}
                   targetSection={targetSection}
                   onSelect={(p: Profile) => {
                     setSelectedProfile(p);
                     navigate(`/dash/${p.id}/${targetSection}`);
                   }}
                   onCreate={handleCreateProfile}
+                  onRename={handleRenameProfile}
                   showCreate={showCreateDialog}
                   setShowCreate={setShowCreateDialog}
                   newName={newProfileName}
                   setNewName={setNewProfileName}
                   error={createError}
                   onDelete={handleDeleteProfile}
-                  handleLogout={handleLogout}
-                  navigate={navigate}
                   onRefresh={fetchProfiles}
-                  currentUser={currentUser}
+                  toasterRef={toasterRef}
                 />
               );
             })()}
           />
           <Route
             path="/dash/:profileId/*"
-            element={
-              <MainLayout
-                isSidebarOpen={isSidebarOpen}
-                setIsSidebarOpen={setIsSidebarOpen}
-                theme={theme}
-                setTheme={setTheme}
+            element={wrapMainLayout(
+              <ProfileRoutes
                 selectedProfile={selectedProfile}
-                profiles={profiles}
-                setSelectedProfile={setSelectedProfile}
-                location={location}
-                navigate={navigate}
-                handleLogout={handleLogout}
+                prefilledRule={prefilledRule}
+                setPrefilledRule={setPrefilledRule}
+                handleQuickAction={handleQuickAction}
+                toasterRef={toasterRef}
                 currentUser={currentUser}
-                isSaving={isSaving}
-              >
-                <ProfileRoutes
-                  selectedProfile={selectedProfile}
-                  prefilledRule={prefilledRule}
-                  setPrefilledRule={setPrefilledRule}
-                  handleQuickAction={handleQuickAction}
-                  toasterRef={toasterRef}
-                  currentUser={currentUser}
-                  onSavingChange={setIsSaving}
-                />
-              </MainLayout>
-            }
+                onSavingChange={setIsSaving}
+              />
+            )}
           />
           <Route
             path="/account"
-            element={
-              <MainLayout
-                isSidebarOpen={isSidebarOpen}
-                setIsSidebarOpen={setIsSidebarOpen}
-                theme={theme}
-                setTheme={setTheme}
-                selectedProfile={selectedProfile}
-                profiles={profiles}
-                setSelectedProfile={setSelectedProfile}
-                location={location}
-                navigate={navigate}
-                handleLogout={handleLogout}
-                currentUser={currentUser}
-                isSaving={isSaving}
-              >
-                <AccountView onSavingChange={setIsSaving} toasterRef={toasterRef} />
-              </MainLayout>
-            }
+            element={wrapMainLayout(<AccountView onSavingChange={setIsSaving} toasterRef={toasterRef} />)}
           />
           <Route
             path="/system"
-            element={
-              <MainLayout
-                isSidebarOpen={isSidebarOpen}
-                setIsSidebarOpen={setIsSidebarOpen}
-                theme={theme}
-                setTheme={setTheme}
-                selectedProfile={selectedProfile}
-                profiles={profiles}
-                setSelectedProfile={setSelectedProfile}
-                location={location}
-                navigate={navigate}
-                handleLogout={handleLogout}
-                currentUser={currentUser}
-                isSaving={isSaving}
-              >
-                <SystemView onSavingChange={setIsSaving} toasterRef={toasterRef} />
-              </MainLayout>
-            }
+            element={wrapMainLayout(<SystemView onSavingChange={setIsSaving} toasterRef={toasterRef} />)}
           />
           <Route path="*" element={<NotFoundView />} />
         </Routes>

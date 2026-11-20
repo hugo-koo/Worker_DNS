@@ -91,9 +91,10 @@ DNS-Worker/
 │   ├── index.ts                       # Cloudflare Workers 入口与计划任务调度
 │   ├── router/                        # HTTP 请求路由层（API 鉴权门控、静态资源/HTML 配置注入、运行时就绪检查）
 │   ├── api/                           # RESTful 与 WebSocket API 路由分层
+│   │   ├── accessPoints.ts            # 用户级接入点管理与动态 Profile 绑定切换接口
 │   │   ├── auth/                      # 认证子模块（Turnstile 验证、锁定屏、密码找回）
 │   │   ├── account/                   # 账户管理（个人资料、安全凭据、WebAuthn、E2EE 设置）
-│   │   ├── profiles/                  # 接入点配置、规则集配置、审计日志及实时 WebSocket 流
+│   │   ├── profiles/                  # 策略配置级接口（规则集配置、审计日志、实时 WebSocket 流及兼容接入点查询）
 │   │   ├── doh.ts                     # RFC 8484 DoH 标准请求处理器
 │   │   └── system.ts                  # 系统设置与状态端点
 │   ├── pipeline/                      # DNS 解析管线核心（缓存、过滤判定、ECS 注入、上游调度）
@@ -119,15 +120,16 @@ DNS-Worker/
 │       ├── types/                     # 前端 TypeScript 类型与接口定义
 │       ├── utils/                     # 前端通用工具函数
 │       ├── views/                     # 页面级业务视图目录
+│       │   ├── AccessPointsManageView/ # 用户级接入点管理（创建、重命名、密钥轮换、Profile 绑定切换）
 │       │   ├── AccountView/           # 账户安全、会话管理、WebAuthn/TOTP 与 E2EE 设置
 │       │   ├── AnalyticsView/         # 多维统计图表、Top 域名与流量趋势分析
-│       │   ├── DashboardHomeView/     # 概览仪表盘首页
+│       │   ├── DashboardHomeView/     # Profiles Collections 集合页（创建、导入、重命名与切换）
 │       │   ├── DeploymentGuideView/   # 接入与部署指引页面
 │       │   ├── FilteringView/         # 外部订阅过滤列表管理与同步状态
 │       │   ├── LogsView/              # 实时/本地查询日志流、检索、导出与解密展示
 │       │   ├── RulesView/             # 自定义过滤与 DNS 重写规则管理
-│       │   ├── SettingsView/          # Profile 接入点配置、隐私与危险操作设置
-│       │   ├── SetupView/             # 设备接入向导（DoH / DoT / DoQ / 路由器配置）
+│       │   ├── SettingsView/          # Profile 策略参数、隐私与危险操作设置
+│       │   ├── SetupView/             # 默认首页与客户端接入向导（DoH / DoT / Apple 描述文件 / 路由器配置）
 │       │   ├── SystemView/            # 系统级配置与管理员控制台
 │       │   └── NotFoundView/          # 404 兜底页面
 │       ├── service-worker/            # PWA Service Worker（静态资源与受控缓存策略）

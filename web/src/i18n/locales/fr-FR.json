@@ -54,7 +54,9 @@
     "modeServerfull": "Mode Serverfull",
     "modeCloudflare": "Mode Cloudflare Worker",
     "unknown": "Inconnu",
-    "system": "Système"
+    "system": "Système",
+    "created": "Créé le",
+    "renameProfile": "Renommer le profil"
   },
   "nav": {
     "setup": "Installation",
@@ -63,7 +65,12 @@
     "logs": "Journaux",
     "filter": "Listes de filtrage",
     "settings": "Paramètres",
-    "noActiveProfileHint": "Aucun profil sélectionné, cliquez pour afficher les profils"
+    "noActiveProfileHint": "Aucun profil sélectionné, cliquez pour afficher les profils",
+    "groupAccessPoints": "Points d'accès",
+    "groupProfiles": "Profils",
+    "groupPreferences": "Préférences",
+    "manage": "Gérer",
+    "collections": "Collections"
   },
   "theme": {
     "light": "Clair",
@@ -314,7 +321,16 @@
     "detecting": "Détection en cours...",
     "dotUnavailableCfTitle": "DoT / DoQ indisponible en mode Cloudflare Worker",
     "dotUnavailableCfDesc": "Actuellement exécuté en mode Cloudflare Worker (Serverless). En raison des limites du runtime edge, l'écoute sur les ports TCP/UDP 853 n'est pas prise en charge. Pour utiliser DoT ou DoQ, déployez en mode Serverfull ; utilisez DoH pour le moment.",
-    "privateNetwork": "Réseau privé"
+    "privateNetwork": "Réseau privé",
+    "manageAccessPointsSubtitle": "Gérez vos jetons de point d'accès et changez le profil DNS associé.",
+    "boundProfile": "Profil associé",
+    "unboundProfile": "Non associé",
+    "bindProfileUpdated": "Profil associé mis à jour",
+    "noAccessPoints": "Aucun point d'accès trouvé",
+    "noMatchingAccessPoints": "Aucun point d'accès correspondant",
+    "createAccessPointHint": "Créez d'abord un point d'accès et associez-le à un profil pour obtenir les identifiants.",
+    "unboundProfileWarningTitle": "Point d'accès non associé",
+    "unboundProfileWarningDesc": "Ce point d'accès n'est actuellement associé à aucun profil. Les requêtes DNS qui l'utilisent basculent vers FAIL_OPEN sans filtrage ni journalisation. Gérez les liaisons dans Access Points -> Manage."
   },
   "rules": {
     "title": "Règles personnalisées",

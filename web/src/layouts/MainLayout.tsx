@@ -1,11 +1,4 @@
 import { useEffect } from "react";
-import { useTranslation } from "react-i18next";
-import {
-  Edit3,
-  BarChart3,
-  Clock,
-  Download,
-} from "lucide-react";
 import { useParams } from "react-router-dom";
 import { useIsMobile } from "../hooks/useIsMobile";
 import type { Profile, UserInfo } from "../types/auth";
@@ -33,7 +26,7 @@ interface MainLayoutProps {
   /** Callback to set selected Profile. */
   setSelectedProfile: (p: Profile) => void;
   /** Router location object. */
-  location: any;
+  location: { pathname: string };
   /** Router navigation function. */
   navigate: (path: string) => void;
   /** Callback to handle logouts. */
@@ -45,12 +38,8 @@ interface MainLayoutProps {
 }
 
 /**
- * MainLayout component establishes the page template framing for all authenticated views.
- * Desktop and mobile both share the responsive sidebar layout, where mobile defaults to completely collapsed
- * and toggles via the top header bar.
- *
- * @param props - Component props containing shared state hooks and layout controllers.
- * @returns React elements representing the page layout template.
+ * MainLayout establishes the responsive sidebar + top header template framing
+ * for all authenticated routes.
  */
 export const MainLayout = ({
   children,
@@ -69,9 +58,8 @@ export const MainLayout = ({
 }: MainLayoutProps) => {
   const { profileId: urlProfileId } = useParams();
   const isMobile = useIsMobile();
-  const { t } = useTranslation();
   const activeId = urlProfileId || selectedProfile?.id;
-  const isProfileActive = !!activeId;
+  const isProfileActive = Boolean(activeId && selectedProfile);
 
   useEffect(() => {
     if (
@@ -84,54 +72,29 @@ export const MainLayout = ({
     }
   }, [urlProfileId, profiles, selectedProfile, setSelectedProfile]);
 
-  const navItems = [
-    {
-      id: "setup",
-      label: t("nav.setup"),
-      icon: <Download size={20} />,
-      path: `/dash/${activeId}/setup`,
-    },
-    {
-      id: "rules",
-      label: t("nav.rules"),
-      icon: <Edit3 size={20} />,
-      path: `/dash/${activeId}/rules`,
-    },
-    {
-      id: "stats",
-      label: t("nav.stats"),
-      icon: <BarChart3 size={20} />,
-      path: `/dash/${activeId}/stats`,
-    },
-    {
-      id: "logs",
-      label: t("nav.logs"),
-      icon: <Clock size={20} />,
-      path: `/dash/${activeId}/logs`,
-    },
-  ];
-
   return (
     <div className="flex h-screen w-full bg-white dark:bg-gray-950 overflow-hidden flex-col md:flex-row">
       <DesktopSidebar
         isSidebarOpen={isSidebarOpen}
         setIsSidebarOpen={setIsSidebarOpen}
         isMobile={isMobile}
-        isProfileActive={isProfileActive}
+        isProfileActive={Boolean(activeId)}
         activeId={activeId}
+        profiles={profiles}
+        setSelectedProfile={setSelectedProfile}
         location={location}
         navigate={navigate}
         handleLogout={handleLogout}
         currentUser={currentUser}
-        navItems={navItems}
       />
 
       <main className="flex-1 min-w-0 h-full relative bg-gray-50/20 dark:bg-gray-950/20 flex flex-col overflow-hidden">
-        {/* Top Header Navbar */}
         <HeaderNavbar
           theme={theme}
           setTheme={setTheme}
           selectedProfile={selectedProfile}
+          profiles={profiles}
+          setSelectedProfile={setSelectedProfile}
           isProfileActive={isProfileActive}
           location={location}
           navigate={navigate}
@@ -142,7 +105,6 @@ export const MainLayout = ({
           onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
         />
 
-        {/* Page Content */}
         <div className="flex-1 min-h-0 flex flex-col relative z-0 isolate" style={{ isolation: "isolate" }}>
           {location.pathname.endsWith("/logs") ? (
             <div className="flex-1 overflow-y-auto">{children}</div>

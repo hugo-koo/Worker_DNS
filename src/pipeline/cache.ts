@@ -110,6 +110,29 @@ export function syncDnsCacheSize(env?: Env): void {
 // Profile Key 到 Profile 元数据映射缓存 (L1 内存缓存，限制最多 500 个 Key)
 export const profileKeyMemoryMap = new SizeCappedMap<string, { data: any; ts: number }>(500);
 
+type ProfileKeyInvalidatePublisher = (profileKey: string) => void;
+let profileKeyInvalidatePublisher: ProfileKeyInvalidatePublisher | null = null;
+
+/**
+ * Registers an IPC publisher to broadcast profile key cache invalidations across cluster workers.
+ */
+export function registerProfileKeyInvalidatePublisher(
+  publisher: ProfileKeyInvalidatePublisher | null
+): void {
+  profileKeyInvalidatePublisher = publisher;
+}
+
+/**
+ * Evicts a profile key / access point token from local L1 memory and notifies peer cluster workers.
+ */
+export function invalidateProfileKeyCache(profileKey: string, propagate = true): void {
+  if (!profileKey) return;
+  profileKeyMemoryMap.delete(profileKey);
+  if (propagate) {
+    profileKeyInvalidatePublisher?.(profileKey);
+  }
+}
+
 // 默认 Profile 元数据内存缓存 (L1 内存缓存，5 分钟 TTL，防范 UDP DNS 高频穿透)
 export let defaultProfileMemoryCache: { data: any; ts: number } | null = null;
 export function setDefaultProfileMemoryCache(entry: { data: any; ts: number } | null): void {

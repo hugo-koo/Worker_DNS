@@ -54,7 +54,9 @@
     "modeServerfull": "Chế độ Serverfull",
     "modeCloudflare": "Chế độ Cloudflare Worker",
     "unknown": "Không xác định",
-    "system": "Hệ thống"
+    "system": "Hệ thống",
+    "created": "Ngày tạo",
+    "renameProfile": "Đổi tên hồ sơ"
   },
   "nav": {
     "setup": "Thiết lập",
@@ -63,7 +65,12 @@
     "logs": "Nhật ký",
     "filter": "Bộ lọc",
     "settings": "Cài đặt",
-    "noActiveProfileHint": "Chưa chọn hồ sơ, nhấn để xem danh sách hồ sơ"
+    "noActiveProfileHint": "Chưa chọn hồ sơ, nhấn để xem danh sách hồ sơ",
+    "groupAccessPoints": "Điểm truy cập",
+    "groupProfiles": "Hồ sơ",
+    "groupPreferences": "Tùy chọn",
+    "manage": "Quản lý",
+    "collections": "Bộ sưu tập"
   },
   "theme": {
     "light": "Sáng",
@@ -314,7 +321,16 @@
     "detecting": "Đang phát hiện...",
     "dotUnavailableCfTitle": "DoT / DoQ không khả dụng trong chế độ Cloudflare Worker",
     "dotUnavailableCfDesc": "Hiện đang chạy ở chế độ Cloudflare Worker (Serverless). Do các giới hạn mạng edge, việc lắng nghe trên cổng TCP/UDP 853 không được hỗ trợ. Để sử dụng DoT hoặc DoQ, hãy triển khai ở chế độ Serverfull; hiện tại vui lòng sử dụng DoH.",
-    "privateNetwork": "Mạng riêng tư"
+    "privateNetwork": "Mạng riêng tư",
+    "manageAccessPointsSubtitle": "Quản lý mã thông báo điểm truy cập và chuyển đổi hồ sơ DNS được liên kết.",
+    "boundProfile": "Hồ sơ liên kết",
+    "unboundProfile": "Chưa liên kết",
+    "bindProfileUpdated": "Đã cập nhật hồ sơ liên kết",
+    "noAccessPoints": "Không tìm thấy điểm truy cập",
+    "noMatchingAccessPoints": "Không có điểm truy cập phù hợp",
+    "createAccessPointHint": "Hãy tạo một Điểm truy cập trước và liên kết với Hồ sơ để lấy thông tin kết nối.",
+    "unboundProfileWarningTitle": "Điểm truy cập chưa liên kết",
+    "unboundProfileWarningDesc": "Điểm truy cập này hiện chưa được liên kết với hồ sơ nào. Các truy vấn DNS sử dụng nó sẽ chuyển sang chế độ Fail-Open mà không lọc hay ghi nhật ký. Quản lý liên kết tại Access Points -> Manage."
   },
   "rules": {
     "title": "Quy tắc tùy chỉnh",

@@ -1,6 +1,6 @@
 ---
-title: Endpoints & Client Setup
-description: Comprehensive guide to creating profiles (endpoints), connection protocols, and multi-platform client configuration in DNS Worker.
+title: Access Points, Profiles & Client Setup
+description: Guide to the decoupled Access Point and Profile architecture, endpoint token management, Fail-Open fallback, and multi-platform client setup.
 sidebar:
   order: 1
 ---
@@ -10,129 +10,133 @@ import endpointsImg from '../../../../screenshots/dns.obex-endpoints.webp';
 import profileSelectImg from '../../../../screenshots/dns.obex-profile_select.webp';
 import setupImg from '../../../../screenshots/dns.obex-setup.webp';
 
-In DNS Worker, an **Endpoint** (also referred to as a **Profile** or **接入点**) is an isolated policy domain. Each endpoint possesses its own unique routing key, custom filtering rules, upstream resolvers, and query logging retention settings.
+DNS Worker separates **device endpoint credentials** from **DNS filtering policies** using a two-layer decoupled model:
 
-By configuring distinct profiles, you can separate policies across different environments — for example, applying strict ad-blocking to mobile phones, enabling SafeSearch on children's devices, and maintaining an unfiltered profile for development servers.
-
----
-
-## 1. Creating and Managing Profiles in Web UI
-
-<Image src={endpointsImg} alt="Endpoints & Access Points Management" format="webp" />
-
-### Step 1: Access the Dashboard
-1. Open your DNS Worker Web Dashboard (e.g., `https://dns.example.com` or `http://<server-ip>:10080`).
-2. Log in with your administrator credentials.
-3. In the sidebar navigation, click **Profiles** (接入点管理).
-
-### Step 2: Create a New Profile
-1. Click the **+ New Profile** button in the top right corner.
-2. Enter a descriptive name for your profile (e.g., `Phone-Mobile`, `Living-Room-Router`, `Kids-Tablet`).
-3. Click **Create Profile**.
+- **Access Points (APs)**: User-owned device endpoints (e.g., `Phone-Mobile`, `Living-Room-Router`, `Laptop`). Each Access Point has its own independent routing token (`access_points.token`) and DoH/DoT URL. Because Access Points belong to your account rather than a single Profile, you can **switch or unbind** which Profile an Access Point uses at any time without reconfiguring the client device.
+- **Profiles**: Isolated DNS policy domains defining custom rules, external blocklists, upstream resolvers, block mode, ECS/ECH options, and log retention settings.
+- **Unbound Access Point → `FAIL_OPEN`**: If an Access Point is currently unbound (`profile_id = null`—for instance, newly created without a Profile or left behind after a Profile is deleted), DNS queries arriving on its token do **not** break client connectivity; instead, they fall back cleanly to `FAIL_OPEN_UPSTREAM` with no profile filtering rules applied and zero query logging.
 
 ```mermaid
 flowchart LR
-    subgraph ProfileCard["Profile Configuration Example"]
-        direction TB
-        P1["Profile Name: Phone-Mobile"]
-        P2["Profile Key: a8f9c2d14e..."]
-        P3["Status: Active"]
-        P4["Block Mode: Zero IP (0.0.0.0 / ::)"]
-        P5["Logging: Enabled (Retention: 30 Days)"]
-        P1 --- P2 --- P3 --- P4 --- P5
-    end
+    U["Authenticated User"] --> AP["Access Point (Device-1 · Token: adu4j)"]
+    U --> P1["Profile A (Strict Ad-Block)"]
+    U --> P2["Profile B (Dev / Clean Upstream)"]
+    AP -- "Bind / Switch via Manage" --> P1
+    AP -. "Switch at any time" .-> P2
+    AP -. "Unbound (profile_id = NULL)" .-> FO["FAIL_OPEN_UPSTREAM (Allow · Zero Log)"]
 ```
-
-### Step 3: Fast Profile Switching
-
-You can switch between multiple profiles instantly from any view in the Web Dashboard using the profile dropdown:
-
-<Image src={profileSelectImg} alt="Multi-Profile Switcher" format="webp" />
-
-### Step 4: Inspect the Generated Profile Key
-Each newly generated profile is assigned a unique cryptographic **Profile Key** (e.g., `a8f9c2d14e...`). This key acts as the routing identifier in DoH paths and DoT SNI handshakes.
 
 ---
 
-## 2. Protocol Matrix & Connection URLs
+## 1. Navigation Layout & Workflow
 
-DNS Worker supports all major modern encrypted DNS protocols alongside classic UDP DNS.
+After signing in, the Web Dashboard lands on **Access Points → Setup** (`/access-points/setup`) by default and organizes navigation into three sidebar groups:
+
+1. **Access Points**:
+   - **Manage** (`/access-points/manage`): Search, create, rename, rotate tokens, delete, and **bind / switch / unbind** the Profile used by each Access Point.
+   - **Setup** (`/access-points/setup`): Verify live connection status, select an Access Point via the dropdown switcher, inspect its DoH URL, and follow OS-specific setup guides.
+2. **Profiles**:
+   - **Collections** (`/dash`): Manage your DNS Profiles (create, import, rename, select, or delete).
+   - **Analytics**, **Logs**, **Rules**, **Filters**, **Settings**: Inspect analytics, logs, and policies for the active Profile. Clicking any of these when no Profile is active automatically selects the Profile if you only have one, or opens **Collections** so you can pick one. While inside `/dash*` pages, the top header displays the active Profile name with a quick switcher dropdown.
+3. **Preferences**:
+   - **Account**, **System** (administrators only), and **Log out**.
+
+---
+
+## 2. Managing Access Points & Binding Profiles
+
+<Image src={endpointsImg} alt="Access Points Management" format="webp" />
+
+### Step 1: Create or Manage Access Points (`/access-points/manage`)
+1. Open your DNS Worker Web Dashboard and log in.
+2. In the left sidebar under **Access Points**, select **Manage**.
+3. Click **+ Add Access Point**, enter a device name (e.g., `Phone-Mobile`, `Office-Laptop`), and optionally choose an initial **Bound Profile** (or leave it unbound).
+4. Each new Access Point is assigned a unique routing token (e.g., `adu4j`) and a DoH URL (`https://<domain>/<token>`).
+
+### Step 2: Switch or Unbind a Profile Dynamically
+- On any Access Point card in **Manage**, use the **Bound Profile** selector to switch the device to another Profile—or set it to **Unbound** (`FAIL_OPEN`).
+- Switching takes effect immediately across L1/L2 caches, Serverfull cluster workers, and Cloudflare Durable Objects without modifying the URL or `.mobileconfig` installed on your device.
+- Deleting a Profile does **not** delete your Access Points; any Access Point that was bound to the deleted Profile is preserved cleanly with `Unbound` status (`FAIL_OPEN`).
+
+### Step 3: Manage & Rename Profiles (`/dash`)
+Open **Profiles → Collections** (`/dash`) to create, import, rename, select, or delete Profiles:
+
+<Image src={profileSelectImg} alt="Profile Collections & Switcher" format="webp" />
+
+---
+
+## 3. Protocol Matrix & Endpoint Formats
+
+DNS Worker supports all major encrypted DNS transports alongside classic UDP DNS:
 
 | Protocol | Endpoint Format | Applicable Environments |
 | :--- | :--- | :--- |
-| **DoH (DNS over HTTPS)** | `https://<domain>/<profileKey>` | HTTP/2 & HTTP/3 compatible; Browsers, Windows 11, iOS/macOS profiles, curl |
-| **DoT (DNS over TLS)** | `tls://<profileKey>.<dotDomain>:853` | DoQ (RFC 9250) compatible; Linux `systemd-resolved`, Stubby, Android Private DNS |
-| **Android Private DNS** | `<profileKey>.<dotDomain>` | Android 9+ native Private DNS |
-| **Classic UDP (Do53)** | `udp://<server-ip>:53` | Legacy routers, IoT devices, local testing |
+| **DoH (DNS over HTTPS)** | `https://<domain>/<accessKey>` | HTTP/2 & HTTP/3 compatible; Browsers, Windows 11, iOS/macOS profiles, `curl` |
+| **DoT (DNS over TLS)** | `tls://<accessKey>.<dotDomain>:853` | DoQ (RFC 9250) compatible; Linux `systemd-resolved`, Stubby, Android Private DNS |
+| **Android Private DNS** | `<accessKey>.<dotDomain>` | Android 9+ native Private DNS |
+| **Classic UDP (Do53)** | `udp://<server-ip>:53` | Legacy routers, IoT devices, local testing (uses `defaultProfile` or `FAIL_OPEN`) |
 
 > [!NOTE]
-> In Serverfull mode, DoT profile routing utilizes **TLS Server Name Indication (SNI)**. When connecting via `<profileKey>.<dotDomain>`, the server parses the sub-hostname during the TLS ClientHello before decrypting traffic, routing queries directly to the target profile. It is also compatible with QUIC-based DoQ transport.
+> `<accessKey>` prefers your **Access Point token** (`access_points.token`) so queries can be attributed to individual devices in logs and analytics while dynamically following whichever Profile the Access Point is bound to. Profile-level keys (`profiles.profile_key` / `profiles.id`) remain supported for direct routing.
+>
+> In Serverfull mode, DoT routing extracts `<accessKey>` from **TLS Server Name Indication (SNI)** during the ClientHello before decrypting DNS payloads.
 
 ---
 
-## 3. Interactive Client Configuration Guide
+## 4. Client Setup Guide (`/access-points/setup`)
 
-The Web Dashboard includes an interactive client setup walkthrough tailored to each operating system:
+The **Access Points → Setup** view provides live connection diagnostics (`Verify Your Connection`), an Access Point dropdown switcher, the active **Access DoH URL**, an unbound `FAIL_OPEN` notice when the selected Access Point has no bound Profile, and step-by-step OS guides:
 
 <Image src={setupImg} alt="Interactive Client Setup Guide" format="webp" />
 
 ### Android 9+ (Native Private DNS)
-Android features built-in support for DNS over TLS (DoT) via the Private DNS setting:
-
-1. Open **Settings** on your Android device.
-2. Navigate to **Network & Internet** → **Private DNS** (or search for "Private DNS").
-3. Select **Private DNS provider hostname**.
-4. Enter your endpoint hostname:
+1. Open **Settings** → **Network & Internet** → **Private DNS**.
+2. Select **Private DNS provider hostname**.
+3. Enter your Access Point hostname:
    ```text
-   <profileKey>.<dotDomain>
+   <accessKey>.<dotDomain>
    ```
-   *Example:* `a8f9c2d14e.dns.example.com`
-5. Tap **Save**. Android will automatically validate the TLS handshake.
+   *Example:* `adu4j.dns.example.com`
+4. Tap **Save**.
 
 ---
 
 ### Apple iOS / iPadOS / macOS
 
-Apple operating systems natively support Encrypted DNS (DoH and DoT) through signed configuration profiles (`.mobileconfig`).
+Apple operating systems natively support Encrypted DNS (DoH and DoT) through configuration profiles (`.mobileconfig`).
 
 #### Method A: Web UI Mobileconfig Download
-1. In the DNS Worker Web Dashboard, navigate to the target profile.
-2. Click **Export Client Config** → **Apple Configuration Profile (.mobileconfig)**.
-3. Open the downloaded `.mobileconfig` file on your Apple device.
-4. Go to **Settings** → **Profile Downloaded** and click **Install**.
+1. Open **Access Points → Setup** and choose the target Access Point from the dropdown.
+2. Select the **Apple** tab (displays the selected **Access Point name** and DoH URL).
+3. Click **Download Profile** to download the `.mobileconfig` file tailored to that Access Point.
+4. Go to **Settings** → **Profile Downloaded** and tap **Install**.
 
 #### Method B: Manual App Integration
-You can also use apps such as **AdGuard**, **DNSCloak**, or **Shadowrocket**:
-- Select upstream type as **DNS-over-HTTPS**.
-- Enter your profile DoH URL: `https://<domain>/<profileKey>`.
+In **AdGuard**, **DNSCloak**, or **Shadowrocket**:
+- Select upstream type **DNS-over-HTTPS**.
+- Enter your Access Point DoH URL: `https://<domain>/<accessKey>`.
 
 ---
 
 ### Windows 11 (Native DoH)
 
-Windows 11 natively supports DNS over HTTPS in system network settings:
-
-1. Open **Settings** (`Win + I`) → **Network & Internet**.
-2. Select your active connection (**Wi-Fi** or **Ethernet**).
-3. Under **DNS server assignment**, click **Edit**.
-4. Switch from *Automatic (DHCP)* to **Manual**, and turn on **IPv4**.
-5. In **Preferred DNS**, enter your DNS Worker server IP (or a local loopback/proxy IP).
-6. Under **DNS over HTTPS**, select **On (automatic template)** or enter your DoH template:
+1. Open **Settings** (`Win + I`) → **Network & Internet** and select **Wi-Fi** or **Ethernet**.
+2. Under **DNS server assignment**, click **Edit**, switch to **Manual**, and enable **IPv4**.
+3. In **Preferred DNS**, enter your DNS Worker server IP (or local loopback/proxy IP).
+4. Turn on **DNS over HTTPS** (`On (manual template)`) and paste your Access Point DoH template:
    ```text
-   https://<domain>/<profileKey>
+   https://<domain>/<accessKey>
    ```
-7. Click **Save**.
+5. Click **Save**.
 
 ---
 
 ### Linux (`systemd-resolved`)
 
-For Linux systems using `systemd-resolved` (Ubuntu, Debian, Fedora, Arch):
-
 1. Edit `/etc/systemd/resolved.conf`:
    ```ini
    [Resolve]
-   DNS=<server-ip>#<profileKey>.<dotDomain>
+   DNS=<server-ip>#<accessKey>.<dotDomain>
    DNSOverTLS=yes
    Domains=~.
    ```
@@ -140,17 +144,14 @@ For Linux systems using `systemd-resolved` (Ubuntu, Debian, Fedora, Arch):
    ```bash
    sudo systemctl restart systemd-resolved
    ```
-3. Test resolution using `resolvectl status`.
+3. Verify encryption status with `resolvectl status`.
 
 ---
 
 ### Routers & Gateways (OpenWrt / AdGuard Home)
 
-If you run a local gateway or router, you can forward all LAN DNS requests to your DNS Worker profile:
-
-#### AdGuard Home Upstream:
-In AdGuard Home **Settings** → **DNS Settings** → **Upstream DNS servers**, add:
+In AdGuard Home **Settings** → **DNS Settings** → **Upstream DNS servers**, add your Access Point endpoints:
 ```text
-tls://<profileKey>.<dotDomain>
-https://<domain>/<profileKey>
+tls://<accessKey>.<dotDomain>
+https://<domain>/<accessKey>
 ```

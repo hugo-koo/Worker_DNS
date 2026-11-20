@@ -115,6 +115,11 @@ export const SetupTabs: React.FC<SetupTabsProps> = ({
             <p className="text-sm">{t("setup.appleDesc")}</p>
             <p className="text-[10px] opacity-50 text-center">{t("setup.appleWarning")}</p>
             <div className="p-6 bg-gray-50 dark:bg-gray-800 rounded-xl border border-dashed border-gray-300 dark:border-gray-700 flex flex-col items-center justify-center">
+              {accessPointName && (
+                <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-1 max-w-full truncate">
+                  {accessPointName}
+                </span>
+              )}
               <span
                 className="font-mono text-xs opacity-75 mb-3 max-w-full truncate select-text"
                 title={resolvedDohUrl}

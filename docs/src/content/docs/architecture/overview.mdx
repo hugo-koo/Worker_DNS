@@ -91,9 +91,10 @@ DNS-Worker/
 │   ├── index.ts                       # Cloudflare Workers entry and cron triggers
 │   ├── router/                        # HTTP routing layer (API auth/CSRF gating, static assets/HTML config injection, runtime readiness)
 │   ├── api/                           # RESTful & WebSocket API routing
+│   │   ├── accessPoints.ts            # User-owned Access Points CRUD & dynamic Profile binding
 │   │   ├── auth/                      # Authentication submodules (Turnstile, lock screen, recovery)
 │   │   ├── account/                   # User profile, security credentials, WebAuthn, E2EE
-│   │   ├── profiles/                  # Access points, rulesets, audit logs, and WS streaming
+│   │   ├── profiles/                  # Profile-scoped access points, rulesets, audit logs, and WS streaming
 │   │   ├── doh.ts                     # RFC 8484 DoH standard request handler
 │   │   └── system.ts                  # System settings and telemetry endpoints
 │   ├── pipeline/                      # DNS pipeline core (cache, filter, ECS, upstream router)
@@ -119,15 +120,16 @@ DNS-Worker/
 │       ├── types/                     # Frontend TypeScript interfaces and type definitions
 │       ├── utils/                     # Shared frontend utility helpers
 │       ├── views/                     # Page-level feature views
+│       │   ├── AccessPointsManageView/ # User-owned Access Points creation, token rotation & Profile binding
 │       │   ├── AccountView/           # Account security, active sessions, WebAuthn/TOTP, and E2EE settings
 │       │   ├── AnalyticsView/         # Traffic analytics charts, top domains, and time-series trends
-│       │   ├── DashboardHomeView/     # Overview dashboard home view
+│       │   ├── DashboardHomeView/     # Profiles Collections view (create, import, rename, select)
 │       │   ├── DeploymentGuideView/   # Deployment & onboarding guide view
 │       │   ├── FilteringView/         # External blocklist subscriptions and sync status
 │       │   ├── LogsView/              # Real-time / local query logs, search, export, and E2EE decryption
 │       │   ├── RulesView/             # Custom filtering and DNS rewrite rule management
 │       │   ├── SettingsView/          # Profile settings, privacy options, and danger-zone actions
-│       │   ├── SetupView/             # Client setup wizard (DoH / DoT / DoQ / router guides)
+│       │   ├── SetupView/             # Default landing route & Access Point client setup guides (DoH / DoT / Apple / routers)
 │       │   ├── SystemView/            # System-level configuration and admin console
 │       │   └── NotFoundView/          # 404 fallback view
 │       ├── service-worker/            # PWA Service Worker (static assets and controlled caching)

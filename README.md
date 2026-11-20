@@ -65,7 +65,7 @@ docker run -d \
 
 ### Key Highlights
 - ⚡ **Full-Stack Protocols**: UDP 53, DoT 853 (DoQ RFC 9250 compatible), DoH (HTTP/2 & HTTP/3 compatible), ECH & DDR (RFC 9460).
-- 🔀 **Multi-Profile & Multi-Access Points**: Create separate protection profiles for different users or scenarios, and derive unlimited sub-access points with independent routing tokens for granular per-device identification, filtering, and analytics.
+- 🔀 **Decoupled Profiles & Access Points**: Create independent DNS policy **Profiles** (rules, blocklists, upstreams) and user-owned **Access Points** (device tokens), bind or switch any Access Point across Profiles on the fly without touching device settings (unbound Access Points safely fall back to `FAIL_OPEN`).
 - 🗄️ **Multi-Database Engines**: Easily switch between `D1`, `Turso`, and `File` backends via the `DATABASE_SERVICE` environment variable, eliminating D1 free-tier quota limits.
 - 🛡️ **Post-Quantum Zero-Knowledge E2EE**: NIST FIPS 203 **P256-MLKEM768** hybrid lattice cryptography + Hardware Passkeys (WebAuthn).
 - 🚀 **Local-First Architecture**: Embedded in-browser WebAssembly SQLite + OPFS for instant 0ms log analytics and charting.

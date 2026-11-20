@@ -8,7 +8,7 @@ import { resolveClientGeoCountry } from "../../utils/geoip";
 import { pipeline } from "../../pipeline";
 import { PROFILE_NAME_REGEX } from "../../utils/validator";
 import { getDefaultUpstreamUrl } from "../../constants/presets";
-import { profileKeyMemoryMap } from "../../pipeline/cache";
+import { invalidateProfileKeyCache } from "../../pipeline/cache";
 import { cacheUtils } from "../../utils/cache";
 import {
   collectProfileAccessKeys,
@@ -146,22 +146,27 @@ export async function handleProfilesCoreRequest(
       const keysToRevoke = await collectProfileAccessKeys(env.DB, profileId);
       await profileModel.delete(profileId);
       if (keysToRevoke.length > 0) {
-        ctx.waitUntil(deleteAccessKeysInDo(env, keysToRevoke));
-      }
-      if (profile.profile_key) {
-        profileKeyMemoryMap.delete(profile.profile_key);
         const cache = typeof caches !== 'undefined' ? (caches as any).default : null;
-        if (cache) {
-          ctx.waitUntil(cacheUtils.delete(cache, `doh_key_v1:${profile.profile_key}`));
+        for (const revokedKey of keysToRevoke) {
+          invalidateProfileKeyCache(revokedKey);
+          if (cache) {
+            ctx.waitUntil(cacheUtils.delete(cache, `doh_key_v1:${revokedKey}`));
+          }
         }
+        ctx.waitUntil(deleteAccessKeysInDo(env, keysToRevoke));
       }
       ctx.waitUntil(pipeline.clearCache(profileId, true, env));
       return new Response(null, { status: 204 });
     }
 
     if (request.method === 'PATCH') {
-      const { name } = await request.json() as { name: string };
+      const body = await request.json() as { name?: unknown };
+      const name = typeof body?.name === 'string' ? body.name.trim() : '';
       if (!name || !PROFILE_NAME_REGEX.test(name)) return new Response("Invalid Profile Name format", { status: 400 });
+      const duplicate = await profileModel.findByName(profile.owner_id, name);
+      if (duplicate && duplicate.id !== profileId) {
+        return new Response("The profile name already exists", { status: 400 });
+      }
       await profileModel.updateName(profileId, name);
       ctx.waitUntil(pipeline.clearCache(profileId, true, env));
       return new Response(JSON.stringify({ success: true }), { headers: { 'Content-Type': 'application/json' } });
@@ -181,7 +186,7 @@ export async function handleProfilesCoreRequest(
     const newKey = generateId(12);
     await profileModel.rotateKey(profileId, newKey);
     if (profile.profile_key) {
-      profileKeyMemoryMap.delete(profile.profile_key);
+      invalidateProfileKeyCache(profile.profile_key);
       const cache = typeof caches !== 'undefined' ? (caches as any).default : null;
       if (cache) {
         ctx.waitUntil(cacheUtils.delete(cache, `doh_key_v1:${profile.profile_key}`));
