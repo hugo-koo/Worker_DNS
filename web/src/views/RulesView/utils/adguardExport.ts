@@ -2,7 +2,8 @@ import type { Rule } from "../types";
 
 /**
  * Normalizes a rule pattern into an AdGuard Home domain matcher (`|domain^` or `||domain^`).
- * Strips accidental AdGuard prefixes/suffixes so stored patterns always serialize cleanly.
+ * Promotes `*.domain`, `||domain`, or `includeSubdomains` patterns to `||domain^` so wildcard
+ * rules serialize as valid AdGuard Home subdomain matchers instead of `|*.domain^`.
  *
  * @param pattern - Domain or wildcard pattern from Custom Rules
  * @param includeSubdomains - Whether apex + subdomains should be matched via `||`
@@ -12,19 +13,34 @@ export function formatRuleDomainMatcher(
   pattern: string,
   includeSubdomains?: boolean | number
 ): string {
-  const cleaned = pattern
+  let normalized = pattern
     .trim()
     .toLowerCase()
-    .replace(/^@@/, "")
-    .replace(/^\|\|?/, "")
+    .replace(/^@@/, "");
+
+  let matchesSubdomains = Boolean(includeSubdomains);
+
+  if (normalized.startsWith("||")) {
+    matchesSubdomains = true;
+    normalized = normalized.slice(2);
+  } else if (normalized.startsWith("|")) {
+    normalized = normalized.slice(1);
+  }
+
+  if (normalized.startsWith("*.")) {
+    matchesSubdomains = true;
+    normalized = normalized.slice(2);
+  }
+
+  const cleaned = normalized
     .replace(/\^$/, "")
-    .replace(/\.+$/, "");
+    .replace(/^\.+|\.+$/g, "");
 
   if (!cleaned) {
     return "";
   }
 
-  const prefix = includeSubdomains ? "||" : "|";
+  const prefix = matchesSubdomains ? "||" : "|";
   return `${prefix}${cleaned}^`;
 }
 
