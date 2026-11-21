@@ -92,18 +92,19 @@ export const UserManagementCard: React.FC<UserManagementCardProps> = ({
   };
 
   const handleCreateUser = async () => {
-    if (!USERNAME_REGEX.test(newUsername)) { alert(t("account.formatTipUsername")); return; }
+    const trimmedUsername = newUsername.trim();
+    if (!USERNAME_REGEX.test(trimmedUsername)) { alert(t("account.formatTipUsername")); return; }
     if (!PASSWORD_REGEX.test(newUserPassword)) { alert(t("account.formatTipPassword")); return; }
     setCreateLoading(true);
     try {
-      const breachCheck = await checkPasswordBreached(newUserPassword, newUsername);
+      const breachCheck = await checkPasswordBreached(newUserPassword, trimmedUsername);
       if (breachCheck.breached) {
         alert(t("auth.passwordLeaked", "This password has been exposed in a data breach or is too predictable. Please choose a different password."));
         setCreateLoading(false);
         return;
       }
-      const clientHash = await hashPasswordClient(newUserPassword, newUsername);
-      await createUser({ username: newUsername, password: clientHash, role: newUserRole });
+      const clientHash = await hashPasswordClient(newUserPassword, trimmedUsername);
+      await createUser({ username: trimmedUsername, password: clientHash, role: newUserRole });
       setIsDialogOpen(false);
       setNewUsername("");
       setNewUserPassword("");

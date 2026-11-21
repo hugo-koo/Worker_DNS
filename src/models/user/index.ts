@@ -50,6 +50,27 @@ export class UserModel {
   }
 
   /**
+   * Retrieves a user by either username or user ID.
+   */
+  async getByLoginIdentifier(identifier: string): Promise<UserRecord | null> {
+    return this.core.getByLoginIdentifier(identifier);
+  }
+
+  /**
+   * Checks whether a candidate username or user ID conflicts with existing users.
+   */
+  async isUsernameConflict(candidate: string, currentUserId?: string): Promise<boolean> {
+    return this.core.isUsernameConflict(candidate, currentUserId);
+  }
+
+  /**
+   * Generates a valid user ID that does not collide with any existing username or user ID.
+   */
+  async generateUniqueUserId(reservedUsername?: string): Promise<string> {
+    return this.core.generateUniqueUserId(reservedUsername);
+  }
+
+  /**
    * Lists all users in the database.
    */
   async listAll(): Promise<User[]> {

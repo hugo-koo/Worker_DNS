@@ -74,12 +74,13 @@ export async function handleAuthRegisterRequest(request: Request, env: Env): Pro
     }
   }
 
-  if (!USERNAME_REGEX.test(username)) return new Response("Invalid username", { status: 400 });
+  const trimmedUsername = typeof username === "string" ? username.trim() : "";
+  if (!USERNAME_REGEX.test(trimmedUsername)) return new Response("Invalid username", { status: 400 });
   if (!password || !PASSWORD_REGEX.test(password)) {
     return new Response("Password format error", { status: 400 });
   }
 
-  if (await userModel.getByUsername(username)) {
+  if (await userModel.isUsernameConflict(trimmedUsername)) {
     return new Response("username_exists", { status: 400 });
   }
 
@@ -107,7 +108,7 @@ export async function handleAuthRegisterRequest(request: Request, env: Env): Pro
   }
 
   const hashedPassword = await hashPassword(password, 2);
-  const userId = generateId(15);
+  const userId = await userModel.generateUniqueUserId(trimmedUsername);
   const cf = (request as any).cf;
   const timezone = cf?.timezone || request.headers.get("CF-Timezone") || null;
   const role = isDbEmpty ? 'admin' : 'user';
@@ -115,7 +116,7 @@ export async function handleAuthRegisterRequest(request: Request, env: Env): Pro
   let userCreated = false;
   try {
     const createStatus = await userModel.createAtomic(
-      { id: userId, username, passwordHash: hashedPassword, role, timezone, passwordVersion: 2 },
+      { id: userId, username: trimmedUsername, passwordHash: hashedPassword, role, timezone, passwordVersion: 2 },
       isDbEmpty ? 0 : maxUsers
     );
     if (createStatus === "admin_exists") {

@@ -23,11 +23,8 @@ export const DeploymentModeBadge: React.FC<DeploymentModeBadgeProps> = ({
   const { t } = useTranslation();
 
   const isSmall = size === "small";
-  const badgeStyle = isDemoMode
-    ? "bg-amber-50 text-amber-700 border border-amber-200 dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800"
-    : isServerfull
-      ? "bg-purple-50 text-purple-700 border border-purple-200 dark:bg-purple-950/40 dark:text-purple-300 dark:border-purple-800"
-      : "bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-800";
+  const badgeStyle =
+    "bg-white text-gray-700 border border-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700";
 
   const badgeTitle = isDemoMode
     ? "Demo Mode (Sample Data)"
@@ -53,11 +50,11 @@ export const DeploymentModeBadge: React.FC<DeploymentModeBadgeProps> = ({
     >
       {showIcon && (
         isDemoMode ? (
-          <FlaskConical size={isSmall ? 12 : 14} className="shrink-0 text-amber-600 dark:text-amber-400" />
+          <FlaskConical size={isSmall ? 12 : 14} className="shrink-0 opacity-75" />
         ) : isServerfull ? (
-          <Server size={isSmall ? 12 : 14} className="shrink-0 text-purple-600 dark:text-purple-400" />
+          <Server size={isSmall ? 12 : 14} className="shrink-0 opacity-75" />
         ) : (
-          <Cloud size={isSmall ? 12 : 14} className="shrink-0 text-blue-600 dark:text-blue-400" />
+          <Cloud size={isSmall ? 12 : 14} className="shrink-0 opacity-75" />
         )
       )}
       <span>{badgeLabel}</span>

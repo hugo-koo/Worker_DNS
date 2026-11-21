@@ -153,10 +153,11 @@ export const SetupTabs: React.FC<SetupTabsProps> = ({
                   a.href = url;
                   const label = formatProfileLabel(profileName, accessPointName);
                   const domain = extractDomain(displayOrigin);
-                  const fileTag = (label || domain)
-                    .replace(/[^a-zA-Z0-9_\-\u4e00-\u9fa5]/g, "_")
-                    .replace(/_+/g, "_")
-                    .replace(/^_|_$/g, "");
+                  const fileTag =
+                    (label || domain)
+                      .replace(/[^\p{L}\p{N}_-]/gu, "_")
+                      .replace(/_+/g, "_")
+                      .replace(/^_|_$/g, "") || "profile";
                   a.download = `dns_worker-${fileTag}-${profileKey}.mobileconfig`;
                   a.click();
                   URL.revokeObjectURL(url);

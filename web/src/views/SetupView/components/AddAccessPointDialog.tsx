@@ -65,7 +65,7 @@ export const AddAccessPointDialog: React.FC<AddAccessPointDialogProps> = ({
             <Tooltip
               content={t(
                 "setup.accessPointNameFormatTip",
-                "1-30 characters, letters, numbers, hyphens and underscores allowed"
+                "Access Point Name tip: 1-30 Unicode characters"
               )}
               isOpen={newApNameFocused}
               position={Position.TOP}

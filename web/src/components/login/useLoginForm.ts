@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { validateUsername, formatApiErrorMessage } from "../../utils/auth";
+import { validateLoginIdentifier, formatApiErrorMessage } from "../../utils/auth";
 import { prelogin } from "../../services";
 import { useTurnstile } from "../../hooks/useTurnstile";
 import { useLoginAuth } from "./hooks/useLoginAuth";
@@ -37,6 +37,7 @@ export const useLoginForm = ({
 
   // Form input states
   const [username, setUsername] = useState<string>("");
+  const [resolvedUsername, setResolvedUsername] = useState<string>("");
   const [password, setPassword] = useState<string>("");
   const [keepLoggedIn, setKeepLoggedIn] = useState<boolean>(false);
 
@@ -58,7 +59,7 @@ export const useLoginForm = ({
     setRotatedRecoveryKey,
     executeLogin
   } = useLoginAuth({
-    username,
+    username: resolvedUsername || username.trim(),
     password,
     passwordVersion,
     nonce,
@@ -115,8 +116,9 @@ export const useLoginForm = ({
    */
   const handleStep1Submit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
-    if (!validateUsername(username)) {
-      setError(t("auth.formatTipUsername"));
+    const identifier = username.trim();
+    if (!validateLoginIdentifier(identifier)) {
+      setError(t("auth.formatTipLoginIdentifier", "Please enter a valid username or user ID"));
       return;
     }
     if (isTurnstileEnabled && authConfig?.turnstile_site_key && !turnstileToken) {
@@ -128,7 +130,8 @@ export const useLoginForm = ({
     setError("");
 
     try {
-      const data = await prelogin({ username, turnstileToken });
+      const data = await prelogin({ username: identifier, turnstileToken });
+      setResolvedUsername(data.username || identifier);
       setRequiresPassword(data.requires_password);
       setRequiresTotp(data.requires_totp);
       setHasPasskey(!!data.has_passkey);
@@ -187,6 +190,7 @@ export const useLoginForm = ({
 
   const resetToStep1 = (): void => {
     setLoginStep(1);
+    setResolvedUsername("");
     setPassword("");
     setError("");
     setNonce(undefined);
@@ -221,6 +225,7 @@ export const useLoginForm = ({
   return {
     loginStep,
     username,
+    resolvedUsername,
     setUsername,
     password,
     setPassword,

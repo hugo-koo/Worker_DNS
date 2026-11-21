@@ -1,5 +1,4 @@
 import { Env, User, ExecutionContext } from "../../types";
-import { generateId } from "../../lib/auth";
 import { hashPassword } from "../../utils/crypto";
 import { UserModel } from "../../models/user";
 import { ProfileModel } from "../../models/profile";
@@ -52,11 +51,16 @@ export async function handleAdminRequest(
 
     if (request.method === 'POST') {
       const { username, password, role } = await request.json() as any;
-      if (!username || !USERNAME_REGEX.test(username)) {
+      const trimmedUsername = typeof username === "string" ? username.trim() : "";
+      if (!trimmedUsername || !USERNAME_REGEX.test(trimmedUsername)) {
         return new Response("Invalid username format", { status: 400 });
       }
       if (!password || !PASSWORD_REGEX.test(password)) {
         return new Response("Password format error", { status: 400 });
+      }
+
+      if (await userModel.isUsernameConflict(trimmedUsername)) {
+        return new Response("username_exists", { status: 400 });
       }
 
       const systemSettings = new SystemSettingsModel(env.DB);
@@ -71,9 +75,9 @@ export async function handleAdminRequest(
       }
 
       const hashedPassword = await hashPassword(password, 2);
-      const userId = generateId(15);
+      const userId = await userModel.generateUniqueUserId(trimmedUsername);
       try {
-        await userModel.create({ id: userId, username, passwordHash: hashedPassword, role: role || 'user', passwordVersion: 2 });
+        await userModel.create({ id: userId, username: trimmedUsername, passwordHash: hashedPassword, role: role || 'user', passwordVersion: 2 });
         return new Response(JSON.stringify({ id: userId }), { status: 201 });
       } catch (e: any) {
         console.error("[Admin API] Create user failed:", e?.message || e);

@@ -61,7 +61,7 @@ export const SettingsHeader: React.FC<SettingsHeaderProps> = ({
               intent={Intent.SUCCESS}
               minimal
               onClick={updateProfileName}
-              disabled={!PROFILE_NAME_REGEX.test(editName)}
+              disabled={!PROFILE_NAME_REGEX.test(editName.trim())}
             />
             <Button
               icon={<X size={16} />}

@@ -78,13 +78,13 @@ export const AddPasskeyDialog: React.FC<AddPasskeyDialogProps> = ({
             labelFor="passkey-name-input"
             helperText={t(
               "account.passkey.formatTip",
-              "1-30 characters, letters, numbers, hyphens and underscores allowed"
+              "Passkey name tip: 1-30 Unicode characters"
             )}
           >
             <Tooltip
               content={t(
                 "account.passkey.formatTip",
-                "1-30 characters, letters, numbers, hyphens and underscores allowed"
+                "Passkey name tip: 1-30 Unicode characters"
               )}
               isOpen={nameFocused}
               position={Position.TOP}

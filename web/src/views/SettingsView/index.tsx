@@ -103,15 +103,17 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ profileId, toasterRe
   }, []);
 
   const updateProfileName = async () => {
-    if (!editName || editName === profile?.name) {
+    const trimmedName = editName.trim();
+    if (!trimmedName || trimmedName === profile?.name) {
       setIsEditingName(false);
       return;
     }
     const previousName = profile?.name || "";
     setSaving(true);
     try {
-      await executeWithTimeout(renameProfile(profileId, editName), 10000);
-      setProfile((prev) => (prev ? { ...prev, name: editName } : null));
+      await executeWithTimeout(renameProfile(profileId, trimmedName), 10000);
+      setProfile((prev) => (prev ? { ...prev, name: trimmedName } : null));
+      setEditName(trimmedName);
       setIsEditingName(false);
       toasterRef?.current?.show({
         message: t("common.saveSuccess", "保存成功"),

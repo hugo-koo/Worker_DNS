@@ -68,9 +68,10 @@ export function useProfiles(isLoggedIn: boolean | null) {
   }, [location.pathname]);
 
   const handleCreateProfile = async () => {
-    if (!newProfileName) return;
+    const trimmed = newProfileName.trim();
+    if (!trimmed) return;
     try {
-      await createProfile(newProfileName);
+      await createProfile(trimmed);
       setNewProfileName("");
       setShowCreateDialog(false);
       await fetchProfiles();

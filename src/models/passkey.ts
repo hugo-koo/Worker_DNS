@@ -25,12 +25,36 @@ export class PasskeyModel {
   }
 
   /**
+   * Finds all passkey bindings sharing a WebAuthn credential ID across users (many-to-many).
+   * Handles base64url padding differences defensively.
+   */
+  async listByCredentialId(credentialId: string): Promise<Passkey[]> {
+    const cleanId = credentialId.replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+    const paddedClean = cleanId + "=".repeat((4 - (cleanId.length % 4)) % 4);
+    const { results } = await this.db.prepare(
+      "SELECT * FROM passkeys WHERE credential_id IN (?, ?, ?) ORDER BY created_at ASC"
+    ).bind(credentialId, cleanId, paddedClean).all<Passkey>();
+    return results || [];
+  }
+
+  /**
+   * Finds a passkey binding for a specific user by WebAuthn credential ID.
+   * Handles base64url padding differences defensively.
+   */
+  async getByCredentialIdAndUser(credentialId: string, userId: string): Promise<Passkey | null> {
+    const cleanId = credentialId.replace(/=/g, "").replace(/\+/g, "-").replace(/\//g, "_");
+    const paddedClean = cleanId + "=".repeat((4 - (cleanId.length % 4)) % 4);
+    return await this.db.prepare(
+      "SELECT * FROM passkeys WHERE user_id = ? AND credential_id IN (?, ?, ?)"
+    ).bind(userId, credentialId, cleanId, paddedClean).first<Passkey>();
+  }
+
+  /**
    * Finds a passkey by its WebAuthn credential ID across all users.
    */
   async getByCredentialId(credentialId: string): Promise<Passkey | null> {
-    return await this.db.prepare(
-      "SELECT * FROM passkeys WHERE credential_id = ?"
-    ).bind(credentialId).first<Passkey>();
+    const matches = await this.listByCredentialId(credentialId);
+    return matches[0] || null;
   }
 
   /**
@@ -113,12 +137,25 @@ export class PasskeyModel {
 
   /**
    * Updates the sign counter and last used timestamp after successful authentication.
+   * When `syncSiblings` is true and `signCount > 0`, monotonically raises `sign_count`
+   * on sibling bindings sharing the same credential ID and public key without altering their `last_used_at`.
    */
-  async updateUsage(id: string, signCount: number): Promise<boolean> {
+  async updateUsage(id: string, signCount: number, syncSiblings: boolean = true): Promise<boolean> {
     const now = Math.floor(Date.now() / 1000);
     const res = await this.db.prepare(
       "UPDATE passkeys SET sign_count = ?, last_used_at = ? WHERE id = ?"
     ).bind(signCount, now, id).run();
+
+    if (res.success && syncSiblings && signCount > 0) {
+      await this.db.prepare(
+        `UPDATE passkeys
+         SET sign_count = ?
+         WHERE credential_id = (SELECT credential_id FROM passkeys WHERE id = ?)
+           AND public_key = (SELECT public_key FROM passkeys WHERE id = ?)
+           AND id != ?
+           AND sign_count < ?`
+      ).bind(signCount, id, id, id, signCount).run();
+    }
     return res.success;
   }
 

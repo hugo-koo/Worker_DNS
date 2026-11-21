@@ -19,7 +19,7 @@ import { ChangePasswordCard } from "./components/ChangePasswordCard";
 import { SessionLockCard } from "./components/SessionLockCard";
 import { UserFilterListsCard } from "./components/UserFilterListsCard";
 import { E2eeCard } from "./components/E2eeCard";
-import { USERNAME_REGEX } from "../../utils/auth";
+import { USERNAME_REGEX, formatApiErrorMessage } from "../../utils/auth";
 import { useIsMobile } from "../../hooks/useIsMobile";
 import { PAGE_CONTAINER_STANDARD } from "../../constants/layout";
 
@@ -70,11 +70,12 @@ export const AccountView: React.FC<AccountViewProps> = ({ onSavingChange, toaste
   }, [i18n]);
 
   const handleUpdateUsername = async () => {
-    if (editUsername === me?.username) {
+    const trimmed = editUsername.trim();
+    if (trimmed === me?.username) {
       setIsEditingUsername(false);
       return;
     }
-    if (!USERNAME_REGEX.test(editUsername)) {
+    if (!USERNAME_REGEX.test(trimmed)) {
       toasterRef?.current?.show({
         message: t("account.formatTipUsername"),
         intent: Intent.WARNING,
@@ -83,12 +84,13 @@ export const AccountView: React.FC<AccountViewProps> = ({ onSavingChange, toaste
       return;
     }
     const previousUsername = me?.username || "";
-    const targetUsername = editUsername;
+    const targetUsername = trimmed;
     setUsernameLoading(true);
     onSavingChange?.(true);
     try {
       await executeWithTimeout(updateMe({ username: targetUsername }), 10000);
       setMe((prev) => (prev ? { ...prev, username: targetUsername } : null));
+      setEditUsername(targetUsername);
       setIsEditingUsername(false);
       toasterRef?.current?.show({
         message: t("common.saveSuccess", "保存成功"),
@@ -102,7 +104,7 @@ export const AccountView: React.FC<AccountViewProps> = ({ onSavingChange, toaste
       setMe((prev) => (prev ? { ...prev, username: previousUsername } : null));
       setIsEditingUsername(false);
       toasterRef?.current?.show({
-        message: e.message || t("common.saveFailed", "保存失败"),
+        message: e?.message ? formatApiErrorMessage(e, t) : t("common.saveFailed", "保存失败"),
         intent: Intent.DANGER,
         icon: "error",
       });

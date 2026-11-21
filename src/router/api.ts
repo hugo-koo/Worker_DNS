@@ -39,7 +39,8 @@ function isPublicApiRoute(pathname: string): boolean {
     PUBLIC_API_EXACT_ROUTES.has(pathname) ||
     pathname.startsWith('/api/icon/') ||
     pathname.startsWith('/api/presets/') ||
-    pathname.startsWith('/api/auth/forgot-password')
+    pathname.startsWith('/api/auth/forgot-password') ||
+    pathname.startsWith('/api/auth/find-username')
   );
 }
 

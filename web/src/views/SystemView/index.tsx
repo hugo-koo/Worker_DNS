@@ -16,6 +16,7 @@ import { UserManagementCard } from "./components/UserManagementCard";
 import { DistributeFilterCard } from "./components/DistributeFilterCard";
 import { SystemSettingsCard } from "./components/SystemSettingsCard";
 import { DatabaseMigrationCard } from "./components/DatabaseMigrationCard";
+import { DeploymentModeBadge } from "../../components/DeploymentMode";
 import { useIsMobile } from "../../hooks/useIsMobile";
 import { PAGE_CONTAINER_STANDARD } from "../../constants/layout";
 
@@ -110,15 +111,18 @@ export const SystemView: React.FC<SystemViewProps> = ({ onSavingChange, toasterR
             {t("system.subtitle", "管理用户、系统过滤列表、系统配置与数据库维护")}
           </p>
         </div>
-        <Tag
-          large
-          round
-          intent={Intent.DANGER}
-          icon={<ShieldCheck size={16} />}
-          className="shrink-0 whitespace-nowrap"
-        >
-          {t("account.roleAdmin", "管理员")}
-        </Tag>
+        <div className="flex items-center gap-2 flex-wrap shrink-0">
+          <DeploymentModeBadge />
+          <Tag
+            large
+            round
+            intent={Intent.DANGER}
+            icon={<ShieldCheck size={16} />}
+            className="shrink-0 whitespace-nowrap"
+          >
+            {t("account.roleAdmin", "管理员")}
+          </Tag>
+        </div>
       </div>
 
       {/* Non-blocking Security Warning for Weak JWT_SECRET (Admin only) */}

@@ -9,9 +9,13 @@ declare global {
 
 /**
  * Username validation regular expression.
- * Requirements: 5-15 alphanumeric characters only.
+ * Requirements: 5-32 characters, starting with lowercase letter or underscore, followed by lowercase letters, numbers, underscores, or hyphens.
  */
 export const USERNAME_REGEX = /^[a-z_][a-z0-9_-]{4,31}$/;
+/**
+ * User ID validation regular expression for login identifiers (allows 15-hex generated IDs and legacy IDs).
+ */
+export const USER_ID_REGEX = /^[a-zA-Z0-9][a-zA-Z0-9_-]{3,63}$/;
 /**
  * Password validation regular expression (NIST SP 800-63B-4 § 3.1.1.2).
  * Allows 12-128 characters including spaces and Unicode characters,
@@ -30,19 +34,19 @@ export const ACCESS_KEY_REGEX = /^[a-zA-Z0-9]{5,12}$/;
 export const TOTP_TOKEN_REGEX = /^\d{6}$/;
 /**
  * Profile name validation regular expression.
- * Requirements: 1-30 characters, allowing letters, numbers, spaces, underscores, hyphens, and parentheses.
+ * Requirements: 1-30 Unicode characters, disallowing control characters and whitespace-only names.
  */
-export const PROFILE_NAME_REGEX = /^[\p{L}\p{N}_ ()-]{1,30}$/u;
+export const PROFILE_NAME_REGEX = /^(?!\s+$)[^\p{Cc}]{1,30}$/u;
 /**
  * Access Point (AP) name validation regular expression.
- * Requirements: 1-30 characters, allowing letters, numbers, underscores, and hyphens.
+ * Requirements: 1-30 Unicode characters, disallowing control characters and whitespace-only names.
  */
-export const AP_NAME_REGEX = /^[a-zA-Z0-9_-]{1,30}$/;
+export const AP_NAME_REGEX = /^(?!\s+$)[^\p{Cc}]{1,30}$/u;
 /**
  * Passkey name validation regular expression.
- * Requirements: 1-30 characters, allowing letters, numbers, underscores, and hyphens (same as AP_NAME_REGEX).
+ * Requirements: 1-30 Unicode characters, disallowing control characters and whitespace-only names (same as AP_NAME_REGEX).
  */
-export const PASSKEY_NAME_REGEX = /^[a-zA-Z0-9_-]{1,30}$/;
+export const PASSKEY_NAME_REGEX = /^(?!\s+$)[^\p{Cc}]{1,30}$/u;
 /**
  * PIN validation regular expression.
  * Requirements: exactly 4 digits.
@@ -50,17 +54,17 @@ export const PASSKEY_NAME_REGEX = /^[a-zA-Z0-9_-]{1,30}$/;
 export const PIN_REGEX = /^\d{4}$/;
 
 /**
- * Validates whether a passkey name matches the required format (1-30 characters, alphanumeric, underscore, hyphen).
+ * Validates whether a passkey name matches the required format (1-30 Unicode characters).
  *
  * @param name - The passkey name to validate.
  * @returns True if valid.
  */
 export function validatePasskeyName(name: string): boolean {
-  return PASSKEY_NAME_REGEX.test(name);
+  return PASSKEY_NAME_REGEX.test(name.trim());
 }
 
 /**
- * Validates whether a username matches the required alphanumeric 5-15 character format.
+ * Validates whether a username matches the required 5-32 character Unix-style format.
  *
  * @param username - The username to validate.
  * @returns True if valid.
@@ -70,7 +74,18 @@ export function validateUsername(username: string): boolean {
 }
 
 /**
- * Validates whether a password matches the required alphanumeric 12+ character format.
+ * Validates whether a string is a valid login identifier (username or user ID).
+ *
+ * @param identifier - Username or user ID entered by the user.
+ * @returns True if valid username or user ID format.
+ */
+export function validateLoginIdentifier(identifier: string): boolean {
+  const trimmed = identifier.trim();
+  return USERNAME_REGEX.test(trimmed) || USER_ID_REGEX.test(trimmed);
+}
+
+/**
+ * Validates whether a password matches the required 12-128 character Unicode/ASCII format.
  *
  * @param password - The password to validate.
  * @returns True if valid.
@@ -292,8 +307,20 @@ export function formatApiErrorMessage(err: any, t: TranslationFunction): string 
   if (bodyText === "geolocation_missing") {
     return t("auth.geolocationRequired", "Geolocation retrieval failed, please re-enter.");
   }
-  if (bodyText === "username_exists") {
+  if (bodyText === "username_exists" || bodyText === "The username is already taken") {
     return t("auth.usernameExists", "Username already exists.");
+  }
+  if (bodyText === "Invalid login identifier") {
+    return t("auth.formatTipLoginIdentifier", "Please enter a valid username or user ID.");
+  }
+  if (bodyText === "No account found for this Passkey") {
+    return t("auth.findUsernameNotFound", "No account found for this Passkey.");
+  }
+  if (bodyText === "Challenge expired, please try again") {
+    return t("auth.findUsernameChallengeExpired", "Verification challenge expired, please try again.");
+  }
+  if (bodyText === "Passkey verification failed") {
+    return t("auth.passkeyAuthFailed", "Passkey verification failed or was cancelled");
   }
   if (bodyText === "max_users_reached") {
     return t("auth.maxUsersReached", "当前系统已达到用户数量上限，无法创建新用户。");

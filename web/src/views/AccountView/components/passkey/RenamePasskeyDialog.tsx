@@ -87,13 +87,13 @@ export const RenamePasskeyDialog: React.FC<RenamePasskeyDialogProps> = ({
             label={t("account.passkey.nameLabel", "Passkey Name")}
             helperText={t(
               "account.passkey.formatTip",
-              "1-30 characters, letters, numbers, hyphens and underscores allowed"
+              "Passkey name tip: 1-30 Unicode characters"
             )}
           >
             <Tooltip
               content={t(
                 "account.passkey.formatTip",
-                "1-30 characters, letters, numbers, hyphens and underscores allowed"
+                "Passkey name tip: 1-30 Unicode characters"
               )}
               isOpen={renameFocused}
               position={Position.TOP}

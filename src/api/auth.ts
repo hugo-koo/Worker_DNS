@@ -6,6 +6,7 @@ import { handleRefreshRequest } from "./auth/refresh";
 import { handleLogoutRequest } from "./auth/logout";
 import { handleSessionLockRequest } from "./auth/lock";
 import { handleForgotPasswordRequest } from "./auth/forgotPassword";
+import { handleFindUsernameRequest } from "./auth/findUsername";
 
 /**
  * Handle authentication related requests by delegating to specialized handlers.
@@ -43,6 +44,11 @@ export async function handleAuthRequest(request: Request, env: Env): Promise<Res
     // 忘记密码重置接口
     if (path.startsWith('/api/auth/forgot-password')) {
       return await handleForgotPasswordRequest(request, env);
+    }
+
+    // 通过 Passkey 找回用户名接口
+    if (path.startsWith('/api/auth/find-username')) {
+      return await handleFindUsernameRequest(request, env);
     }
 
     // 会话锁定与解锁接口

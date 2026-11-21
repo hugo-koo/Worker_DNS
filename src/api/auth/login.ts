@@ -24,6 +24,7 @@ import { verifyTurnstile } from "./utils";
 import { withTokenLock } from "../../lib/preauth";
 import { generateWebAuthnChallenge, verifyAuthenticationResponse } from "../../lib/webauthn";
 import { ensureDemoDataSeeded } from "../../lib/demoMode";
+import { validateLoginIdentifier } from "../../utils/validator";
 
 /**
  * Handle prelogin and login requests
@@ -58,7 +59,17 @@ export async function handleLoginRequest(request: Request, env: Env): Promise<Re
       }
     }
 
-    const user = await userModel.getByUsername(username);
+    const identifier = typeof username === "string" ? username.trim() : "";
+    if (!identifier || !validateLoginIdentifier(identifier)) {
+      const isEmpty = await userModel.isEmpty().catch(() => false);
+      if (isEmpty) {
+        return new Response("no_users_registered", { status: 404 });
+      }
+      await cacheUtils.isRateLimited(cache, `login_fail:${clientIp}`, 100, 900);
+      return new Response("Invalid login identifier", { status: 400 });
+    }
+
+    const user = await userModel.getByLoginIdentifier(identifier);
     if (!user) {
       const isEmpty = await userModel.isEmpty().catch(() => false);
       if (isEmpty) {
@@ -114,6 +125,7 @@ export async function handleLoginRequest(request: Request, env: Env): Promise<Re
     }, preauthTtl);
 
     return new Response(JSON.stringify({
+      username: user.username,
       requires_password,
       requires_totp,
       has_passkey,

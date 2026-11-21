@@ -59,7 +59,7 @@ export function useAccessPoints({
     return ap.profile_id === profileFilterId;
   });
 
-  const isValidApName = (name: string): boolean => AP_NAME_REGEX.test(name);
+  const isValidApName = (name: string): boolean => AP_NAME_REGEX.test(name.trim());
 
   const openAddDialog = (preferredProfileId?: string | null) => {
     setNewApName("");

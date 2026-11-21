@@ -2,6 +2,10 @@ import { D1Database } from "@cloudflare/workers-types";
 import { User } from "../../types";
 import { UserRecord, CreateUserOptions } from "./types";
 import { UserSecretProcessor } from "./secrets";
+import { generateId } from "../../utils/crypto";
+import { GENERATED_USER_ID_REGEX, USER_ID_REGEX } from "../../utils/validator";
+
+const MAX_USER_ID_GENERATION_ATTEMPTS = 16;
 
 /**
  * Handles core user entity lifecycle, querying, profile attributes, and CRUD operations.
@@ -44,6 +48,87 @@ export class UserCoreModel {
       }
       throw e;
     }
+  }
+
+  /**
+   * Retrieves a user by either their username (case-insensitive via COLLATE NOCASE)
+   * or their user ID (checking exact match first, then lowercase canonical match).
+   *
+   * @param identifier - Username or user ID supplied at login.
+   * @returns Matching user record with decrypted secrets, or null if not found.
+   */
+  async getByLoginIdentifier(identifier: string): Promise<UserRecord | null> {
+    const trimmed = identifier.trim();
+    if (!trimmed) {
+      return null;
+    }
+    const byUsername = await this.getByUsername(trimmed);
+    if (byUsername) {
+      return byUsername;
+    }
+    const byExactId = await this.getById(trimmed);
+    if (byExactId) {
+      return byExactId;
+    }
+    const lower = trimmed.toLowerCase();
+    if (lower !== trimmed) {
+      return await this.getById(lower);
+    }
+    return null;
+  }
+
+  /**
+   * Checks whether a proposed username or candidate ID conflicts with any existing user ID
+   * (case-insensitive, including the caller's own ID) or any other user's username.
+   *
+   * @param candidate - Candidate username or user ID to check.
+   * @param currentUserId - Optional caller user ID excluded from username self-collision during rename.
+   * @returns True if a conflict exists.
+   */
+  async isUsernameConflict(candidate: string, currentUserId?: string): Promise<boolean> {
+    const trimmed = candidate.trim();
+    if (!trimmed) {
+      return true;
+    }
+    try {
+      const row = await this.db
+        .prepare(
+          "SELECT id FROM users WHERE LOWER(id) = LOWER(?) OR (username = ? AND (? IS NULL OR id != ?)) LIMIT 1"
+        )
+        .bind(trimmed, trimmed, currentUserId ?? null, currentUserId ?? null)
+        .first<{ id: string }>();
+      return !!row;
+    } catch (e: unknown) {
+      const errorMsg = e instanceof Error ? e.message : String(e);
+      if (errorMsg.includes("no such table")) {
+        return false;
+      }
+      throw e;
+    }
+  }
+
+  /**
+   * Generates a valid 15-character hex user ID and ensures it does not collide with
+   * any existing user ID, existing username, or the registering user's own username.
+   *
+   * @param reservedUsername - Optional username being registered in the same operation.
+   * @returns Valid, collision-free user ID.
+   */
+  async generateUniqueUserId(reservedUsername?: string): Promise<string> {
+    const reservedLower = reservedUsername?.trim().toLowerCase();
+    for (let attempt = 0; attempt < MAX_USER_ID_GENERATION_ATTEMPTS; attempt++) {
+      const candidate = generateId(15);
+      if (!GENERATED_USER_ID_REGEX.test(candidate) || !USER_ID_REGEX.test(candidate)) {
+        continue;
+      }
+      if (reservedLower && candidate.toLowerCase() === reservedLower) {
+        continue;
+      }
+      if (!(await this.isUsernameConflict(candidate))) {
+        return candidate;
+      }
+    }
+    throw new Error("Failed to generate a unique valid user ID");
   }
 
   /**

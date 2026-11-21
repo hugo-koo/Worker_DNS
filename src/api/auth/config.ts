@@ -45,12 +45,12 @@ export async function handleAuthConfigRequest(request: Request, env: Env): Promi
 
   // 检查用户名是否存在接口
   if (url.pathname === '/api/auth/check-username' && request.method === 'GET') {
-    const username = url.searchParams.get('username') || '';
+    const username = (url.searchParams.get('username') || '').trim();
     if (!USERNAME_REGEX.test(username)) {
       return new Response(JSON.stringify({ error: "Invalid username" }), { status: 400, headers: { 'Content-Type': 'application/json' } });
     }
-    const exists = await userModel.getByUsername(username);
-    return new Response(JSON.stringify({ exists: !!exists }), {
+    const exists = await userModel.isUsernameConflict(username);
+    return new Response(JSON.stringify({ exists }), {
       headers: { 'Content-Type': 'application/json' }
     });
   }

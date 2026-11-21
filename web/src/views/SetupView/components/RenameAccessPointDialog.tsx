@@ -39,7 +39,7 @@ export const RenameAccessPointDialog: React.FC<RenameAccessPointDialogProps> = (
       >
         <div className={Classes.DIALOG_BODY}>
           <Tooltip
-            content={t("setup.accessPointNameFormatTip", "1-30 characters, letters, numbers, hyphens and underscores allowed")}
+            content={t("setup.accessPointNameFormatTip", "Access Point Name tip: 1-30 Unicode characters")}
             isOpen={renameApNameFocused}
             position={Position.TOP}
             intent={Intent.PRIMARY}

@@ -277,10 +277,11 @@ export async function handlePasskeysRequest(
         expectedRpId: cachedState.rpId
       });
 
-      // Check if credential ID is already registered
-      const existing = await passkeyModel.getByCredentialId(parsed.credentialId);
-      if (existing) {
-        return new Response("This passkey is already registered", { status: 409 });
+      // Prevent the same user from registering the same credential ID twice,
+      // while allowing different users to share a passkey credential ID (many-to-many).
+      const existingForUser = await passkeyModel.getByCredentialIdAndUser(parsed.credentialId, user.id);
+      if (existingForUser) {
+        return new Response("This passkey is already registered for this account", { status: 409 });
       }
 
       const passkeyName = (name || "").trim();

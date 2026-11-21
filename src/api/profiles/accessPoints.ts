@@ -41,18 +41,19 @@ export async function handleProfileAccessPointsRequest(
       return new Response(JSON.stringify({ token: newToken }), { headers: { 'Content-Type': 'application/json' } });
     }
 
-    const body = await request.json() as { name: string };
-    if (!body.name) return new Response("Name is required", { status: 400 });
-    if (!AP_NAME_REGEX.test(body.name)) return new Response("Invalid Access Point name format", { status: 400 });
+    const body = await request.json() as { name?: unknown };
+    const trimmedName = typeof body?.name === "string" ? body.name.trim() : "";
+    if (!trimmedName) return new Response("Name is required", { status: 400 });
+    if (!AP_NAME_REGEX.test(trimmedName)) return new Response("Invalid Access Point name format", { status: 400 });
     
     const currentAps = await apModel.getAccessPoints(profileId);
-    if (currentAps.some(ap => ap.name.toLowerCase() === body.name.toLowerCase())) {
+    if (currentAps.some(ap => ap.name.toLowerCase() === trimmedName.toLowerCase())) {
       return new Response("Access Point name already exists", { status: 400 });
     }
     const maxAps = Number(env.MAX_ACCESS_POINTS_PER_PROFILE) || 100;
     if (currentAps.length >= maxAps) return new Response(`Access point limit exceeded (max ${maxAps})`, { status: 400 });
     
-    const result = await apModel.addAccessPoint(profileId, body.name, user.id);
+    const result = await apModel.addAccessPoint(profileId, trimmedName, user.id);
     ctx.waitUntil(
       upsertAccessKeysInDo(env, [
         {
@@ -70,16 +71,17 @@ export async function handleProfileAccessPointsRequest(
 
   if (request.method === 'PATCH' && pathParts.length === 5) {
     const apId = pathParts[4];
-    const body = await request.json() as { name: string };
-    if (!body.name) return new Response("Name is required", { status: 400 });
-    if (!AP_NAME_REGEX.test(body.name)) return new Response("Invalid Access Point name format", { status: 400 });
+    const body = await request.json() as { name?: unknown };
+    const trimmedName = typeof body?.name === "string" ? body.name.trim() : "";
+    if (!trimmedName) return new Response("Name is required", { status: 400 });
+    if (!AP_NAME_REGEX.test(trimmedName)) return new Response("Invalid Access Point name format", { status: 400 });
 
     const currentAps = await apModel.getAccessPoints(profileId);
-    if (currentAps.some(ap => ap.id !== apId && ap.name.toLowerCase() === body.name.toLowerCase())) {
+    if (currentAps.some(ap => ap.id !== apId && ap.name.toLowerCase() === trimmedName.toLowerCase())) {
       return new Response("Access Point name already exists", { status: 400 });
     }
 
-    await apModel.updateAccessPointName(apId, profileId, body.name);
+    await apModel.updateAccessPointName(apId, profileId, trimmedName);
     const updatedAp = currentAps.find(ap => ap.id === apId);
     if (updatedAp?.token) {
       profileKeyMemoryMap.delete(updatedAp.token);

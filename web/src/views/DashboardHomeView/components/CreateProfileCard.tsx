@@ -45,7 +45,7 @@ export const CreateProfileCard: React.FC<CreateProfileCardProps> = ({
       <form
         onSubmit={(e) => {
           e.preventDefault();
-          if (PROFILE_NAME_REGEX.test(newName)) {
+          if (PROFILE_NAME_REGEX.test(newName.trim())) {
             onCreate();
           }
         }}
@@ -75,7 +75,7 @@ export const CreateProfileCard: React.FC<CreateProfileCardProps> = ({
             intent={Intent.SUCCESS}
             text={t("common.create")}
             className="whitespace-nowrap"
-            disabled={!PROFILE_NAME_REGEX.test(newName)}
+            disabled={!PROFILE_NAME_REGEX.test(newName.trim())}
           />
           <Button
             type="button"

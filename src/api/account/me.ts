@@ -101,9 +101,12 @@ export async function handleMeRequest(
         }
 
         if (body.username !== undefined) {
-          const newUsername = body.username;
+          const newUsername = typeof body.username === 'string' ? body.username.trim() : '';
           if (!newUsername || !USERNAME_REGEX.test(newUsername)) {
             return new Response("Username format error", { status: 400 });
+          }
+          if (await userModel.isUsernameConflict(newUsername, user.id)) {
+            return new Response("The username is already taken", { status: 400 });
           }
           await userModel.updateUsername(user.id, newUsername);
         }

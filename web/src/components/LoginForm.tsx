@@ -6,6 +6,7 @@ import LogoIcon from "../assets/obex_cat_eye_logo-256.webp";
 import { LoginUsernameStep } from "./login/LoginUsernameStep";
 import { LoginPasswordStep } from "./login/LoginPasswordStep";
 import { LoginMfaStep } from "./login/LoginMfaStep";
+import { FindUsernameModal } from "./login/FindUsernameModal";
 import { useLoginForm } from "./login/useLoginForm";
 
 /**
@@ -51,6 +52,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({
   const {
     loginStep,
     username,
+    resolvedUsername,
     setUsername,
     password,
     setPassword,
@@ -82,6 +84,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({
   } = useLoginForm({ authConfig, turnstileReady, onSuccess });
 
   const [copiedRotatedKey, setCopiedRotatedKey] = useState(false);
+  const [findUsernameOpen, setFindUsernameOpen] = useState(false);
 
   const handleCopyRotatedKey = (k: string) => {
     navigator.clipboard.writeText(k);
@@ -122,7 +125,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({
           {getStepTitle()}
         </H3>
         <p className="text-gray-500 mt-2 text-center text-sm leading-relaxed">
-          {loginStep === 1 ? t("auth.protectInternet") : username}
+          {loginStep === 1 ? t("auth.protectInternet") : (resolvedUsername || username)}
         </p>
       </div>
 
@@ -167,6 +170,10 @@ export const LoginForm: React.FC<LoginFormProps> = ({
           loading={loading}
           turnstileStatus={turnstileStatus}
           onSubmit={handleStep1Submit}
+          onOpenFindUsername={() => {
+            setError("");
+            setFindUsernameOpen(true);
+          }}
         />
       )}
 
@@ -271,6 +278,24 @@ export const LoginForm: React.FC<LoginFormProps> = ({
           </div>
         </div>
       </Dialog>
+
+      <FindUsernameModal
+        isOpen={findUsernameOpen}
+        onClose={() => setFindUsernameOpen(false)}
+        authConfig={
+          authConfig
+            ? {
+                turnstile_site_key: authConfig.turnstile_site_key,
+                turnstile_enabled_login: authConfig.turnstile_enabled_login
+              }
+            : null
+        }
+        turnstileReady={turnstileReady}
+        onSelectAccount={(foundUsername) => {
+          setUsername(foundUsername);
+          setError("");
+        }}
+      />
     </>
   );
 };

@@ -39,9 +39,10 @@ export async function handleProfilesCoreCollectionRequest(
 
   // POST /api/profiles
   if (request.method === 'POST') {
-    const body = await request.json() as { name: string };
-    
-    if (!body.name || !PROFILE_NAME_REGEX.test(body.name)) {
+    const body = await request.json() as { name?: unknown };
+    const trimmedName = typeof body?.name === 'string' ? body.name.trim() : '';
+
+    if (!trimmedName || !PROFILE_NAME_REGEX.test(trimmedName)) {
       return new Response("Invalid Profile Name format", { status: 400 });
     }
 
@@ -49,7 +50,7 @@ export async function handleProfilesCoreCollectionRequest(
     const maxProfiles = Number(env.MAX_PROFILES_PER_USER) || 10;
     if (existingProfiles.length >= maxProfiles) return new Response(`Profile limit exceeded (max ${maxProfiles})`, { status: 400 });
 
-    const existing = existingProfiles.find(p => p.name === body.name);
+    const existing = existingProfiles.find(p => p.name === trimmedName);
     if (existing) return new Response("The profile name already exists", { status: 400 });
 
     const newId = generateId(6);
@@ -76,7 +77,7 @@ export async function handleProfilesCoreCollectionRequest(
       default_policy: 'ALLOW',
       best_effort_ech: { enabled: false, fronting_domain: "cloudflare-ech.com" }
     };
-    await profileModel.create({ id: newId, owner_id: user.id, name: body.name || "Unnamed Profile", settings: defaultSettings });
+    await profileModel.create({ id: newId, owner_id: user.id, name: trimmedName, settings: defaultSettings });
 
     if (ctx) {
       ctx.waitUntil(syncProfileKeysToDo(env.DB, env, newId));
