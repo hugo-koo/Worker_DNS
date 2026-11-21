@@ -26,6 +26,7 @@ export interface RouterRuntimeContext {
  */
 export function detectServerfullMode(env: Env): boolean {
   return Boolean(
+    env.DATABASE_SERVICE === 'File' ||
     env.SERVERFULL_DEFAULT_PROFILE_KEY !== undefined ||
     env.SERVERFULL_HOST !== undefined ||
     env.SERVERFULL_DOT_DOMAIN !== undefined ||

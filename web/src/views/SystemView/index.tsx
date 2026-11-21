@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
-import { Divider, Tag, Intent, Callout, H5, type OverlayToaster } from "@blueprintjs/core";
-import { ShieldCheck, AlertTriangle } from "lucide-react";
+import { Divider, Intent, Callout, H5, type OverlayToaster } from "@blueprintjs/core";
+import { AlertTriangle } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { clsx } from "clsx";
 
@@ -17,8 +17,10 @@ import { DistributeFilterCard } from "./components/DistributeFilterCard";
 import { SystemSettingsCard } from "./components/SystemSettingsCard";
 import { DatabaseMigrationCard } from "./components/DatabaseMigrationCard";
 import { DeploymentModeBadge } from "../../components/DeploymentMode";
+import { UserRoleBadge } from "../../components/UserRoleBadge";
 import { useIsMobile } from "../../hooks/useIsMobile";
 import { PAGE_CONTAINER_STANDARD } from "../../constants/layout";
+import { useStickyHeaderTitle } from "../../layouts/HeaderTitleContext";
 
 export interface SystemViewProps {
   onSavingChange?: (saving: boolean) => void;
@@ -37,6 +39,7 @@ export const SystemView: React.FC<SystemViewProps> = ({ onSavingChange, toasterR
   const [loading, setLoading] = useState(true);
   const { t } = useTranslation();
   const isMobile = useIsMobile();
+  const headerTitleRef = useStickyHeaderTitle<HTMLHeadingElement>(t("system.title", "系统管理"));
 
   const [sysSettings, setSysSettings] = useState<Record<string, string>>({});
   const [dbStatus, setDbStatus] = useState<DatabaseStatusResponse | null>(null);
@@ -106,22 +109,14 @@ export const SystemView: React.FC<SystemViewProps> = ({ onSavingChange, toasterR
     <div className={clsx(PAGE_CONTAINER_STANDARD, "mx-auto space-y-8", isMobile ? "p-0" : "px-8")}>
       <div className="flex justify-between items-start sm:items-end gap-3 flex-wrap sm:flex-nowrap">
         <div>
-          <h2 className="bp6-heading">{t("system.title", "系统管理")}</h2>
+          <h2 ref={headerTitleRef} className="bp6-heading">{t("system.title", "系统管理")}</h2>
           <p className="bp6-text-muted">
             {t("system.subtitle", "管理用户、系统过滤列表、系统配置与数据库维护")}
           </p>
         </div>
-        <div className="flex items-center gap-2 flex-wrap shrink-0">
+        <div className="flex items-center justify-end gap-2 flex-wrap shrink-0 w-full sm:w-auto">
           <DeploymentModeBadge />
-          <Tag
-            large
-            round
-            intent={Intent.DANGER}
-            icon={<ShieldCheck size={16} />}
-            className="shrink-0 whitespace-nowrap"
-          >
-            {t("account.roleAdmin", "管理员")}
-          </Tag>
+          <UserRoleBadge role="admin" />
         </div>
       </div>
 

@@ -13,8 +13,9 @@ import {
 import { Database, CheckCircle2, AlertCircle, Play, RefreshCw } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
-import type { DatabaseStatusResponse } from "../../../services";
+import type { DatabaseSnapshotOverview, DatabaseStatusResponse } from "../../../services";
 import { runDatabaseMigrations } from "../../../services";
+import { DatabaseStorageAndSnapshots } from "./DatabaseStorageAndSnapshots";
 
 export interface DatabaseMigrationCardProps {
   status: DatabaseStatusResponse | null;
@@ -30,6 +31,9 @@ export const DatabaseMigrationCard: React.FC<DatabaseMigrationCardProps> = ({
   const { t } = useTranslation();
   const [migrating, setMigrating] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [liveSnapshotOverview, setLiveSnapshotOverview] = useState<DatabaseSnapshotOverview | null>(null);
+
+  const snapshotOverview = liveSnapshotOverview ?? status?.snapshotOverview ?? null;
 
   const migrations = status?.migrations;
   const isCompleted = migrations?.completed ?? false;
@@ -67,6 +71,7 @@ export const DatabaseMigrationCard: React.FC<DatabaseMigrationCardProps> = ({
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
+      setLiveSnapshotOverview(null);
       await onRefresh();
       window.dispatchEvent(new Event("db-migration-updated"));
     } finally {
@@ -177,6 +182,14 @@ export const DatabaseMigrationCard: React.FC<DatabaseMigrationCardProps> = ({
               onClick={handleRunMigrations}
             />
           </div>
+
+          {snapshotOverview?.supported && (
+            <DatabaseStorageAndSnapshots
+              overview={snapshotOverview}
+              onOverviewUpdated={setLiveSnapshotOverview}
+              toasterRef={toasterRef}
+            />
+          )}
         </div>
       </Card>
     </>

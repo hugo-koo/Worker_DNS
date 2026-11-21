@@ -15,8 +15,15 @@ export interface RulesTableProps {
   onToggleSelectAll: (checked: boolean) => void;
 }
 
-type SortField = "action" | "pattern" | "details" | "created_at";
+type SortField = "action" | "pattern" | "details" | "status" | "created_at";
 type SortOrder = "asc" | "desc";
+
+/**
+ * Returns whether a custom rule is currently active.
+ */
+function isRuleEnabled(rule: Rule): boolean {
+  return rule.enabled !== 0 && rule.enabled !== false;
+}
 
 interface ColumnConfig {
   key: SortField;
@@ -72,6 +79,9 @@ export const RulesTable: React.FC<RulesTableProps> = ({
           break;
         case "details":
           cmp = getRuleDetailString(a).localeCompare(getRuleDetailString(b));
+          break;
+        case "status":
+          cmp = Number(isRuleEnabled(a)) - Number(isRuleEnabled(b));
           break;
         case "created_at": {
           const timeA = a.created_at ?? a.id;
@@ -164,6 +174,24 @@ export const RulesTable: React.FC<RulesTableProps> = ({
       ),
     },
     {
+      key: "status",
+      header: t("rules.tableStatus", "Status"),
+      headerClassName: "w-28",
+      cellClassName: "align-middle",
+      render: (rule: Rule): React.ReactNode => {
+        const active = isRuleEnabled(rule);
+        return active ? (
+          <Tag intent={Intent.SUCCESS} minimal>
+            {t("rules.statusActive", "Active")}
+          </Tag>
+        ) : (
+          <Tag intent={Intent.NONE} minimal>
+            {t("rules.statusDisabled", "Disabled")}
+          </Tag>
+        );
+      },
+    },
+    {
       key: "created_at",
       header: t("rules.tableCreatedAt", "添加时间"),
       headerClassName: "w-44",
@@ -222,6 +250,7 @@ export const RulesTable: React.FC<RulesTableProps> = ({
         <tbody>
           {sortedRules.map((rule) => {
             const isSelected = selectedIdSet.has(rule.id);
+            const isDisabled = !isRuleEnabled(rule);
             return (
               <tr
                 key={rule.id}
@@ -245,7 +274,13 @@ export const RulesTable: React.FC<RulesTableProps> = ({
                   </div>
                 </td>
                 {columns.map((col) => (
-                  <td key={col.key} className={col.cellClassName}>
+                  <td
+                    key={col.key}
+                    className={clsx(
+                      col.cellClassName,
+                      isDisabled && col.key !== "status" && "opacity-60"
+                    )}
+                  >
                     {col.render(rule)}
                   </td>
                 ))}

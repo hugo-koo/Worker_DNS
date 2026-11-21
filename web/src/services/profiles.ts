@@ -243,6 +243,23 @@ export async function deleteProfileRulesBulk(profileId: string, ruleIds: number[
   return res.json();
 }
 
+/**
+ * Enables or disables multiple custom rules in a single batch API call without deleting them.
+ */
+export async function toggleProfileRulesBulk(
+  profileId: string,
+  ruleIds: number[],
+  enabled: boolean
+): Promise<{ success: boolean; count: number; enabled: boolean }> {
+  const res = await profileFetch(`/api/profiles/${profileId}/rules`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ids: ruleIds, enabled })
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
 export async function getProfileAccessPoints(profileId: string): Promise<AccessPoint[]> {
   const res = await profileFetch(`/api/profiles/${profileId}/access_points`);
   if (!res.ok) throw new Error("Failed to fetch access points");

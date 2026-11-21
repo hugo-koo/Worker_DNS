@@ -84,6 +84,17 @@ DATABASE_SERVICE=File
 # Automatically applies all migrations on startup / 启动时自动执行表结构初始化与迁移
 # SERVERFULL_DB_PATH=
 
+# SQLite Snapshot Backup Configuration (File mode only, .sqlite.zst) / 本地 SQLite 快照配置 (仅 File 模式)
+# Snapshot storage directory; defaults to the same directory as SERVERFULL_DB_PATH when empty
+# 快照存储目录；留空时默认与 SERVERFULL_DB_PATH 所在目录相同
+# SERVERFULL_SNAPSHOT_DIR=
+# Snapshot retention validity in days (0 = never expire, default: 7)
+# 快照有效期（天，0 表示永不过期，默认：7）
+# SERVERFULL_SNAPSHOT_RETENTION_DAYS=7
+# Maximum number of retained snapshots (oldest snapshots are pruned when exceeded, default: 3)
+# 保留快照最大数量限制（超出时自动清理最早的快照，默认：3）
+# SERVERFULL_SNAPSHOT_MAX_COUNT=3
+
 # Turso (libSQL) Remote Database / 远程 Turso 分布式数据库配置 (选填)
 # When configured, DNS Worker automatically switches from local SQLite to Turso and runs schema migrations.
 # 当配置了 TURSO_DATABASE_URL 与 TURSO_AUTH_TOKEN 时，系统将自动使用 Turso 远程数据库替代本地 SQLite。

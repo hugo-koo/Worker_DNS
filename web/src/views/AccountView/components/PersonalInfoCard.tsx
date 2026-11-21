@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   Card,
   Elevation,
@@ -11,8 +11,9 @@ import {
   Intent,
   H4,
   HTMLSelect,
+  type OverlayToaster,
 } from "@blueprintjs/core";
-import { User, Edit2, Check, X } from "lucide-react";
+import { User, Edit2, Check, X, Copy } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { UserInfo } from "../types";
 import { timezoneOptions } from "../../../config/timezones";
@@ -41,6 +42,8 @@ export interface PersonalInfoCardProps {
   onUpdateUsername: () => void;
   /** Callback to submit timezone change. */
   onUpdateTimezone?: (tz: string | null) => void;
+  /** Optional shared OverlayToaster ref for copy confirmation feedback. */
+  toasterRef?: React.RefObject<OverlayToaster | null>;
 }
 
 /**
@@ -60,8 +63,40 @@ export const PersonalInfoCard: React.FC<PersonalInfoCardProps> = ({
   setUsernameFocused,
   onUpdateUsername,
   onUpdateTimezone,
+  toasterRef,
 }) => {
   const { t } = useTranslation();
+  const [copiedField, setCopiedField] = useState<"username" | "id" | null>(null);
+  const copyTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current !== null) {
+        window.clearTimeout(copyTimerRef.current);
+      }
+    };
+  }, []);
+
+  const handleCopy = async (field: "username" | "id", value?: string): Promise<void> => {
+    if (!value) return;
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopiedField(field);
+      toasterRef?.current?.show({
+        message: t("common.copied", "已复制"),
+        intent: Intent.SUCCESS,
+      });
+      if (copyTimerRef.current !== null) {
+        window.clearTimeout(copyTimerRef.current);
+      }
+      copyTimerRef.current = window.setTimeout(() => {
+        setCopiedField(null);
+        copyTimerRef.current = null;
+      }, 2000);
+    } catch {
+      // Clipboard write unavailable
+    }
+  };
 
   return (
     <Card elevation={Elevation.ONE}>
@@ -126,17 +161,59 @@ export const PersonalInfoCard: React.FC<PersonalInfoCardProps> = ({
               </div>
             </form>
           ) : (
-            <div className="flex gap-2">
-              <InputGroup fill value={me?.username} readOnly />
-              <Button
-                icon={<Edit2 size={16} />}
+            <div className="flex items-center justify-between gap-2 min-h-8">
+              <button
+                type="button"
                 onClick={() => setIsEditingUsername(true)}
+                aria-label={t("common.rename", "Rename")}
+                title={t("common.rename", "Rename")}
+                className="group/rename inline-flex items-center gap-1.5 min-w-0 bg-transparent border-0 p-0 text-left text-base font-semibold text-gray-900 dark:text-gray-100 cursor-pointer"
+              >
+                <span className="truncate">{me?.username}</span>
+                <Edit2
+                  size={14}
+                  className="shrink-0 opacity-30 group-hover/rename:opacity-100 transition-opacity"
+                />
+              </button>
+              <Button
+                minimal
+                small
+                icon={
+                  copiedField === "username" ? (
+                    <Check size={14} className="text-green-500" />
+                  ) : (
+                    <Copy size={14} />
+                  )
+                }
+                onClick={() => void handleCopy("username", me?.username)}
+                disabled={!me?.username}
+                title={t("common.copy", "Copy")}
+                aria-label={t("common.copy", "Copy")}
               />
             </div>
           )}
         </FormGroup>
         <FormGroup label={t("account.userId")}>
-          <InputGroup leftIcon="id-number" value={me?.id} disabled />
+          <div className="flex items-center justify-between gap-2 min-h-8">
+            <span className="font-mono text-sm text-gray-900 dark:text-gray-100 select-all truncate">
+              {me?.id}
+            </span>
+            <Button
+              minimal
+              small
+              icon={
+                copiedField === "id" ? (
+                  <Check size={14} className="text-green-500" />
+                ) : (
+                  <Copy size={14} />
+                )
+              }
+              onClick={() => void handleCopy("id", me?.id)}
+              disabled={!me?.id}
+              title={t("common.copy", "Copy")}
+              aria-label={t("common.copy", "Copy")}
+            />
+          </div>
         </FormGroup>
         <FormGroup label={t("account.timezone", "Timezone")}>
           <HTMLSelect

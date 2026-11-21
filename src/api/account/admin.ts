@@ -16,6 +16,7 @@ import {
   runTursoMigrations
 } from "../../lib/turso";
 import { detectServerfullMode } from "../../router/runtimeConfig";
+import { buildDemoSnapshotOverview, isDemoMode } from "../../lib/demoConfig";
 
 /**
  * Allowlist of system setting keys that can be updated via administrative REST APIs.
@@ -150,15 +151,149 @@ export async function handleAdminRequest(
     const isServerfull = detectServerfullMode(env);
     const dbService = getDatabaseService(env, isServerfull);
     const isTurso = dbService === 'Turso' && isTursoConfigured(env);
+    const demoMode = isDemoMode(env);
+    const snapshotBridge = isServerfull && dbService === 'File' && !demoMode
+      ? env.SERVERFULL_SNAPSHOT_BRIDGE
+      : undefined;
 
-    if (request.method === 'GET') {
-      const stats = env.DB ? await getTursoMigrationStats(env.DB as any) : null;
+    if (pathParts[3] === 'snapshots') {
+      if (demoMode) {
+        if (request.method === 'GET' && !pathParts[4]) {
+          return new Response(JSON.stringify(buildDemoSnapshotOverview(env)), {
+            headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
+          });
+        }
+        return new Response(JSON.stringify({ error: "Database snapshot operations are disabled in Demo Mode" }), {
+          status: 403,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      if (!snapshotBridge) {
+        return new Response(JSON.stringify({ error: "Database snapshots are only supported in Serverfull File mode" }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // GET /api/admin/database/snapshots -> lightweight status & storage overview
+      if (request.method === 'GET' && !pathParts[4]) {
+        const overview = await snapshotBridge.getOverview();
+        return new Response(JSON.stringify(overview), {
+          headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
+        });
+      }
+
+      // GET /api/admin/database/snapshots/:filename/download
+      if (request.method === 'GET' && pathParts[4] && pathParts[5] === 'download') {
+        let decodedName = pathParts[4];
+        try {
+          decodedName = decodeURIComponent(pathParts[4]);
+        } catch {
+          return new Response("Invalid filename encoding", { status: 400 });
+        }
+        const download = await snapshotBridge.openSnapshotDownload(decodedName);
+        if (!download) {
+          return new Response("Snapshot not found", { status: 404 });
+        }
+        return new Response(download.stream, {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/zstd',
+            'Content-Disposition': `attachment; filename="${download.filename}"`,
+            'Content-Length': String(download.sizeBytes),
+            'Cache-Control': 'no-store'
+          }
+        });
+      }
+
+      // POST /api/admin/database/snapshots -> start capture
+      if (request.method === 'POST' && !pathParts[4]) {
+        try {
+          const activeCapture = await snapshotBridge.startCapture();
+          return new Response(JSON.stringify({ success: true, activeCapture }), {
+            status: 202,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err || '');
+          if (msg === 'SNAPSHOT_IN_PROGRESS') {
+            return new Response(JSON.stringify({ error: 'Snapshot capture is already in progress' }), {
+              status: 409,
+              headers: { 'Content-Type': 'application/json' }
+            });
+          }
+          if (msg.startsWith('ZSTD_UNSUPPORTED')) {
+            return new Response(JSON.stringify({ error: msg }), {
+              status: 501,
+              headers: { 'Content-Type': 'application/json' }
+            });
+          }
+          return new Response(JSON.stringify({ error: msg || 'Failed to start snapshot capture' }), {
+            status: 500,
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+      }
+
+      // POST /api/admin/database/snapshots/abort -> stop and discard active capture
+      if (request.method === 'POST' && pathParts[4] === 'abort') {
+        const result = await snapshotBridge.abortCapture();
+        return new Response(JSON.stringify({ success: true, ...result }), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      // DELETE /api/admin/database/snapshots/:filename or bulk DELETE /api/admin/database/snapshots
+      if (request.method === 'DELETE') {
+        if (pathParts[4]) {
+          let decodedName = pathParts[4];
+          try {
+            decodedName = decodeURIComponent(pathParts[4]);
+          } catch {
+            return new Response("Invalid filename encoding", { status: 400 });
+          }
+          const result = await snapshotBridge.deleteSnapshots([decodedName]);
+          return new Response(JSON.stringify({ success: true, ...result }), {
+            headers: { 'Content-Type': 'application/json' }
+          });
+        }
+
+        let body: { filenames?: unknown };
+        try {
+          body = (await request.json()) as { filenames?: unknown };
+        } catch {
+          return new Response("Invalid JSON payload", { status: 400 });
+        }
+        const rawList = Array.isArray(body?.filenames) ? body.filenames : [];
+        const filenames = rawList.filter((v): v is string => typeof v === 'string' && v.trim().length > 0);
+        if (filenames.length === 0) {
+          return new Response("Missing snapshot filenames", { status: 400 });
+        }
+        const result = await snapshotBridge.deleteSnapshots(filenames);
+        return new Response(JSON.stringify({ success: true, ...result }), {
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+
+      return new Response("Method Not Allowed", { status: 405 });
+    }
+
+    if (request.method === 'GET' && !pathParts[3]) {
+      const [stats, snapshotOverview] = await Promise.all([
+        env.DB ? getTursoMigrationStats(env.DB as any) : Promise.resolve(null),
+        demoMode
+          ? Promise.resolve(buildDemoSnapshotOverview(env))
+          : snapshotBridge
+            ? snapshotBridge.getOverview()
+            : Promise.resolve(null)
+      ]);
       return new Response(JSON.stringify({
         databaseService: dbService,
         isTurso,
         configured: Boolean(env.DB),
-        migrations: stats
-      }), { headers: { 'Content-Type': 'application/json' } });
+        migrations: stats,
+        snapshotOverview
+      }), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' } });
     }
 
     if (request.method === 'POST') {

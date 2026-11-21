@@ -13,6 +13,7 @@ import { RenameAccessPointDialog } from "../SetupView/components/RenameAccessPoi
 import { AccessPointSection } from "../SetupView/components/AccessPointSection";
 import { MinimalSelect } from "../../components/MinimalSelect";
 import { PAGE_CONTAINER_WIDE } from "../../constants/layout";
+import { useStickyHeaderTitle } from "../../layouts/HeaderTitleContext";
 
 export interface AccessPointsManageViewProps {
   profiles: Profile[];
@@ -32,6 +33,9 @@ export const AccessPointsManageView: React.FC<AccessPointsManageViewProps> = ({
 }) => {
   const { t } = useTranslation();
   const isMobile = useIsMobile();
+  const headerTitleRef = useStickyHeaderTitle<HTMLHeadingElement>(
+    t("setup.manageAccessPoints", "Manage Access Points")
+  );
   const navigate = useNavigate();
   const [accessPoints, setAccessPoints] = useState<AccessPoint[]>([]);
   const [loading, setLoading] = useState(true);
@@ -106,7 +110,7 @@ export const AccessPointsManageView: React.FC<AccessPointsManageViewProps> = ({
     <div className={clsx("md:px-8 w-full min-w-0 mx-auto pb-24", PAGE_CONTAINER_WIDE, isMobile ? "p-1" : "px-8")}>
       <div className="mb-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="bp6-heading m-0">{t("setup.manageAccessPoints", "Manage Access Points")}</h1>
+          <h1 ref={headerTitleRef} className="bp6-heading m-0">{t("setup.manageAccessPoints", "Manage Access Points")}</h1>
           <p className="bp6-text-muted mt-2!">
             {t(
               "setup.manageAccessPointsSubtitle",

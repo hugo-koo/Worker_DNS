@@ -15,10 +15,11 @@ export class RuleModel {
     const normalizedPattern = rule.pattern ? rule.pattern.trim().toLowerCase() : "";
     const createdAt = rule.created_at ?? Math.floor(Date.now() / 1000);
     const includeSubdomains = rule.include_subdomains ? 1 : 0;
+    const enabled = rule.enabled === false || rule.enabled === 0 ? 0 : 1;
     const result = await this.db.prepare(
-      "INSERT INTO rules (profile_id, type, pattern, v_a, v_aaaa, v_txt, v_cname, created_at, include_subdomains) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      "INSERT INTO rules (profile_id, type, pattern, v_a, v_aaaa, v_txt, v_cname, created_at, include_subdomains, enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     )
-      .bind(profileId, rule.type, normalizedPattern, rule.v_a || null, rule.v_aaaa || null, rule.v_txt || null, rule.v_cname || null, createdAt, includeSubdomains)
+      .bind(profileId, rule.type, normalizedPattern, rule.v_a || null, rule.v_aaaa || null, rule.v_txt || null, rule.v_cname || null, createdAt, includeSubdomains, enabled)
       .run();
     return result.success;
   }
@@ -38,8 +39,9 @@ export class RuleModel {
       const normalizedPattern = rule.pattern ? rule.pattern.trim().toLowerCase() : "";
       const createdAt = rule.created_at ?? now;
       const includeSubdomains = rule.include_subdomains ? 1 : 0;
+      const enabled = rule.enabled === false || rule.enabled === 0 ? 0 : 1;
       return this.db.prepare(
-        "INSERT INTO rules (profile_id, type, pattern, v_a, v_aaaa, v_txt, v_cname, created_at, include_subdomains) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO rules (profile_id, type, pattern, v_a, v_aaaa, v_txt, v_cname, created_at, include_subdomains, enabled) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
       ).bind(
         profileId,
         rule.type,
@@ -49,7 +51,8 @@ export class RuleModel {
         rule.v_txt || null,
         rule.v_cname || null,
         createdAt,
-        includeSubdomains
+        includeSubdomains,
+        enabled
       );
     });
 
@@ -67,12 +70,43 @@ export class RuleModel {
   async updateRule(id: number, profileId: string, rule: Partial<Rule>): Promise<boolean> {
     const normalizedPattern = rule.pattern ? rule.pattern.trim().toLowerCase() : "";
     const includeSubdomains = rule.include_subdomains ? 1 : 0;
+    const enabled = rule.enabled === false || rule.enabled === 0 ? 0 : 1;
     const result = await this.db.prepare(
-      "UPDATE rules SET type = ?, pattern = ?, v_a = ?, v_aaaa = ?, v_txt = ?, v_cname = ?, include_subdomains = ? WHERE id = ? AND profile_id = ?"
+      "UPDATE rules SET type = ?, pattern = ?, v_a = ?, v_aaaa = ?, v_txt = ?, v_cname = ?, include_subdomains = ?, enabled = ? WHERE id = ? AND profile_id = ?"
     )
-      .bind(rule.type, normalizedPattern, rule.v_a || null, rule.v_aaaa || null, rule.v_txt || null, rule.v_cname || null, includeSubdomains, id, profileId)
+      .bind(rule.type, normalizedPattern, rule.v_a || null, rule.v_aaaa || null, rule.v_txt || null, rule.v_cname || null, includeSubdomains, enabled, id, profileId)
       .run();
     return result.success;
+  }
+
+  /**
+   * Enables or disables multiple rules belonging to a profile inside D1 batch chunks (max 100 per batch).
+   *
+   * @param ids - Rule IDs to toggle.
+   * @param profileId - Owner profile identifier.
+   * @param enabled - Target active state.
+   * @returns Total number of rows updated.
+   */
+  async setRulesEnabledBulk(ids: number[], profileId: string, enabled: boolean): Promise<number> {
+    const uniqueIds = Array.from(new Set(ids.filter((id) => Number.isInteger(id) && id > 0)));
+    if (uniqueIds.length === 0) return 0;
+
+    const enabledInt = enabled ? 1 : 0;
+    const statements = uniqueIds.map((id) =>
+      this.db.prepare("UPDATE rules SET enabled = ? WHERE id = ? AND profile_id = ?").bind(enabledInt, id, profileId)
+    );
+
+    let updated = 0;
+    for (let i = 0; i < statements.length; i += 100) {
+      const chunk = statements.slice(i, i + 100);
+      const results = await this.db.batch(chunk);
+      for (const res of results) {
+        if (res.success) {
+          updated += res.meta.changes ?? 0;
+        }
+      }
+    }
+    return updated;
   }
 
   async getRuleByPattern(profileId: string, pattern: string): Promise<Rule | null> {

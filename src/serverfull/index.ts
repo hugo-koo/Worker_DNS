@@ -9,6 +9,7 @@ import path from 'node:path';
 import { initNodeGlobals } from './cache';
 import { getPackageVersion, getServerfullConfig } from './config';
 import { initServerfullDb } from './db';
+import { ServerfullSnapshotManager } from './snapshot';
 import { createTursoClient, maskDatabaseUrl } from '../lib/turso';
 import { runTursoMigrations } from '../lib/turso/migrate';
 import { UdpDnsServer } from './udp';
@@ -53,9 +54,10 @@ function startServerfullCronLoop(
     isCronRunning = true;
     try {
       cronCounter++;
-      // Periodic non-blocking WAL checkpoint every 10 minutes
+      // Periodic non-blocking WAL checkpoint and snapshot retention pruning every 10 minutes
       if (localSqliteDb?.checkpoint && cronCounter % 10 === 0) {
         localSqliteDb.checkpoint('PASSIVE');
+        env.SERVERFULL_SNAPSHOT_BRIDGE?.getOverview().catch(() => {});
       }
       // Periodic PRAGMA optimize every 6 hours
       if (localSqliteDb?.optimize && cronCounter % 360 === 0) {
@@ -221,6 +223,7 @@ async function bootstrap(): Promise<void> {
     const db = initServerfullDb(config.dbPath, config.packageRoot, skipMigrations);
     localSqliteDb = db;
     env.DB = db;
+    env.SERVERFULL_SNAPSHOT_BRIDGE = new ServerfullSnapshotManager(env);
   }
 
   // 6. Cluster Primary Process: Fork workers and coordinate background cron

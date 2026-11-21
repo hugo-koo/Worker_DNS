@@ -10,6 +10,7 @@ import { CreateProfileCard } from "./components/CreateProfileCard";
 import { RenameProfileDialog } from "./components/RenameProfileDialog";
 import { ProfileList } from "./components/ProfileList";
 import { PAGE_CONTAINER_COLLECTIONS } from "../../constants/layout";
+import { useStickyHeaderTitle } from "../../layouts/HeaderTitleContext";
 
 interface DashboardHomeProps {
   profiles: Profile[];
@@ -46,6 +47,7 @@ export const DashboardHomeView = ({
 }: DashboardHomeProps) => {
   const isMobile = useIsMobile();
   const { t } = useTranslation();
+  const headerTitleRef = useStickyHeaderTitle<HTMLDivElement>(t("nav.collections", "Collections"));
 
   const [renameTarget, setRenameTarget] = useState<Profile | null>(null);
   const [renameValue, setRenameValue] = useState("");
@@ -115,9 +117,11 @@ export const DashboardHomeView = ({
 
       <div className="flex justify-between items-center mb-6">
         <div>
-          <H3 className="dark:text-white font-bold" style={{ marginBottom: 0 }}>
-            {t("nav.collections", "Collections")}
-          </H3>
+          <div ref={headerTitleRef}>
+            <H3 className="dark:text-white font-bold" style={{ marginBottom: 0 }}>
+              {t("nav.collections", "Collections")}
+            </H3>
+          </div>
           <p className="bp6-text-muted text-sm m-0 mt-1">
             {t("common.selectProfile")}
           </p>

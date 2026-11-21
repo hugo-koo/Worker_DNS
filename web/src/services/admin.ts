@@ -52,11 +52,54 @@ export interface DatabaseMigrationStats {
   pendingFiles: string[];
 }
 
+export interface DatabaseStorageStats {
+  dbPath: string;
+  snapshotDir: string;
+  sameFilesystem: boolean;
+  diskTotalBytes: number;
+  diskFreeBytes: number;
+  diskUsedBytes: number;
+  dbMainBytes: number;
+  dbWalBytes: number;
+  dbShmBytes: number;
+  dbTotalBytes: number;
+  snapshotsTotalBytes: number;
+  snapshotDiskTotalBytes?: number;
+  snapshotDiskFreeBytes?: number;
+}
+
+export interface DatabaseSnapshotItem {
+  filename: string;
+  sizeBytes: number;
+  createdAt: number;
+  expiresAt: number;
+}
+
+export interface ActiveSnapshotCapture {
+  id: string;
+  startedAt: number;
+  stage: "vacuumming" | "compressing" | "cancelling";
+  progress: number;
+}
+
+export interface DatabaseSnapshotOverview {
+  supported: boolean;
+  storage: DatabaseStorageStats | null;
+  snapshots: DatabaseSnapshotItem[];
+  activeCapture: ActiveSnapshotCapture | null;
+  config: {
+    retentionDays: number;
+    maxCount: number;
+    snapshotDir: string;
+  };
+}
+
 export interface DatabaseStatusResponse {
   databaseService: string;
   isTurso: boolean;
   configured: boolean;
   migrations: DatabaseMigrationStats | null;
+  snapshotOverview?: DatabaseSnapshotOverview | null;
 }
 
 export interface RunMigrationsResponse {
@@ -68,9 +111,54 @@ export interface RunMigrationsResponse {
 }
 
 export async function getDatabaseStatus(): Promise<DatabaseStatusResponse> {
-  const res = await fetch("/api/admin/database");
+  const res = await fetch("/api/admin/database", { cache: "no-store" });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
+}
+
+export async function getDatabaseSnapshots(): Promise<DatabaseSnapshotOverview> {
+  const res = await fetch("/api/admin/database/snapshots", { cache: "no-store" });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function startDatabaseSnapshot(): Promise<{ success: boolean; activeCapture: ActiveSnapshotCapture }> {
+  const res = await fetch("/api/admin/database/snapshots", {
+    method: "POST"
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    try {
+      const json = JSON.parse(text) as { error?: string };
+      if (json.error) throw new Error(json.error);
+    } catch {
+      // fall back to raw text
+    }
+    throw new Error(text);
+  }
+  return res.json();
+}
+
+export async function abortDatabaseSnapshot(): Promise<{ success: boolean; aborted: boolean }> {
+  const res = await fetch("/api/admin/database/snapshots/abort", {
+    method: "POST"
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function deleteDatabaseSnapshots(filenames: string[]): Promise<{ success: boolean; deletedCount: number }> {
+  const res = await fetch("/api/admin/database/snapshots", {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ filenames })
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export function getSnapshotDownloadUrl(filename: string): string {
+  return `/api/admin/database/snapshots/${encodeURIComponent(filename)}/download`;
 }
 
 export async function runDatabaseMigrations(): Promise<RunMigrationsResponse> {

@@ -72,8 +72,20 @@ export const PasskeyList: React.FC<PasskeyListProps> = ({
               <KeyRound size={18} />
             </div>
             <div className="min-w-0">
-              <div className="font-semibold text-sm truncate text-gray-900 dark:text-gray-100">
-                {pk.name}
+              <div className="flex items-center min-w-0">
+                <button
+                  type="button"
+                  onClick={() => onOpenRename(pk)}
+                  aria-label={t("common.rename", "Rename")}
+                  title={t("common.rename", "Rename")}
+                  className="group/rename inline-flex items-center gap-1.5 max-w-full min-w-0 bg-transparent border-0 p-0 text-left font-semibold text-sm text-gray-900 dark:text-gray-100 cursor-pointer"
+                >
+                  <span className="truncate">{pk.name}</span>
+                  <Edit2
+                    size={13}
+                    className="shrink-0 opacity-30 group-hover/rename:opacity-100 transition-opacity"
+                  />
+                </button>
               </div>
               <div className="text-xs text-gray-500 dark:text-gray-400 flex flex-wrap gap-x-3 gap-y-1 mt-0.5">
                 <span>
@@ -101,13 +113,6 @@ export const PasskeyList: React.FC<PasskeyListProps> = ({
               title={t("account.passkey.testThis", "Test this passkey")}
               loading={testingId === pk.id}
               onClick={() => onTestPasskey?.(pk)}
-            />
-            <Button
-              minimal
-              small
-              icon={<Edit2 size={14} />}
-              title={t("common.rename", "Rename")}
-              onClick={() => onOpenRename(pk)}
             />
             <Button
               minimal

@@ -10,7 +10,7 @@ import { DashboardHomeView } from "./views/DashboardHomeView";
 import { MainLayout } from "./layouts/MainLayout";
 import { NotFoundView } from "./views/NotFoundView";
 import { ProfileRoutes } from "./routes/ProfileRoutes";
-import type { Profile } from "./services";
+import { getClientInfo, type Profile } from "./services";
 import { useTheme } from "./hooks/useTheme";
 import { usePageMeta } from "./hooks/usePageMeta";
 import { useAuth } from "./hooks/useAuth";
@@ -77,6 +77,11 @@ function App() {
       setLocaleReady(true);
     });
   }, [i18n.language]);
+
+  useEffect(() => {
+    // Fallback runtime mode sync for routes (e.g. /system) or static-served HTML without HTMLRewriter injection
+    void getClientInfo().catch(() => {});
+  }, []);
 
   if (!localeReady) {
     return (

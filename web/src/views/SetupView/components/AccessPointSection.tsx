@@ -58,7 +58,19 @@ export const AccessPointSection: React.FC<AccessPointSectionProps> = ({
       title={
         <div className="flex items-center gap-2 min-w-0">
           <DeviceTypeEmblem deviceType={currentDeviceType} size={16} className="shrink-0 opacity-85" />
-          <span className="truncate">{ap.name}</span>
+          <button
+            type="button"
+            onClick={() => onRenameTrigger(ap.id, ap.name)}
+            aria-label={t("setup.renameAccessPoint", "重命名")}
+            title={t("setup.renameAccessPoint", "重命名")}
+            className="group/rename inline-flex items-center gap-1.5 min-w-0 bg-transparent border-0 p-0 text-inherit font-inherit cursor-pointer text-left"
+          >
+            <span className="truncate">{ap.name}</span>
+            <Edit2
+              size={13}
+              className="shrink-0 opacity-30 group-hover/rename:opacity-100 transition-opacity"
+            />
+          </button>
         </div>
       }
       className="group relative overflow-hidden rounded-lg! [&_.bp6-section-header]:relative [&_.bp6-section-header]:z-10 [&_.bp6-section-card]:relative [&_.bp6-section-card]:z-10"
@@ -131,12 +143,6 @@ export const AccessPointSection: React.FC<AccessPointSectionProps> = ({
               onClick={() => onGoToSetup(ap.id)}
             />
           )}
-          <Button
-            size="small"
-            icon={<Edit2 size={14} />}
-            text={t("setup.renameAccessPoint")}
-            onClick={() => onRenameTrigger(ap.id, ap.name)}
-          />
           <PopoverNext
             isOpen={rotateConfirmApId === ap.id}
             onInteraction={(nextOpenState) => {

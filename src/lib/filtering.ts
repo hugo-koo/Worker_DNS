@@ -64,6 +64,9 @@ export class DNSFilter {
    */
   static findMatch(domain: string, rules: Rule[]): Rule | null {
     for (const rule of rules) {
+      if (rule.enabled === 0 || rule.enabled === false) {
+        continue;
+      }
       if (this.isMatch(domain, rule)) {
         return rule;
       }

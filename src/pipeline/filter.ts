@@ -24,15 +24,18 @@ export const pipelineFilter = {
     const domainLower = query.name.toLowerCase();
 
     // ── 阶段 1：本地自定义规则 (Local Rules) ──────────────────────────────────
+    // Skip rules explicitly disabled by the user without deleting them.
+    const activeRules = rules.filter(r => r.enabled !== 0 && r.enabled !== false);
+
     // 1.1 本地白名单
-    const whitelist = rules.filter(r => r.type === 'ALLOW');
+    const whitelist = activeRules.filter(r => r.type === 'ALLOW');
     if (DNSFilter.findMatch(query.name, whitelist)) {
       track('local_rules');
       return pipelineResolver.resolve(request, query, context, settings, "PASS", "Whitelist");
     }
 
     // 1.2 本地重定向
-    const redirections = rules.filter(r => r.type === 'REDIRECT');
+    const redirections = activeRules.filter(r => r.type === 'REDIRECT');
     const redirectRule = DNSFilter.findMatch(query.name, redirections);
     if (redirectRule) {
       let val: string | undefined;
@@ -64,7 +67,7 @@ export const pipelineFilter = {
     }
 
     // 1.3 本地黑名单
-    const blacklist = rules.filter(r => r.type === 'BLOCK');
+    const blacklist = activeRules.filter(r => r.type === 'BLOCK');
     const blockRule = DNSFilter.findMatch(query.name, blacklist);
     if (blockRule) {
       track('local_rules');

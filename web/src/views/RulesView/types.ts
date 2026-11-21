@@ -5,6 +5,7 @@ export interface Rule {
   type: "ALLOW" | "BLOCK" | "REDIRECT";
   pattern: string;
   include_subdomains?: boolean | number;
+  enabled?: boolean | number;
   v_a?: string;
   v_aaaa?: string;
   v_txt?: string;

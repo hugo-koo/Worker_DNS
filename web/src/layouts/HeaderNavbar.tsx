@@ -8,6 +8,7 @@ import { MigrationStatusBadge } from "../components/MigrationStatusBadge";
 import type { Profile, UserInfo } from "../types/auth";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { ALLOWED_PROFILE_SECTIONS } from "../utils/navigation";
+import { useHeaderTitleState } from "./HeaderTitleContext";
 
 /**
  * Properties for the HeaderNavbar component.
@@ -41,6 +42,30 @@ interface HeaderNavbarProps {
   onToggleSidebar?: () => void;
 }
 
+interface StickyTitleTextProps {
+  title: string;
+  isVisible: boolean;
+}
+
+/**
+ * Renders the animated page title with smooth upward fade-in and downward fade-out transitions.
+ */
+const StickyTitleText: React.FC<StickyTitleTextProps> = ({ title, isVisible }) => (
+  <span
+    aria-hidden={!isVisible}
+    style={{
+      transform: isVisible ? "translate3d(0, 0, 0)" : "translate3d(0, 14px, 0)",
+      opacity: isVisible ? 1 : 0,
+      transition: isVisible
+        ? "transform 280ms cubic-bezier(0.22, 1, 0.36, 1), opacity 260ms ease-out"
+        : "transform 240ms cubic-bezier(0.4, 0, 1, 1), opacity 180ms ease-out"
+    }}
+    className="block truncate text-sm sm:text-base font-bold tracking-tight text-gray-900 dark:text-gray-100 will-change-[transform,opacity]"
+  >
+    {title}
+  </span>
+);
+
 /**
  * HeaderNavbar component renders the top sticky/blurred toolbar.
  * Shows the active profile name with a switcher dropdown on `/dash` routes when a Profile is selected;
@@ -65,6 +90,8 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
   const isMobileHook = useIsMobile();
   const mobile = isMobile ?? isMobileHook;
   const isDashRoute = location.pathname === "/dash" || location.pathname.startsWith("/dash/");
+  const hasProfileSelector = Boolean(isDashRoute && isProfileActive && selectedProfile);
+  const headerTitle = useHeaderTitleState();
 
   const handleSelectProfileFromHeader = (target: Profile) => {
     setSelectedProfile(target);
@@ -89,7 +116,7 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
             aria-label={isSidebarOpen ? t("common.close", "关闭") : t("common.menu", "菜单")}
           />
         )}
-        {isDashRoute && isProfileActive && selectedProfile && (
+        {hasProfileSelector && selectedProfile && (
           <PopoverNext
             placement="bottom-start"
             animation="minimal"
@@ -123,7 +150,27 @@ export const HeaderNavbar: React.FC<HeaderNavbarProps> = ({
             </Button>
           </PopoverNext>
         )}
+        {mobile && !hasProfileSelector && headerTitle.title && (
+          <div
+            key={location.pathname}
+            className="pointer-events-none flex items-center min-w-0 max-w-[calc(100vw-13.5rem)] sm:max-w-xs"
+          >
+            <StickyTitleText title={headerTitle.title} isVisible={headerTitle.isVisible} />
+          </div>
+        )}
       </Navbar.Group>
+
+      {!mobile && headerTitle.title && (
+        <div
+          key={location.pathname}
+          className="pointer-events-none absolute inset-0 flex items-center justify-center px-4"
+        >
+          <div className="flex items-center justify-center max-w-xs md:max-w-md">
+            <StickyTitleText title={headerTitle.title} isVisible={headerTitle.isVisible} />
+          </div>
+        </div>
+      )}
+
       <Navbar.Group align={Alignment.RIGHT}>
         <div className="flex items-center gap-2">
           {isSaving && (

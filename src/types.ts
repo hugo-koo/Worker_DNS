@@ -1,10 +1,69 @@
 import { D1Database, ExecutionContext as CFExecutionContext } from "@cloudflare/workers-types";
 import type { AccessKeyDoNamespace } from "./lib/accessKeyRegistry";
 
+export interface DatabaseStorageStats {
+  dbPath: string;
+  snapshotDir: string;
+  sameFilesystem: boolean;
+  diskTotalBytes: number;
+  diskFreeBytes: number;
+  diskUsedBytes: number;
+  dbMainBytes: number;
+  dbWalBytes: number;
+  dbShmBytes: number;
+  dbTotalBytes: number;
+  snapshotsTotalBytes: number;
+  snapshotDiskTotalBytes?: number;
+  snapshotDiskFreeBytes?: number;
+}
+
+export interface DatabaseSnapshotItem {
+  filename: string;
+  sizeBytes: number;
+  /** Creation Unix timestamp in seconds. */
+  createdAt: number;
+  /** Expiration Unix timestamp in seconds (0 = never expires). */
+  expiresAt: number;
+}
+
+export interface ActiveSnapshotCapture {
+  id: string;
+  /** Capture start Unix timestamp in seconds. */
+  startedAt: number;
+  stage: 'vacuumming' | 'compressing' | 'cancelling';
+  /** Overall capture completion percentage (0-100). */
+  progress: number;
+}
+
+export interface DatabaseSnapshotOverview {
+  supported: boolean;
+  storage: DatabaseStorageStats | null;
+  snapshots: DatabaseSnapshotItem[];
+  activeCapture: ActiveSnapshotCapture | null;
+  config: {
+    retentionDays: number;
+    maxCount: number;
+    snapshotDir: string;
+  };
+}
+
+export interface ServerfullSnapshotBridge {
+  getOverview(): Promise<DatabaseSnapshotOverview>;
+  startCapture(): Promise<ActiveSnapshotCapture>;
+  abortCapture(): Promise<{ aborted: boolean }>;
+  deleteSnapshots(filenames: string[]): Promise<{ deletedCount: number }>;
+  openSnapshotDownload(filename: string): Promise<{
+    stream: ReadableStream<Uint8Array>;
+    sizeBytes: number;
+    filename: string;
+  } | null>;
+}
+
 export interface Env {
   DB: D1Database;
   ACCESS_KEY_DO?: AccessKeyDoNamespace;
   ASSETS: any;
+  SERVERFULL_SNAPSHOT_BRIDGE?: ServerfullSnapshotBridge;
   JWT_SECRET?: string;
   MAX_ACCESS_POINTS_PER_PROFILE?: string | number;
   MAX_PROFILES_PER_USER?: string | number;
@@ -49,6 +108,9 @@ export interface Env {
   DOMAIN_ROLLUP_MIN_COUNT?: string | number;
   SERVERFULL_DOT_DOMAIN?: string;
   SERVERFULL_DB_PATH?: string;
+  SERVERFULL_SNAPSHOT_DIR?: string;
+  SERVERFULL_SNAPSHOT_RETENTION_DAYS?: string | number;
+  SERVERFULL_SNAPSHOT_MAX_COUNT?: string | number;
   DOT_DOMAIN?: string;
   SERVERFULL_ECH_ENABLED?: string | boolean;
   SERVERFULL_ECH_CONFIG?: string;
@@ -160,6 +222,8 @@ export interface Rule {
   v_cname?: string;
   created_at?: number;
   include_subdomains?: boolean | number;
+  /** Whether the rule is active in DNS filtering (1/true = active, 0/false = disabled). */
+  enabled?: boolean | number;
 }
 
 export interface ListMetadataStats {

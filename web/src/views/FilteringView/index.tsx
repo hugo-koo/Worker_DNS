@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Button, Intent, Callout, ButtonGroup } from "@blueprintjs/core";
+import { Intent, Callout } from "@blueprintjs/core";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
 import { useIsMobile } from "../../hooks/useIsMobile";
 import { clsx } from "clsx";
 
@@ -11,6 +10,7 @@ import { ListsTable } from "./components/ListsTable";
 import { ListDetailsDialog } from "./components/ListDetailsDialog";
 import { SyncProgressButton } from "./components/SyncProgressButton";
 import { PAGE_CONTAINER_STANDARD } from "../../constants/layout";
+import { useStickyHeaderTitle } from "../../layouts/HeaderTitleContext";
 import { getProfileLists, addCustomProfileList, deleteCustomProfileList, syncProfileLists, syncSingleProfileList, getProfileSyncStatus, toggleProfileList, addProfileRule } from "../../services";
 
 /**
@@ -51,7 +51,6 @@ function mergeUserAndSystemLists(rawLists: FilterList[]): FilterList[] {
 }
 
 export const FilteringView: React.FC<FilteringViewProps> = ({ profileId, toasterRef }) => {
-  const navigate = useNavigate();
   const isMobile = useIsMobile();
   const [lists, setLists] = useState<FilterList[]>([]);
   const [newUrl, setNewUrl] = useState("");
@@ -62,6 +61,7 @@ export const FilteringView: React.FC<FilteringViewProps> = ({ profileId, toaster
   const [syncingSingleId, setSyncingSingleId] = useState<number | null>(null);
   const [syncSingleProgress, setSyncSingleProgress] = useState(0);
   const { t } = useTranslation();
+  const headerTitleRef = useStickyHeaderTitle<HTMLDivElement>(t("filtering.title"));
 
   const [selectedList, setSelectedList] = useState<FilterList | null>(null);
   const profileLists = useMemo(() => lists.filter((l) => l.scope === "profile"), [lists]);
@@ -374,24 +374,7 @@ export const FilteringView: React.FC<FilteringViewProps> = ({ profileId, toaster
     <div className={clsx("md:px-8 w-full min-w-0 mx-auto", PAGE_CONTAINER_STANDARD, isMobile ? "p-1" : "px-8")}>
       <div className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
         <div className="w-full md:w-auto flex-1">
-          {isMobile ? (
-            <ButtonGroup minimal fill={isMobile}>
-              <Button
-                active={false}
-                onClick={() => navigate(`/dash/${profileId}/rules`)}
-                text={t("rules.title")}
-                large
-              />
-              <Button
-                active={true}
-                onClick={() => navigate(`/dash/${profileId}/filter`)}
-                text={t("filtering.title")}
-                large
-              />
-            </ButtonGroup>
-          ) : (
-            <h1 className="bp6-heading">{t("filtering.title")}</h1>
-          )}
+          <h1 ref={headerTitleRef} className="bp6-heading">{t("filtering.title")}</h1>
           <p className="bp6-text-muted mt-2!">{t("filtering.subtitle")}</p>
         </div>
         <SyncProgressButton

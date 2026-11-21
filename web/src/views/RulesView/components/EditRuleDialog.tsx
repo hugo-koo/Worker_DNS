@@ -1,5 +1,5 @@
 import React from "react";
-import { Dialog, DialogBody, DialogFooter, FormGroup, HTMLSelect, InputGroup, Button, Intent } from "@blueprintjs/core";
+import { Dialog, DialogBody, DialogFooter, FormGroup, HTMLSelect, InputGroup, Button, Intent, Switch } from "@blueprintjs/core";
 import { Globe, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type {  Rule  } from "../types";
@@ -62,6 +62,21 @@ export const EditRuleDialog: React.FC<EditRuleDialogProps> = ({
 
             <div className="text-xs text-gray-500 dark:text-gray-400">
               {t("rules.wildcardDisclaimer")}
+            </div>
+
+            <div className="flex items-center justify-between border border-gray-200 dark:border-gray-700 rounded-lg p-3">
+              <div>
+                <div className="text-sm font-bold">{t("rules.ruleEnabled", "Rule active")}</div>
+                <div className="text-xs opacity-60">
+                  {t("rules.ruleEnabledHint", "Disable to stop applying this rule without deleting it.")}
+                </div>
+              </div>
+              <Switch
+                large
+                checked={editRule.enabled !== 0 && editRule.enabled !== false}
+                disabled={isSaving || isDeleting}
+                onChange={(e) => setEditRule({ ...editRule, enabled: (e.target as HTMLInputElement).checked })}
+              />
             </div>
 
             {editRule.type === "REDIRECT" && (

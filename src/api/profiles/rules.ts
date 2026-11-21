@@ -3,6 +3,13 @@ import { RuleModel } from "../../models/rule";
 import { pipeline } from "../../pipeline";
 
 /**
+ * Normalizes a rule enabled payload value to a strict boolean (defaults to true when omitted).
+ */
+function normalizeRuleEnabled(value: unknown): boolean {
+  return value !== false && value !== 0;
+}
+
+/**
  * Handle custom rules requests to /api/profiles/:id/rules
  */
 export async function handleProfileRulesRequest(
@@ -53,6 +60,7 @@ export async function handleProfileRulesRequest(
           v_cname: r.v_cname || null,
           created_at: typeof r.created_at === 'number' ? r.created_at : undefined,
           include_subdomains: Boolean(r.include_subdomains),
+          enabled: normalizeRuleEnabled(r.enabled),
         });
       }
 
@@ -97,25 +105,75 @@ export async function handleProfileRulesRequest(
       return new Response("Rule for this domain already exists", { status: 400 });
     }
     rule.include_subdomains = Boolean(rule.include_subdomains);
+    rule.enabled = normalizeRuleEnabled(rule.enabled);
     await ruleModel.addRule(profileId, rule);
     ctx.waitUntil(pipeline.clearCache(profileId, false, env));
     return new Response(null, { status: 201 });
   }
 
   if (request.method === 'PUT') {
-    const rule = await request.json() as any;
+    const rule = await request.json() as Partial<Rule> & { id?: number };
+    const ruleId = Number(rule.id);
+    if (!Number.isInteger(ruleId) || ruleId <= 0) {
+      return new Response("Invalid rule id", { status: 400 });
+    }
     const pattern = rule.pattern ? rule.pattern.trim() : "";
     if (!pattern) {
       return new Response("Domain pattern cannot be empty", { status: 400 });
     }
-    const existing = await ruleModel.getRuleByPatternExcludeId(profileId, pattern, rule.id);
+    const existing = await ruleModel.getRuleByPatternExcludeId(profileId, pattern, ruleId);
     if (existing) {
       return new Response("Rule for this domain already exists", { status: 400 });
     }
     rule.include_subdomains = Boolean(rule.include_subdomains);
-    await ruleModel.updateRule(rule.id, profileId, rule);
+    rule.enabled = normalizeRuleEnabled(rule.enabled);
+    await ruleModel.updateRule(ruleId, profileId, rule);
     ctx.waitUntil(pipeline.clearCache(profileId, false, env));
     return new Response(null, { status: 200 });
+  }
+
+  if (request.method === 'PATCH') {
+    let body: { id?: unknown; ids?: unknown; enabled?: unknown };
+    try {
+      body = (await request.json()) as { id?: unknown; ids?: unknown; enabled?: unknown };
+    } catch {
+      return new Response("Invalid JSON payload", { status: 400 });
+    }
+
+    if (typeof body?.enabled !== 'boolean' && body?.enabled !== 0 && body?.enabled !== 1) {
+      return new Response("Missing or invalid 'enabled' boolean", { status: 400 });
+    }
+    const enabled = Boolean(body.enabled);
+
+    const MAX_BULK_TOGGLE = 2000;
+    let rawIds: unknown[] = [];
+    if (Array.isArray(body.ids)) {
+      if (body.ids.length === 0) {
+        return new Response("Rule ids cannot be empty", { status: 400 });
+      }
+      if (body.ids.length > MAX_BULK_TOGGLE) {
+        return new Response(`Bulk update exceeds maximum of ${MAX_BULK_TOGGLE} rules`, { status: 400 });
+      }
+      rawIds = body.ids;
+    } else if (body.id !== undefined) {
+      rawIds = [body.id];
+    } else {
+      return new Response("Rule id or ids required", { status: 400 });
+    }
+
+    const validIds = rawIds
+      .map((val) => Number(val))
+      .filter((val) => Number.isInteger(val) && val > 0);
+    if (validIds.length === 0) {
+      return new Response("No valid rule ids provided", { status: 400 });
+    }
+
+    const updatedCount = await ruleModel.setRulesEnabledBulk(validIds, profileId, enabled);
+    ctx.waitUntil(pipeline.clearCache(profileId, false, env));
+    return new Response(JSON.stringify({ success: true, count: updatedCount, enabled }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 
   if (request.method === 'DELETE') {

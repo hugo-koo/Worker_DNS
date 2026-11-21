@@ -122,6 +122,9 @@ function collectAdGuardRuleLines(rules: Rule[]): string[] {
   const ruleLines: string[] = [];
 
   for (const rule of rules) {
+    if (rule.enabled === 0 || rule.enabled === false) {
+      continue;
+    }
     for (const line of formatRuleToAdGuardLines(rule)) {
       if (!seen.has(line)) {
         seen.add(line);

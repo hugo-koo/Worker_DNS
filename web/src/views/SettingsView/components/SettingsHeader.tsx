@@ -4,6 +4,7 @@ import { Download, Edit2, Check, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type {  Profile  } from "../types";
 import { PROFILE_NAME_REGEX } from "../../../utils/auth";
+import { useStickyHeaderTitle } from "../../../layouts/HeaderTitleContext";
 
 export interface SettingsHeaderProps {
   profile: Profile | null;
@@ -26,6 +27,7 @@ export const SettingsHeader: React.FC<SettingsHeaderProps> = ({
 }) => {
   const { t } = useTranslation();
   const [nameFocused, setNameFocused] = useState(false);
+  const headerTitleRef = useStickyHeaderTitle<HTMLDivElement>(profile?.name);
 
   return (
     <div className="mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -73,14 +75,14 @@ export const SettingsHeader: React.FC<SettingsHeaderProps> = ({
             />
           </div>
         ) : (
-          <div className="group flex items-center gap-2 mb-1 cursor-pointer" onClick={() => setIsEditingName(true)}>
+          <div ref={headerTitleRef} className="group flex items-center gap-2 mb-1 cursor-pointer" onClick={() => setIsEditingName(true)}>
             <h2 className="bp6-heading mb-0">{profile?.name}</h2>
             <Button icon={<Edit2 size={14} />} minimal className="opacity-30 group-hover:opacity-100 transition-opacity" />
           </div>
         )}
         <p className="bp6-text-muted">{t("settings.subtitle")}</p>
       </div>
-      <div className="flex gap-2 items-center">
+      <div className="flex gap-2 items-center justify-end w-full md:w-auto">
         <Button size="large" icon={<Download size={18} />} text={t("settings.export", "导出配置")} onClick={exportProfile} />
       </div>
     </div>

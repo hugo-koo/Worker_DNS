@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { Alert, Callout, Intent, ButtonGroup, Button, Tag, PopoverNext, Spinner } from "@blueprintjs/core";
-import { Trash2, Download } from "lucide-react";
+import { Alert, Callout, Intent, Button, Tag, PopoverNext, Spinner } from "@blueprintjs/core";
+import { Trash2, Download, Ban, CheckCircle } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useNavigate } from "react-router-dom";
 import { clsx } from "clsx";
 
 import type { Rule, RulesViewProps, ProfileSettings } from "./types";
@@ -12,6 +11,7 @@ import { EditRuleDialog } from "./components/EditRuleDialog";
 import { downloadAdGuardRulesList } from "./utils/adguardExport";
 import { useIsMobile } from "../../hooks/useIsMobile";
 import { PAGE_CONTAINER_STANDARD } from "../../constants/layout";
+import { useStickyHeaderTitle } from "../../layouts/HeaderTitleContext";
 import {
   getProfileRules,
   getProfileDetails,
@@ -19,11 +19,11 @@ import {
   updateProfileRule,
   deleteProfileRule,
   deleteProfileRulesBulk,
+  toggleProfileRulesBulk,
   getClientInfo,
 } from "../../services";
 
 export const RulesView: React.FC<RulesViewProps> = ({ profileId, prefill, onPrefillUsed, toasterRef }) => {
-  const navigate = useNavigate();
   const [rules, setRules] = useState<Rule[]>([]);
   const [settings, setSettings] = useState<ProfileSettings | null>(null);
   const [loading, setLoading] = useState(true);
@@ -32,6 +32,7 @@ export const RulesView: React.FC<RulesViewProps> = ({ profileId, prefill, onPref
   const [isDeleting, setIsDeleting] = useState(false);
   const { t } = useTranslation();
   const isMobile = useIsMobile();
+  const headerTitleRef = useStickyHeaderTitle<HTMLDivElement>(t("rules.title"));
   const [newRule, setNewRule] = useState<{
     type: Rule["type"];
     pattern: string;
@@ -54,6 +55,7 @@ export const RulesView: React.FC<RulesViewProps> = ({ profileId, prefill, onPref
   const [selectedRuleIds, setSelectedRuleIds] = useState<number[]>([]);
   const [isBulkDeleteAlertOpen, setIsBulkDeleteAlertOpen] = useState(false);
   const [isDeletingBulk, setIsDeletingBulk] = useState(false);
+  const [isTogglingBulk, setIsTogglingBulk] = useState(false);
   const [substituteDomain, setSubstituteDomain] = useState<string>("www.wto.org");
   const [isPromptOpen, setIsPromptOpen] = useState(false);
 
@@ -214,6 +216,7 @@ export const RulesView: React.FC<RulesViewProps> = ({ profileId, prefill, onPref
         ...editRule,
         pattern: trimmedPattern,
         include_subdomains: 0,
+        enabled: editRule.enabled !== 0 && editRule.enabled !== false,
       } as Rule);
       toasterRef?.current?.show({
         message: t("rules.updateSuccess", "Rule updated successfully"),
@@ -239,6 +242,7 @@ export const RulesView: React.FC<RulesViewProps> = ({ profileId, prefill, onPref
     setEditRule({
       ...rule,
       include_subdomains: rule.include_subdomains === 1 || rule.include_subdomains === true,
+      enabled: rule.enabled !== 0 && rule.enabled !== false,
     });
   };
 
@@ -263,6 +267,53 @@ export const RulesView: React.FC<RulesViewProps> = ({ profileId, prefill, onPref
 
   const handleToggleSelectAll = (checked: boolean) => {
     setSelectedRuleIds(checked ? rules.map((r) => r.id) : []);
+  };
+
+  const selectedRules = useMemo(() => {
+    const selectedSet = new Set(selectedRuleIds);
+    return rules.filter((r) => selectedSet.has(r.id));
+  }, [rules, selectedRuleIds]);
+
+  const hasActiveSelected = useMemo(
+    () => selectedRules.some((r) => r.enabled !== 0 && r.enabled !== false),
+    [selectedRules]
+  );
+
+  const hasDisabledSelected = useMemo(
+    () => selectedRules.some((r) => r.enabled === 0 || r.enabled === false),
+    [selectedRules]
+  );
+
+  const handleBulkToggleEnabled = async (enabled: boolean) => {
+    if (selectedRuleIds.length === 0) return;
+    setIsTogglingBulk(true);
+    try {
+      const targetCount = selectedRuleIds.length;
+      const res = await toggleProfileRulesBulk(profileId, selectedRuleIds, enabled);
+      const updatedCount = typeof res?.count === "number" ? res.count : targetCount;
+      setSelectedRuleIds([]);
+      toasterRef?.current?.show({
+        message: enabled
+          ? t("rules.enableBulkSuccess", {
+              count: updatedCount,
+              defaultValue: `已启用 ${updatedCount} 条规则`,
+            })
+          : t("rules.disableBulkSuccess", {
+              count: updatedCount,
+              defaultValue: `已停用 ${updatedCount} 条规则`,
+            }),
+        intent: Intent.SUCCESS,
+      });
+      await fetchRules();
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "";
+      toasterRef?.current?.show({
+        message: message || t("rules.toggleBulkFailed", "批量更新规则状态失败"),
+        intent: Intent.DANGER,
+      });
+    } finally {
+      setIsTogglingBulk(false);
+    }
   };
 
   const handleConfirmBulkDelete = async () => {
@@ -326,34 +377,14 @@ export const RulesView: React.FC<RulesViewProps> = ({ profileId, prefill, onPref
       <div className="mb-8">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div className="w-full md:w-auto flex-1">
-            {isMobile ? (
-              <div className="flex items-center gap-2">
-                <ButtonGroup minimal fill={isMobile} className="flex-1">
-                  <Button
-                    active={true}
-                    onClick={() => navigate(`/dash/${profileId}/rules`)}
-                    text={t("rules.title")}
-                    large
-                  />
-                  <Button
-                    active={false}
-                    onClick={() => navigate(`/dash/${profileId}/filter`)}
-                    text={t("filtering.title")}
-                    large
-                  />
-                </ButtonGroup>
-                {loading && <Spinner size={16} />}
-              </div>
-            ) : (
-              <div className="flex items-center gap-3">
-                <h1 className="bp6-heading m-0">{t("rules.title")}</h1>
-                {loading && <Spinner size={20} />}
-              </div>
-            )}
+            <div ref={headerTitleRef} className="flex items-center gap-3">
+              <h1 className="bp6-heading m-0">{t("rules.title")}</h1>
+              {loading && <Spinner size={20} />}
+            </div>
             <p className="bp6-text-muted mt-2!">{t("rules.subtitle")}</p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 self-start md:self-auto">
+          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
             {!loading && !hasSelfRedirect && (
               <PopoverNext
                 isOpen={isPromptOpen}
@@ -394,9 +425,10 @@ export const RulesView: React.FC<RulesViewProps> = ({ profileId, prefill, onPref
             )}
             <Button
               type="button"
-              variant="outlined"
-              icon={<Download size={14} />}
+              size="large"
+              icon={<Download size={18} />}
               text={t("rules.exportList", "导出列表")}
+              className="ml-auto md:ml-0"
               disabled={loading || rules.length === 0}
               onClick={() => handleExportAdGuardList(rules)}
             />
@@ -440,10 +472,42 @@ export const RulesView: React.FC<RulesViewProps> = ({ profileId, prefill, onPref
                   variant="minimal"
                   text={t("rules.clearSelection", "取消选择")}
                   onClick={() => setSelectedRuleIds([])}
-                  disabled={isDeletingBulk}
+                  disabled={isDeletingBulk || isTogglingBulk}
                 />
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {hasDisabledSelected && (
+                  <Button
+                    type="button"
+                    size="small"
+                    variant="outlined"
+                    intent={Intent.SUCCESS}
+                    icon={<CheckCircle size={14} />}
+                    text={t("rules.enableSelected", {
+                      count: selectedRuleIds.length,
+                      defaultValue: `启用 (${selectedRuleIds.length})`,
+                    })}
+                    loading={isTogglingBulk}
+                    disabled={isDeletingBulk || isTogglingBulk}
+                    onClick={() => handleBulkToggleEnabled(true)}
+                  />
+                )}
+                {hasActiveSelected && (
+                  <Button
+                    type="button"
+                    size="small"
+                    variant="outlined"
+                    intent={Intent.WARNING}
+                    icon={<Ban size={14} />}
+                    text={t("rules.disableSelected", {
+                      count: selectedRuleIds.length,
+                      defaultValue: `停用 (${selectedRuleIds.length})`,
+                    })}
+                    loading={isTogglingBulk}
+                    disabled={isDeletingBulk || isTogglingBulk}
+                    onClick={() => handleBulkToggleEnabled(false)}
+                  />
+                )}
                 <Button
                   type="button"
                   size="small"
@@ -453,9 +517,9 @@ export const RulesView: React.FC<RulesViewProps> = ({ profileId, prefill, onPref
                     count: selectedRuleIds.length,
                     defaultValue: `导出 (${selectedRuleIds.length})`,
                   })}
-                  disabled={isDeletingBulk}
+                  disabled={isDeletingBulk || isTogglingBulk}
                   onClick={() =>
-                    handleExportAdGuardList(rules.filter((r) => selectedRuleIds.includes(r.id)))
+                    handleExportAdGuardList(selectedRules)
                   }
                 />
                 <Button
@@ -468,6 +532,7 @@ export const RulesView: React.FC<RulesViewProps> = ({ profileId, prefill, onPref
                     defaultValue: `删除 (${selectedRuleIds.length})`,
                   })}
                   loading={isDeletingBulk}
+                  disabled={isTogglingBulk}
                   onClick={() => setIsBulkDeleteAlertOpen(true)}
                 />
               </div>

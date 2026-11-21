@@ -1,10 +1,11 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import type { OverlayToaster } from "@blueprintjs/core";
 import { useIsMobile } from "../hooks/useIsMobile";
 import type { Profile, UserInfo } from "../types/auth";
 import { DesktopSidebar } from "./DesktopSidebar";
 import { HeaderNavbar } from "./HeaderNavbar";
+import { HeaderTitleProvider } from "./HeaderTitleContext";
 
 /**
  * Properties for the MainLayout component.
@@ -62,6 +63,7 @@ export const MainLayout = ({
 }: MainLayoutProps) => {
   const { profileId: urlProfileId } = useParams();
   const isMobile = useIsMobile();
+  const [scrollContainerEl, setScrollContainerEl] = useState<HTMLDivElement | null>(null);
   const activeId = urlProfileId || selectedProfile?.id;
   const isProfileActive = Boolean(activeId && selectedProfile);
 
@@ -75,6 +77,12 @@ export const MainLayout = ({
       if (found) setSelectedProfile(found);
     }
   }, [urlProfileId, profiles, selectedProfile, setSelectedProfile]);
+
+  useEffect(() => {
+    if (scrollContainerEl) {
+      scrollContainerEl.scrollTo(0, 0);
+    }
+  }, [location.pathname, scrollContainerEl]);
 
   return (
     <div className="flex h-screen w-full bg-slate-100 dark:bg-gray-950 overflow-hidden flex-col md:flex-row">
@@ -94,31 +102,36 @@ export const MainLayout = ({
       />
 
       <main className="flex-1 min-w-0 h-full relative bg-slate-100/80 dark:bg-gray-950/20 flex flex-col overflow-hidden">
-        <HeaderNavbar
-          theme={theme}
-          setTheme={setTheme}
-          selectedProfile={selectedProfile}
-          profiles={profiles}
-          setSelectedProfile={setSelectedProfile}
-          isProfileActive={isProfileActive}
-          location={location}
-          navigate={navigate}
-          isSaving={isSaving}
-          currentUser={currentUser}
-          isMobile={isMobile}
-          isSidebarOpen={isSidebarOpen}
-          onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
-        />
+        <HeaderTitleProvider
+          scrollContainerEl={scrollContainerEl}
+          pathname={location.pathname}
+        >
+          <HeaderNavbar
+            theme={theme}
+            setTheme={setTheme}
+            selectedProfile={selectedProfile}
+            profiles={profiles}
+            setSelectedProfile={setSelectedProfile}
+            isProfileActive={isProfileActive}
+            location={location}
+            navigate={navigate}
+            isSaving={isSaving}
+            currentUser={currentUser}
+            isMobile={isMobile}
+            isSidebarOpen={isSidebarOpen}
+            onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+          />
 
-        <div className="flex-1 min-h-0 flex flex-col relative z-0 isolate" style={{ isolation: "isolate" }}>
-          {location.pathname.endsWith("/logs") ? (
-            <div className="flex-1 overflow-y-auto">{children}</div>
-          ) : (
-            <div className="flex-1 overflow-y-auto pt-14">
-              <div className="p-2 md:p-4 pb-6 md:pb-8">{children}</div>
-            </div>
-          )}
-        </div>
+          <div className="flex-1 min-h-0 flex flex-col relative z-0 isolate" style={{ isolation: "isolate" }}>
+            {location.pathname.endsWith("/logs") ? (
+              <div ref={setScrollContainerEl} className="flex-1 overflow-y-auto">{children}</div>
+            ) : (
+              <div ref={setScrollContainerEl} className="flex-1 overflow-y-auto pt-14">
+                <div className="p-2 md:p-4 pb-6 md:pb-8">{children}</div>
+              </div>
+            )}
+          </div>
+        </HeaderTitleProvider>
       </main>
     </div>
   );

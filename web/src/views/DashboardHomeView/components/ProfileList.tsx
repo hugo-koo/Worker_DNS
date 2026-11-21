@@ -49,29 +49,35 @@ export const ProfileList: React.FC<ProfileListProps> = ({
             <a
               href={targetPath}
               onClick={createSpaLinkClickHandler(targetPath, () => onSelect(p))}
-              className="flex flex-col flex-1 min-w-0 text-inherit no-underline hover:no-underline after:absolute after:inset-0 after:content-['']"
-            >
-              <span className="font-bold text-base dark:text-white truncate">
-                {p.name}
-              </span>
+              aria-label={p.name}
+              className="absolute inset-0 z-0 rounded-xl focus:outline-none"
+            />
+            <div className="flex flex-col flex-1 min-w-0 pointer-events-none relative z-10">
+              <div className="flex items-center min-w-0">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    onRename(p);
+                  }}
+                  aria-label={t("common.rename", "Rename")}
+                  title={t("common.rename", "Rename")}
+                  className="pointer-events-auto group/rename inline-flex items-center gap-1.5 max-w-full min-w-0 bg-transparent border-0 p-0 text-left font-bold text-base text-gray-900 dark:text-white cursor-pointer"
+                >
+                  <span className="truncate">{p.name}</span>
+                  <Edit2
+                    size={13}
+                    className="shrink-0 opacity-30 group-hover/rename:opacity-100 transition-opacity"
+                  />
+                </button>
+              </div>
               <code className="text-gray-400 text-[10px] font-mono uppercase mt-0.5">
                 {p.id}
               </code>
-            </a>
-            <div className="flex items-center gap-1 shrink-0">
+            </div>
+            <div className="flex items-center gap-1 shrink-0 relative z-10">
               <Button
-                className="relative z-10"
-                variant="minimal"
-                icon={<Edit2 size={16} />}
-                aria-label={t("common.rename", "Rename")}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  e.preventDefault();
-                  onRename(p);
-                }}
-              />
-              <Button
-                className="relative z-10"
                 variant="minimal"
                 intent={Intent.DANGER}
                 icon={<Trash2 size={16} />}
