@@ -1187,7 +1187,8 @@
     "snapshotDeleteOne": "刪除快照",
     "snapshotDeleteBulkConfirm": "確定要永久刪除選取的 {{count}} 個資料庫快照嗎？此操作無法復原。",
     "snapshotDeleteSingleConfirm": "確定要永久刪除資料庫快照 \"{{filename}}\" 嗎？此操作無法復原。",
-    "snapshotDemoDownloadBlocked": "示範模式僅提供前端展示，不支援下載真實資料庫快照。"
+    "snapshotDemoDownloadBlocked": "示範模式僅提供前端展示，不支援下載真實資料庫快照。",
+    "snapshotDownloadFailed": "下載快照失敗"
   },
   "intro": {
     "item1Title": "DNS Worker 保護性 DNS",

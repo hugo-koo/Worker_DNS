@@ -1187,7 +1187,8 @@
     "snapshotDeleteOne": "Xóa bản chụp",
     "snapshotDeleteBulkConfirm": "Xóa vĩnh viễn {{count}} bản chụp CSDL đã chọn? Hành động này không thể hoàn tác.",
     "snapshotDeleteSingleConfirm": "Xóa vĩnh viễn bản chụp CSDL \"{{filename}}\"? Hành động này không thể hoàn tác.",
-    "snapshotDemoDownloadBlocked": "Chế độ Demo chỉ hiển thị giao diện bản chụp và không cho phép tải xuống tệp cơ sở dữ liệu thật."
+    "snapshotDemoDownloadBlocked": "Chế độ Demo chỉ hiển thị giao diện bản chụp và không cho phép tải xuống tệp cơ sở dữ liệu thật.",
+    "snapshotDownloadFailed": "Tải xuống bản chụp thất bại"
   },
   "intro": {
     "item1Title": "DNS Worker Protective DNS",

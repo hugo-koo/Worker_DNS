@@ -349,29 +349,9 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
             />
             {showText && (
               <div className="ml-2.5 flex flex-col justify-center min-w-0 flex-1">
-                <div className="flex items-baseline gap-1.5 min-w-0">
-                  <span className="font-bold text-base leading-tight dark:text-white shrink-0">
-                    DNS Worker
-                  </span>
-                  <span
-                    className="text-xs text-gray-500 dark:text-gray-400 font-mono leading-tight truncate shrink-0 inline-flex items-center"
-                    title={hasUpdate ? (latestTag ? `New version available: ${latestTag}` : "Update available") : appVersion}
-                  >
-                    {hasUpdate ? (
-                      <a
-                        href="https://github.com/Oppidi/DNS-Worker/releases"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-amber-500 dark:text-amber-400 hover:underline transition-colors"
-                      >
-                        {gitTag}
-                      </a>
-                    ) : (
-                      <span>{gitTag}</span>
-                    )}
-                    {gitCommit ? `-${gitCommit}` : ""}
-                  </span>
-                </div>
+                <span className="font-bold text-base leading-tight dark:text-white truncate">
+                  DNS Worker
+                </span>
                 <span
                   className="text-xs text-gray-500 dark:text-gray-400 font-mono leading-tight mt-0.5 truncate select-all"
                   title={displayHost}
@@ -493,6 +473,28 @@ export const DesktopSidebar: React.FC<DesktopSidebarProps> = ({
               />
             </PopoverNext>
           </Menu>
+          {showText && (
+            <div className="mt-2.5 px-3 flex items-center justify-center">
+              <span
+                className="text-xs text-gray-500 dark:text-gray-400 font-mono leading-tight truncate inline-flex items-center"
+                title={hasUpdate ? (latestTag ? `New version available: ${latestTag}` : "Update available") : appVersion}
+              >
+                {hasUpdate ? (
+                  <a
+                    href="https://github.com/Oppidi/DNS-Worker/releases"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-amber-500 dark:text-amber-400 hover:underline transition-colors"
+                  >
+                    {gitTag}
+                  </a>
+                ) : (
+                  <span>{gitTag}</span>
+                )}
+                {gitCommit ? `-${gitCommit}` : ""}
+              </span>
+            </div>
+          )}
         </div>
 
         <div className="p-4 border-t border-gray-100 dark:border-gray-800 flex items-center justify-between">

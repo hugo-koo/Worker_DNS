@@ -161,6 +161,28 @@ export function getSnapshotDownloadUrl(filename: string): string {
   return `/api/admin/database/snapshots/${encodeURIComponent(filename)}/download`;
 }
 
+/**
+ * Requests a short-lived signed download ticket via authenticated `POST` (bypassing browser
+ * speculative prefetching while preserving Bearer + CSRF protection) and immediately hands off
+ * the `.sqlite.zst` URL to the browser's native streaming download manager (zero JS memory buffering).
+ */
+export async function downloadDatabaseSnapshot(filename: string): Promise<void> {
+  const res = await fetch(`/api/admin/database/snapshots/${encodeURIComponent(filename)}/ticket`, {
+    method: "POST"
+  });
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(errText || `HTTP ${res.status}`);
+  }
+  const { downloadUrl } = (await res.json()) as { downloadUrl: string };
+  const link = document.createElement("a");
+  link.href = downloadUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
 export async function runDatabaseMigrations(): Promise<RunMigrationsResponse> {
   let totalApplied = 0;
   let lastRes: RunMigrationsResponse | null = null;

@@ -78,14 +78,79 @@ export async function getCurrentUser(request: Request, env: Env, ctx?: Execution
   const authHeader = request.headers.get("Authorization") || "";
   let accessToken = "";
   let wsTicket = "";
+  let snapshotDownloadTicket = "";
+  let requestedSnapshotFilename = "";
   if (authHeader.startsWith("Bearer ")) {
     accessToken = authHeader.slice(7);
-  } else if (
-    request.headers.get("Upgrade")?.toLowerCase().includes("websocket") ||
-    new URL(request.url).pathname.endsWith("/ws")
-  ) {
+  } else {
     const url = new URL(request.url);
-    wsTicket = url.searchParams.get("ticket") || "";
+    if (
+      request.headers.get("Upgrade")?.toLowerCase().includes("websocket") ||
+      url.pathname.endsWith("/ws")
+    ) {
+      wsTicket = url.searchParams.get("ticket") || "";
+    } else if (request.method === "GET") {
+      const snapMatch = /^\/api\/admin\/database\/snapshots\/([^/]+)\/download$/.exec(url.pathname);
+      if (snapMatch) {
+        snapshotDownloadTicket = url.searchParams.get("ticket") || "";
+        try {
+          requestedSnapshotFilename = decodeURIComponent(snapMatch[1]);
+        } catch {
+          return null;
+        }
+      }
+    }
+  }
+
+  if (snapshotDownloadTicket) {
+    try {
+      const secret = await getOrCreateJwtSecret(env);
+      const jwtKey = await importJwtSecret(secret);
+      const payload = await verifyJWT<{
+        purpose?: string;
+        filename?: string;
+        userId?: string;
+        sessionId?: string;
+        exp?: number;
+      }>(snapshotDownloadTicket, jwtKey);
+
+      const now = Math.floor(Date.now() / 1000);
+      if (
+        !payload ||
+        payload.purpose !== "snapshot_download" ||
+        !payload.filename ||
+        payload.filename !== requestedSnapshotFilename ||
+        !payload.userId ||
+        !payload.sessionId ||
+        !payload.exp ||
+        payload.exp <= now
+      ) {
+        return null;
+      }
+
+      const sessionModel = new SessionModel(env.DB);
+      const session = await sessionModel.getSessionWithUser(payload.sessionId);
+      if (!session || session.user_id !== payload.userId || session.role !== "admin") {
+        return null;
+      }
+      const sessionId = session.id || session.session_id || payload.sessionId;
+      const absoluteExpiresAt = getAbsoluteSessionExpiry(
+        { id: sessionId, created_at: session.created_at },
+        env
+      );
+      if (now >= session.expires_at || now >= absoluteExpiresAt || session.is_paused === 1) {
+        return null;
+      }
+
+      return {
+        id: session.user_id,
+        username: session.username,
+        role: "admin",
+        sessionId,
+      };
+    } catch {
+      return null;
+    }
   }
 
   if (wsTicket) {

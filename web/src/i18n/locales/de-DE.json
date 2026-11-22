@@ -1187,7 +1187,8 @@
     "snapshotDeleteOne": "Snapshot löschen",
     "snapshotDeleteBulkConfirm": "Die {{count}} ausgewählten Datenbank-Snapshots dauerhaft löschen? Dies kann nicht rückgängig gemacht werden.",
     "snapshotDeleteSingleConfirm": "Datenbank-Snapshot „{{filename}}“ dauerhaft löschen? Dies kann nicht rückgängig gemacht werden.",
-    "snapshotDemoDownloadBlocked": "Der Demo-Modus zeigt nur die Snapshot-Oberfläche und erlaubt keinen Download echter Datenbankdateien."
+    "snapshotDemoDownloadBlocked": "Der Demo-Modus zeigt nur die Snapshot-Oberfläche und erlaubt keinen Download echter Datenbankdateien.",
+    "snapshotDownloadFailed": "Snapshot-Download fehlgeschlagen"
   },
   "intro": {
     "item1Title": "DNS Worker Schützendes DNS",

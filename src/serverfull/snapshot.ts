@@ -406,7 +406,7 @@ export class ServerfullSnapshotManager implements ServerfullSnapshotBridge {
     }
     const diskUsedBytes = Math.max(0, diskTotalBytes - diskFreeBytes);
 
-    let sameFilesystem = true;
+    let sameFilesystem: boolean;
     let snapshotDiskTotalBytes: number | undefined;
     let snapshotDiskFreeBytes: number | undefined;
 
@@ -679,9 +679,13 @@ export class ServerfullSnapshotManager implements ServerfullSnapshotBridge {
     return { deletedCount };
   }
 
-  public async openSnapshotDownload(filename: string): Promise<{
-    stream: ReadableStream<Uint8Array>;
+  public async openSnapshotDownload(filename: string, rangeHeader?: string | null): Promise<{
+    stream: ReadableStream<Uint8Array> | null;
+    status: 200 | 206 | 416;
     sizeBytes: number;
+    contentLength: number;
+    contentRange?: string;
+    etag: string;
     filename: string;
   } | null> {
     if (!SNAPSHOT_FILE_REGEX.test(filename)) {
@@ -703,11 +707,80 @@ export class ServerfullSnapshotManager implements ServerfullSnapshotBridge {
       return null;
     }
 
+    const sizeBytes = stat.size;
+    const etag = `"${sizeBytes}-${Math.floor(stat.mtimeMs)}"`;
+
+    if (rangeHeader && rangeHeader.trim().toLowerCase().startsWith('bytes=')) {
+      const rangeSpec = rangeHeader.trim().slice(6).split(',')[0]?.trim() || '';
+      const match = /^(\d*)-(\d*)$/.exec(rangeSpec);
+      if (!match || (match[1] === '' && match[2] === '') || sizeBytes === 0) {
+        return {
+          stream: null,
+          status: 416,
+          sizeBytes,
+          contentLength: 0,
+          contentRange: `bytes */${sizeBytes}`,
+          etag,
+          filename,
+        };
+      }
+
+      let start: number;
+      let end: number;
+      if (match[1] === '') {
+        // Suffix byte range: last N bytes
+        const suffixLen = Number(match[2]);
+        if (!Number.isFinite(suffixLen) || suffixLen <= 0) {
+          return {
+            stream: null,
+            status: 416,
+            sizeBytes,
+            contentLength: 0,
+            contentRange: `bytes */${sizeBytes}`,
+            etag,
+            filename,
+          };
+        }
+        start = Math.max(0, sizeBytes - suffixLen);
+        end = sizeBytes - 1;
+      } else {
+        start = Number(match[1]);
+        end = match[2] === '' ? sizeBytes - 1 : Math.min(sizeBytes - 1, Number(match[2]));
+      }
+
+      if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || start >= sizeBytes || end < start) {
+        return {
+          stream: null,
+          status: 416,
+          sizeBytes,
+          contentLength: 0,
+          contentRange: `bytes */${sizeBytes}`,
+          etag,
+          filename,
+        };
+      }
+
+      const nodeStream = fs.createReadStream(targetPath, { start, end });
+      const webStream = Readable.toWeb(nodeStream) as unknown as ReadableStream<Uint8Array>;
+      return {
+        stream: webStream,
+        status: 206,
+        sizeBytes,
+        contentLength: end - start + 1,
+        contentRange: `bytes ${start}-${end}/${sizeBytes}`,
+        etag,
+        filename,
+      };
+    }
+
     const nodeStream = fs.createReadStream(targetPath);
     const webStream = Readable.toWeb(nodeStream) as unknown as ReadableStream<Uint8Array>;
     return {
       stream: webStream,
-      sizeBytes: stat.size,
+      status: 200,
+      sizeBytes,
+      contentLength: sizeBytes,
+      etag,
       filename,
     };
   }

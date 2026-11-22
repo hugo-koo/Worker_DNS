@@ -1187,7 +1187,8 @@
     "snapshotDeleteOne": "Удалить снимок",
     "snapshotDeleteBulkConfirm": "Безвозвратно удалить выбранные снимки БД ({{count}} шт.)? Это действие необратимо.",
     "snapshotDeleteSingleConfirm": "Безвозвратно удалить снимок БД «{{filename}}»? Это действие необратимо.",
-    "snapshotDemoDownloadBlocked": "В демо-режиме доступен только предпросмотр интерфейса снимков; скачивание реальных файлов БД отключено."
+    "snapshotDemoDownloadBlocked": "В демо-режиме доступен только предпросмотр интерфейса снимков; скачивание реальных файлов БД отключено.",
+    "snapshotDownloadFailed": "Не удалось скачать снимок"
   },
   "intro": {
     "item1Title": "Защитный DNS Worker",

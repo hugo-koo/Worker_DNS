@@ -52,9 +52,13 @@ export interface ServerfullSnapshotBridge {
   startCapture(): Promise<ActiveSnapshotCapture>;
   abortCapture(): Promise<{ aborted: boolean }>;
   deleteSnapshots(filenames: string[]): Promise<{ deletedCount: number }>;
-  openSnapshotDownload(filename: string): Promise<{
-    stream: ReadableStream<Uint8Array>;
+  openSnapshotDownload(filename: string, rangeHeader?: string | null): Promise<{
+    stream: ReadableStream<Uint8Array> | null;
+    status: 200 | 206 | 416;
     sizeBytes: number;
+    contentLength: number;
+    contentRange?: string;
+    etag: string;
     filename: string;
   } | null>;
 }

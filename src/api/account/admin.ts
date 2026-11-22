@@ -17,6 +17,8 @@ import {
 } from "../../lib/turso";
 import { detectServerfullMode } from "../../router/runtimeConfig";
 import { buildDemoSnapshotOverview, isDemoMode } from "../../lib/demoConfig";
+import { getOrCreateJwtSecret } from "../../lib/auth";
+import { importJwtSecret, signJWT } from "../../lib/jwt";
 
 /**
  * Allowlist of system setting keys that can be updated via administrative REST APIs.
@@ -30,6 +32,17 @@ const ALLOWED_ADMIN_SETTINGS_KEYS = new Set<string>([
   'registration_enabled',
   'max_users'
 ]);
+
+/**
+ * Safely decodes a URL path segment, returning `null` if percent-encoding is malformed.
+ */
+function decodePathSegment(raw: string): string | null {
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Handle admin requests to /api/admin/...
@@ -183,26 +196,82 @@ export async function handleAdminRequest(
         });
       }
 
-      // GET /api/admin/database/snapshots/:filename/download
-      if (request.method === 'GET' && pathParts[4] && pathParts[5] === 'download') {
-        let decodedName = pathParts[4];
-        try {
-          decodedName = decodeURIComponent(pathParts[4]);
-        } catch {
+      // POST /api/admin/database/snapshots/:filename/ticket -> short-lived signed download URL for native streaming
+      if (request.method === 'POST' && pathParts[4] && pathParts[5] === 'ticket') {
+        const decodedName = decodePathSegment(pathParts[4]);
+        if (decodedName === null) {
           return new Response("Invalid filename encoding", { status: 400 });
         }
-        const download = await snapshotBridge.openSnapshotDownload(decodedName);
+
+        const overview = await snapshotBridge.getOverview();
+        const exists = overview.snapshots.some((snap) => snap.filename === decodedName);
+        if (!exists) {
+          return new Response("Snapshot not found", { status: 404 });
+        }
+        if (!user.sessionId) {
+          return new Response("Active session required", { status: 401 });
+        }
+
+        const secret = await getOrCreateJwtSecret(env);
+        const jwtKey = await importJwtSecret(secret);
+        // 4-hour download ticket so large snapshots can be retried/resumed cleanly while
+        // every download request still performs real-time DB session & admin role checks.
+        const expiresIn = 14400;
+        const ticket = await signJWT(
+          {
+            purpose: "snapshot_download",
+            filename: decodedName,
+            userId: user.id,
+            sessionId: user.sessionId,
+            exp: Math.floor(Date.now() / 1000) + expiresIn,
+          },
+          jwtKey
+        );
+
+        const downloadUrl = `/api/admin/database/snapshots/${encodeURIComponent(decodedName)}/download?ticket=${encodeURIComponent(ticket)}`;
+        return new Response(JSON.stringify({ ticket, downloadUrl, expiresIn }), {
+          headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }
+        });
+      }
+
+      // GET /api/admin/database/snapshots/:filename/download
+      if (request.method === 'GET' && pathParts[4] && pathParts[5] === 'download') {
+        const decodedName = decodePathSegment(pathParts[4]);
+        if (decodedName === null) {
+          return new Response("Invalid filename encoding", { status: 400 });
+        }
+        const download = await snapshotBridge.openSnapshotDownload(decodedName, request.headers.get('Range'));
         if (!download) {
           return new Response("Snapshot not found", { status: 404 });
         }
+        if (download.status === 416) {
+          return new Response(null, {
+            status: 416,
+            headers: {
+              'Content-Range': download.contentRange || `bytes */${download.sizeBytes}`,
+              'Accept-Ranges': 'bytes',
+              'Cache-Control': 'private, no-store, no-transform'
+            }
+          });
+        }
+
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/zstd',
+          'Content-Disposition': `attachment; filename="${download.filename}"`,
+          'Content-Length': String(download.contentLength),
+          'Accept-Ranges': 'bytes',
+          'ETag': download.etag,
+          'Cache-Control': 'private, no-store, no-transform',
+          'Vary': 'Authorization',
+          'X-Accel-Buffering': 'no'
+        };
+        if (download.status === 206 && download.contentRange) {
+          headers['Content-Range'] = download.contentRange;
+        }
+
         return new Response(download.stream, {
-          status: 200,
-          headers: {
-            'Content-Type': 'application/zstd',
-            'Content-Disposition': `attachment; filename="${download.filename}"`,
-            'Content-Length': String(download.sizeBytes),
-            'Cache-Control': 'no-store'
-          }
+          status: download.status,
+          headers
         });
       }
 
@@ -215,7 +284,7 @@ export async function handleAdminRequest(
             headers: { 'Content-Type': 'application/json' }
           });
         } catch (err: unknown) {
-          const msg = err instanceof Error ? err.message : String(err || '');
+          const msg = err instanceof Error ? err.message : '';
           if (msg === 'SNAPSHOT_IN_PROGRESS') {
             return new Response(JSON.stringify({ error: 'Snapshot capture is already in progress' }), {
               status: 409,
@@ -223,12 +292,13 @@ export async function handleAdminRequest(
             });
           }
           if (msg.startsWith('ZSTD_UNSUPPORTED')) {
-            return new Response(JSON.stringify({ error: msg }), {
+            return new Response(JSON.stringify({ error: 'Zstd compression is not supported in the current Node.js runtime (requires Node.js >= 22.15).' }), {
               status: 501,
               headers: { 'Content-Type': 'application/json' }
             });
           }
-          return new Response(JSON.stringify({ error: msg || 'Failed to start snapshot capture' }), {
+          console.error('[Admin Snapshot] Failed to start capture:', err);
+          return new Response(JSON.stringify({ error: 'Failed to start snapshot capture' }), {
             status: 500,
             headers: { 'Content-Type': 'application/json' }
           });
@@ -246,10 +316,8 @@ export async function handleAdminRequest(
       // DELETE /api/admin/database/snapshots/:filename or bulk DELETE /api/admin/database/snapshots
       if (request.method === 'DELETE') {
         if (pathParts[4]) {
-          let decodedName = pathParts[4];
-          try {
-            decodedName = decodeURIComponent(pathParts[4]);
-          } catch {
+          const decodedName = decodePathSegment(pathParts[4]);
+          if (decodedName === null) {
             return new Response("Invalid filename encoding", { status: 400 });
           }
           const result = await snapshotBridge.deleteSnapshots([decodedName]);

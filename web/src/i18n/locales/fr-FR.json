@@ -1187,7 +1187,8 @@
     "snapshotDeleteOne": "Supprimer l'instantané",
     "snapshotDeleteBulkConfirm": "Supprimer définitivement les {{count}} instantanés sélectionnés ? Cette action est irréversible.",
     "snapshotDeleteSingleConfirm": "Supprimer définitivement l'instantané « {{filename}} » ? Cette action est irréversible.",
-    "snapshotDemoDownloadBlocked": "Le mode démo affiche uniquement l'aperçu et ne permet pas de télécharger les fichiers réels de la base."
+    "snapshotDemoDownloadBlocked": "Le mode démo affiche uniquement l'aperçu et ne permet pas de télécharger les fichiers réels de la base.",
+    "snapshotDownloadFailed": "Échec du téléchargement de l'instantané"
   },
   "intro": {
     "item1Title": "DNS Worker de protection",

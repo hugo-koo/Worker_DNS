@@ -210,13 +210,36 @@ export function createHttpRequestHandler(
 
       if (response.body) {
         const reader = response.body.getReader();
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          res.write(value);
+        const cancelOnClose = () => {
+          reader.cancel().catch(() => {});
+        };
+        res.once('close', cancelOnClose);
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done || res.destroyed || res.writableEnded) break;
+            if (!res.write(value)) {
+              await new Promise<void>((resolve) => {
+                const onDrain = () => {
+                  res.off('close', onClose);
+                  resolve();
+                };
+                const onClose = () => {
+                  res.off('drain', onDrain);
+                  resolve();
+                };
+                res.once('drain', onDrain);
+                res.once('close', onClose);
+              });
+            }
+          }
+        } finally {
+          res.off('close', cancelOnClose);
         }
       }
-      res.end();
+      if (!res.writableEnded && !res.destroyed) {
+        res.end();
+      }
     } catch (err: any) {
       console.error(`[${defaultProto.toUpperCase()} Server] Request processing failed:`, err);
       if (!res.headersSent) {

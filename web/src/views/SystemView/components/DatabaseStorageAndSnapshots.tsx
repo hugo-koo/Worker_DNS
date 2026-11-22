@@ -18,8 +18,8 @@ import type { DatabaseSnapshotItem, DatabaseSnapshotOverview } from "../../../se
 import {
   abortDatabaseSnapshot,
   deleteDatabaseSnapshots,
+  downloadDatabaseSnapshot,
   getDatabaseSnapshots,
-  getSnapshotDownloadUrl,
   startDatabaseSnapshot,
 } from "../../../services";
 import { useDeploymentMode } from "../../../hooks/useDeploymentMode";
@@ -59,6 +59,7 @@ export const DatabaseStorageAndSnapshots: React.FC<DatabaseStorageAndSnapshotsPr
   const [selectedFilenames, setSelectedFilenames] = useState<string[]>([]);
   const [deleteTargetFilenames, setDeleteTargetFilenames] = useState<string[] | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [downloadingFilename, setDownloadingFilename] = useState<string | null>(null);
 
   const wasCapturingRef = useRef<boolean>(Boolean(overview.activeCapture));
   const abortedByUserRef = useRef<boolean>(false);
@@ -322,6 +323,30 @@ export const DatabaseStorageAndSnapshots: React.FC<DatabaseStorageAndSnapshotsPr
     setSelectedFilenames((prev) =>
       prev.includes(filename) ? prev.filter((item) => item !== filename) : [...prev, filename]
     );
+  };
+
+  const handleDownloadSnapshot = async (filename: string) => {
+    if (isDemoMode) {
+      toasterRef?.current?.show({
+        message: t("account.snapshotDemoDownloadBlocked", "演示模式仅提供前端展示，不支持下载真实数据库快照"),
+        intent: Intent.PRIMARY,
+        icon: "info-sign",
+      });
+      return;
+    }
+    setDownloadingFilename(filename);
+    try {
+      await downloadDatabaseSnapshot(filename);
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : "";
+      toasterRef?.current?.show({
+        message: msg || t("account.snapshotDownloadFailed", "下载快照失败"),
+        intent: Intent.DANGER,
+        icon: "error",
+      });
+    } finally {
+      setDownloadingFilename((cur) => (cur === filename ? null : cur));
+    }
   };
 
   const captureStageLabel = useMemo(() => {
@@ -657,32 +682,16 @@ export const DatabaseStorageAndSnapshots: React.FC<DatabaseStorageAndSnapshotsPr
                       </td>
                       <td className="align-middle text-right">
                         <div className="inline-flex items-center justify-end gap-1">
-                          {isDemoMode ? (
-                            <Button
-                              minimal
-                              small
-                              icon={<Download size={14} />}
-                              title={t("account.snapshotDownload", "下载快照")}
-                              aria-label={t("account.snapshotDownload", "下载快照")}
-                              onClick={() => {
-                                toasterRef?.current?.show({
-                                  message: t("account.snapshotDemoDownloadBlocked", "演示模式仅提供前端展示，不支持下载真实数据库快照"),
-                                  intent: Intent.PRIMARY,
-                                  icon: "info-sign",
-                                });
-                              }}
-                            />
-                          ) : (
-                            <a
-                              href={getSnapshotDownloadUrl(snap.filename)}
-                              download={snap.filename}
-                              className="bp6-button bp6-minimal bp6-small inline-flex items-center justify-center"
-                              title={t("account.snapshotDownload", "下载快照")}
-                              aria-label={t("account.snapshotDownload", "下载快照")}
-                            >
-                              <Download size={14} />
-                            </a>
-                          )}
+                          <Button
+                            minimal
+                            small
+                            icon={<Download size={14} />}
+                            loading={downloadingFilename === snap.filename}
+                            disabled={Boolean(downloadingFilename && downloadingFilename !== snap.filename)}
+                            title={t("account.snapshotDownload", "下载快照")}
+                            aria-label={t("account.snapshotDownload", "下载快照")}
+                            onClick={() => handleDownloadSnapshot(snap.filename)}
+                          />
                           <Button
                             minimal
                             small

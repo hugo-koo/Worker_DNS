@@ -1187,7 +1187,8 @@
     "snapshotDeleteOne": "Eliminar instantánea",
     "snapshotDeleteBulkConfirm": "¿Eliminar permanentemente las {{count}} instantáneas seleccionadas? Esta acción no se puede deshacer.",
     "snapshotDeleteSingleConfirm": "¿Eliminar permanentemente la instantánea \"{{filename}}\"? Esta acción no se puede deshacer.",
-    "snapshotDemoDownloadBlocked": "El modo demo solo muestra la interfaz de instantáneas y no permite descargar archivos reales de la base de datos."
+    "snapshotDemoDownloadBlocked": "El modo demo solo muestra la interfaz de instantáneas y no permite descargar archivos reales de la base de datos.",
+    "snapshotDownloadFailed": "Error al descargar la instantánea"
   },
   "intro": {
     "item1Title": "DNS Worker de protección",

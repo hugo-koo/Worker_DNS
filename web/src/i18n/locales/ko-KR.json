@@ -1187,7 +1187,8 @@
     "snapshotDeleteOne": "삭제",
     "snapshotDeleteBulkConfirm": "선택한 {{count}}개의 데이터베이스 스냅샷을 영구 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.",
     "snapshotDeleteSingleConfirm": "데이터베이스 스냅샷 \"{{filename}}\"을(를) 영구 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.",
-    "snapshotDemoDownloadBlocked": "데모 모드에서는 스냅샷 UI 미리보기만 제공되며 실제 데이터베이스 파일은 다운로드할 수 없습니다."
+    "snapshotDemoDownloadBlocked": "데모 모드에서는 스냅샷 UI 미리보기만 제공되며 실제 데이터베이스 파일은 다운로드할 수 없습니다.",
+    "snapshotDownloadFailed": "스냅샷 다운로드에 실패했습니다"
   },
   "intro": {
     "item1Title": "DNS Worker 보호 DNS",
