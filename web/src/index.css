@@ -4,8 +4,21 @@
 
 @import "tailwindcss";
 
+@theme inline {
+  --font-sans: var(--app-font-sans);
+  --font-serif: var(--app-font-serif);
+  --font-mono: var(--app-font-mono);
+}
+
 @layer base {
   :root {
+    --app-font-cjk-sans: 'Noto Sans SC', 'Noto Sans TC', 'Noto Sans HK', 'Noto Sans JP', 'Noto Sans KR';
+    --app-font-cjk-serif: 'Noto Serif SC', 'Noto Serif TC', 'Noto Serif HK', 'Noto Serif JP', 'Noto Serif KR';
+    --app-font-sans: 'Noto Sans Variable', 'Noto Sans', var(--app-font-cjk-sans), system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --app-font-serif: 'Noto Serif Variable', 'Noto Serif', var(--app-font-cjk-serif), Georgia, 'Times New Roman', serif;
+    --app-font-mono: 'Noto Sans Mono Variable', 'Noto Sans Mono', 'Noto Sans Variable', 'Noto Sans', var(--app-font-cjk-sans), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    --bp-typography-family-default: var(--app-font-sans);
+    --bp-typography-family-mono: var(--app-font-mono);
     --bg-color: #f1f5f9;
     --text-color: #111827;
     --map-bg: #e5e7eb;
@@ -51,6 +64,40 @@
     padding: 0;
     background-color: var(--bg-color);
     color: var(--text-color);
+    font-family: var(--app-font-sans);
+  }
+
+  code, kbd, samp, pre {
+    font-family: var(--app-font-mono);
+  }
+
+  :lang(zh-CN),
+  :lang(zh-SG),
+  :lang(zh-Hans) {
+    --app-font-cjk-sans: 'Noto Sans SC';
+    --app-font-cjk-serif: 'Noto Serif SC';
+  }
+
+  :lang(zh-TW),
+  :lang(zh-Hant) {
+    --app-font-cjk-sans: 'Noto Sans TC';
+    --app-font-cjk-serif: 'Noto Serif TC';
+  }
+
+  :lang(zh-HK),
+  :lang(zh-MO) {
+    --app-font-cjk-sans: 'Noto Sans HK', 'Noto Sans TC';
+    --app-font-cjk-serif: 'Noto Serif HK', 'Noto Serif TC';
+  }
+
+  :lang(ja) {
+    --app-font-cjk-sans: 'Noto Sans JP';
+    --app-font-cjk-serif: 'Noto Serif JP';
+  }
+
+  :lang(ko) {
+    --app-font-cjk-sans: 'Noto Sans KR';
+    --app-font-cjk-serif: 'Noto Serif KR';
   }
 
   /* Progressive typography and rem-unit scaling for QHD / 4K displays at low OS scale */

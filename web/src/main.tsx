@@ -1,4 +1,7 @@
 import { createRoot } from "react-dom/client";
+import "@fontsource-variable/noto-sans";
+import "@fontsource-variable/noto-serif";
+import "@fontsource-variable/noto-sans-mono";
 import "./index.css";
 import "./i18n/config";
 import App from "./App.tsx";

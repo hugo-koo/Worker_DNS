@@ -5,6 +5,7 @@ import { PasskeyModel } from "../../../models/passkey";
 import { UserModel } from "../../../models/user";
 import { verifyAuthenticationResponse } from "../../../lib/webauthn";
 import { cacheUtils } from "../../../utils/cache";
+import { isDemoMode, isDemoPasskeyCredentialId } from "../../../lib/demoConfig";
 
 export interface ReauthPayload {
   password?: string;
@@ -58,7 +59,10 @@ export async function verifyUserReauth(
   }
 
   const passkeyModel = new PasskeyModel(env.DB);
-  const userPasskeys = await passkeyModel.listByUser(dbUser.id);
+  const allUserPasskeys = await passkeyModel.listByUser(dbUser.id);
+  const userPasskeys = isDemoMode(env)
+    ? allUserPasskeys.filter((p) => !isDemoPasskeyCredentialId(p.credential_id))
+    : allUserPasskeys;
   const hasPasskeys = userPasskeys.length > 0;
   const hasTotp = !!dbUser.totp_enabled && !!dbUser.totp_secret;
   const hasMfa = hasTotp || hasPasskeys;

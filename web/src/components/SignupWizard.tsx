@@ -2,7 +2,7 @@ import React from "react";
 import { H3, Intent, Callout } from "@blueprintjs/core";
 import { useTranslation } from "react-i18next";
 import { ArrowLeft } from "lucide-react";
-import LogoIcon from "../assets/obex_cat_eye_logo-256.webp";
+import LogoIcon from "../assets/obex_cat_eye_logo.svg";
 import { SignupUsernameStep } from "./signup/SignupUsernameStep";
 import { SignupPasswordStep } from "./signup/SignupPasswordStep";
 import { SignupMfaStep } from "./signup/SignupMfaStep";

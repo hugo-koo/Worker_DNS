@@ -24,6 +24,7 @@ import { verifyTurnstile } from "./utils";
 import { withTokenLock } from "../../lib/preauth";
 import { generateWebAuthnChallenge, verifyAuthenticationResponse } from "../../lib/webauthn";
 import { ensureDemoDataSeeded } from "../../lib/demoMode";
+import { isDemoMode, isDemoPasskeyCredentialId } from "../../lib/demoConfig";
 import { validateLoginIdentifier } from "../../utils/validator";
 
 /**
@@ -83,14 +84,17 @@ export async function handleLoginRequest(request: Request, env: Env): Promise<Re
     const preauthToken = await createPreauthSession(env, user.id);
     const preauthCookie = createPreauthCookie(preauthToken, env);
 
-    const requires_password = !user.totp_skip_password;
     const requires_totp = !!user.totp_enabled;
     const password_version = user.password_version ?? 1;
 
-    // Check if user has registered passkeys for MFA
+    // Check if user has registered passkeys for MFA (exclude synthetic Demo showcase passkeys without real credentials)
     const passkeyModel = new PasskeyModel(env.DB);
-    const passkeys = await passkeyModel.listByUser(user.id);
+    const allPasskeys = await passkeyModel.listByUser(user.id);
+    const passkeys = isDemoMode(env)
+      ? allPasskeys.filter((p) => !isDemoPasskeyCredentialId(p.credential_id))
+      : allPasskeys;
     const has_passkey = passkeys.length > 0;
+    const requires_password = !(user.totp_skip_password && (requires_totp || has_passkey));
     let passkey_options: any = null;
     let passkey_challenge: string | null = null;
 
@@ -179,7 +183,10 @@ export async function handleLoginRequest(request: Request, env: Env): Promise<Re
 
     // Check MFA configuration & whether user chose "Other options" to authenticate via MFA directly
     const passkeyModel = new PasskeyModel(env.DB);
-    const userPasskeys = await passkeyModel.listByUser(userId);
+    const allUserPasskeys = await passkeyModel.listByUser(userId);
+    const userPasskeys = isDemoMode(env)
+      ? allUserPasskeys.filter((p) => !isDemoPasskeyCredentialId(p.credential_id))
+      : allUserPasskeys;
     const hasPasskeys = userPasskeys.length > 0;
     const hasTotp = !!user.totp_enabled;
     const hasRecoveryKeys = !!user.totp_recovery_keys;

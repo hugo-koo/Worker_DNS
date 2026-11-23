@@ -8,7 +8,7 @@ sidebar:
 import { Image } from 'astro:assets';
 import { Aside } from '@astrojs/starlight/components';
 import loginImg from '../../../../screenshots/dns.obex-login.webp';
-import settingsImg from '../../../../screenshots/dns.obex-settings.webp';
+import mfaImg from '../../../../screenshots/dns.obex-mfa.webp';
 
 DNS Worker implements defense-in-depth zero-trust security standards across both its backend resolution pipelines and Web Dashboard. This guide details the authentication protocol, key rotation mechanics, and security environment variables.
 
@@ -48,7 +48,7 @@ sequenceDiagram
 
 Configure your master security keys, Passkeys, and Post-Quantum E2EE directly in the **Account & Security Settings** card:
 
-<Image src={settingsImg} alt="Security & Account Settings" format="webp" />
+<Image src={mfaImg} alt="Account Settings: Multi-Factor Authentication, Passkeys and E2EE" format="webp" />
 
 Sensitive data at rest — including client session tokens and private query logs — is protected using two-tier envelope encryption:
 
@@ -111,13 +111,6 @@ Configure these variables in `.env` (Serverfull) or as Cloudflare Workers Secret
 
 ---
 
-## 4. NIST SP 800-63B-4 (AAL2) Compliance Statement
-
-<Aside type="note" title="Compliance Scope">
-The Web Dashboard authentication and session management architecture conforms to **NIST SP 800-63B-4 Authenticator Assurance Level 2 (AAL2)** requirements (with pseudonymous self-asserted enrollment at **NIST SP 800-63A IAL1**).
+<Aside type="note" title="Standards & Compliance Statements">
+Formal standards conformance declarations—including **NIST SP 800-63B-4 (AAL2)**—are documented in [Compliance Statements](/DNS-Worker/advanced/compliance/).
 </Aside>
-
-- **Phishing-Resistant & Multi-Factor Authenticators**: Supports FIDO2/WebAuthn Passkeys (ES256/RS256 with strict RP ID, origin, UP/UV flag, and monotonic `signCount` verification) as well as RFC 6238 TOTP with 90-second single-use anti-replay protection and single-use modulo-11 Recovery Keys.
-- **Memorized Secrets Policy**: Enforces a 12–128 character length range without arbitrary composition rules or forced periodic rotation, accepts spaces and Unicode passphrases (NFC-normalized), and checks passwords against known data breaches via client-side HIBP k-Anonymity range queries and upstream credential-leak headers.
-- **Rate Limiting & Step-Up Re-authentication**: Enforces strict IP and user-scoped attempt limits across login, password recovery, PIN unlock, and security settings mutations. Sensitive actions require step-up MFA verification when MFA is enabled.
-- **Session Lifecycle & Absolute Timeout**: Sessions are protected with `HttpOnly; SameSite=Lax; Secure` cookies, double-submit CSRF tokens, Refresh Token Rotation (RTR) with reuse detection, inactivity lock timeouts, and an immutable **absolute session lifetime ceiling** (`SESSION_ABSOLUTE_MAX_MINUTES` / `OPTIONAL_SESSION_ABSOLUTE_MAX_DAYS`) requiring re-authentication even during continuous activity.

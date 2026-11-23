@@ -1,0 +1,23 @@
+---
+title: Compliance Statements
+description: Central registry of technical standards conformance and security compliance statements for DNS Worker.
+sidebar:
+  order: 5
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+This chapter documents DNS Worker's formal standards conformance and security compliance statements across authentication, session security, cryptography, and network protocols.
+
+---
+
+## 1. NIST SP 800-63B-4 (AAL2)
+
+<Aside type="note" title="Compliance Scope">
+The Web Dashboard authentication and session management architecture conforms to **NIST SP 800-63B-4 Authenticator Assurance Level 2 (AAL2)** requirements (with pseudonymous self-asserted enrollment at **NIST SP 800-63A IAL1**). For implementation architecture details, see [Authentication, Keys & Envelope Encryption](/DNS-Worker/advanced/security-auth/).
+</Aside>
+
+- **Phishing-Resistant & Multi-Factor Authenticators**: Supports FIDO2/WebAuthn Passkeys (ES256/RS256 with strict RP ID, origin, UP/UV flag, and monotonic `signCount` verification) as well as RFC 6238 TOTP with 90-second single-use anti-replay protection and single-use modulo-11 Recovery Keys.
+- **Memorized Secrets Policy**: Enforces a 12–128 character length range without arbitrary composition rules or forced periodic rotation, accepts spaces and Unicode passphrases (NFC-normalized), and checks passwords against known data breaches via client-side HIBP k-Anonymity range queries and upstream credential-leak headers.
+- **Rate Limiting & Step-Up Re-authentication**: Enforces strict IP and user-scoped attempt limits across login, password recovery, PIN unlock, and security settings mutations. Sensitive actions require step-up MFA verification when MFA is enabled.
+- **Session Lifecycle & Absolute Timeout**: Sessions are protected with `HttpOnly; SameSite=Lax; Secure` cookies, double-submit CSRF tokens, Refresh Token Rotation (RTR) with reuse detection, inactivity lock timeouts, and an immutable **absolute session lifetime ceiling** (`SESSION_ABSOLUTE_MAX_MINUTES` / `OPTIONAL_SESSION_ABSOLUTE_MAX_DAYS`) requiring re-authentication even during continuous activity.

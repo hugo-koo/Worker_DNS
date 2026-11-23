@@ -10,6 +10,7 @@ import { PasskeyModel } from "../../models/passkey";
 import { ProfileModel } from "../../models/profile";
 import { invalidateProfileLogKeyCache } from "../../pipeline/logBatcher";
 import { isValidE2eePublicKey } from "../../lib/crypto/e2ee";
+import { ensureDemoDataSeeded } from "../../lib/demoMode";
 
 /**
  * Routes /api/account/e2ee/* endpoints.
@@ -34,6 +35,7 @@ export async function handleAccountE2eeRequest(
 
   // 1. GET /api/account/e2ee/status
   if (subResource === "status" && request.method === "GET") {
+    await ensureDemoDataSeeded(env, user.id);
     const [profiles, passkeys] = await Promise.all([
       profileModel.listByOwner(user.id),
       passkeyModel.listByUser(user.id),

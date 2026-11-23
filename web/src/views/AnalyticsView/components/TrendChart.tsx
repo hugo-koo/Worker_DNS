@@ -66,7 +66,7 @@ export const TrendChart: React.FC<TrendChartProps> = ({ chartData, range }) => {
                 border: "1px solid rgba(255, 255, 255, 0.3)",
                 boxShadow: "0 8px 32px rgba(0, 0, 0, 0.1), inset 0 0 4px rgba(255, 255, 255, 0.4)",
                 color: "#d6d6d6",
-                fontFamily: "monospace",
+                fontFamily: "var(--app-font-mono)",
                 backgroundColor: "#fefefe22",
                 backdropFilter: "blur(10px) saturate(180%)",
               }}

@@ -17,6 +17,7 @@ import {
 } from "../../lib/turso";
 import { detectServerfullMode } from "../../router/runtimeConfig";
 import { buildDemoSnapshotOverview, isDemoMode } from "../../lib/demoConfig";
+import { ensureDemoDataSeeded } from "../../lib/demoMode";
 import { getOrCreateJwtSecret } from "../../lib/auth";
 import { importJwtSecret, signJWT } from "../../lib/jwt";
 
@@ -59,6 +60,7 @@ export async function handleAdminRequest(
 
   if (pathParts[2] === 'users') {
     if (request.method === 'GET') {
+      await ensureDemoDataSeeded(env, user.id);
       const users = await userModel.listAll();
       return new Response(JSON.stringify(users), { headers: { 'Content-Type': 'application/json' } });
     }

@@ -5,6 +5,7 @@ import { LogModel } from "../../models/log";
 import { PasskeyModel } from "../../models/passkey";
 import { USERNAME_REGEX } from "../../utils/validator";
 import { verifyUserReauth, ReauthPayload } from "./security/reauth";
+import { ensureDemoDataSeeded } from "../../lib/demoMode";
 
 /**
  * Handle requests to /api/account/me, /api/account/logs, /api/account/delete
@@ -23,6 +24,7 @@ export async function handleMeRequest(
   // GET /api/account/me & PATCH /api/account/me
   if (action === 'me') {
     if (request.method === 'GET') {
+      await ensureDemoDataSeeded(env, user.id);
       const dbUser = await userModel.getById(user.id);
       const globalMaxRetention = env.MAX_LOG_RETENTION_DAYS !== undefined && env.MAX_LOG_RETENTION_DAYS !== ''
         ? Number(env.MAX_LOG_RETENTION_DAYS)

@@ -2,6 +2,7 @@ import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
 import enUS from './locales/en-US.json';
+import { syncLocaleTypography } from '../utils/typography';
 
 /**
  * Maps a resolved i18next language tag to its canonical locale key and the
@@ -63,6 +64,11 @@ i18n
   });
 
 // Load the initially detected language as soon as possible.
+syncLocaleTypography(i18n.language);
 loadLocale(i18n.language);
+
+i18n.on('languageChanged', (lng: string) => {
+  syncLocaleTypography(lng);
+});
 
 export default i18n;

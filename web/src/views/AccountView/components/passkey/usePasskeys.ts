@@ -14,6 +14,7 @@ import {
 } from "../../../../services";
 import type { Passkey, VerifyIdentityPayload } from "../../../../services";
 import { isPasskeySupported, startPasskeyRegistration } from "../../../../utils/webauthn";
+import { useDeploymentMode } from "../../../../hooks/useDeploymentMode";
 
 /**
  * Properties passed to the usePasskeys hook.
@@ -107,6 +108,7 @@ export interface UsePasskeysReturn {
  */
 export const usePasskeys = ({ onRefresh, toasterRef, user }: UsePasskeysProps): UsePasskeysReturn => {
   const { t } = useTranslation();
+  const { isDemoMode } = useDeploymentMode();
   const [passkeys, setPasskeys] = useState<Passkey[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [supported, setSupported] = useState<boolean>(true);
@@ -358,6 +360,24 @@ export const usePasskeys = ({ onRefresh, toasterRef, user }: UsePasskeysProps): 
     const idToSet = pk ? pk.id : "all";
     setTestingId(idToSet);
     try {
+      const demoTarget = pk
+        ? pk.credential_id.startsWith("demo-pk-")
+          ? pk
+          : null
+        : passkeys.find((p) => p.credential_id.startsWith("demo-pk-")) ?? null;
+
+      if (isDemoMode && demoTarget) {
+        toasterRef?.current?.show({
+          message: t("account.passkey.testSuccess", {
+            name: demoTarget.name,
+            defaultValue: `Passkey verified successfully: ${demoTarget.name}`
+          }),
+          intent: Intent.SUCCESS,
+          icon: "tick-circle"
+        });
+        return;
+      }
+
       const result = await testPasskey(pk?.id);
       if (result.success) {
         toasterRef?.current?.show({

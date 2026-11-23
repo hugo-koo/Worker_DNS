@@ -13,6 +13,7 @@ import {
 import { cacheUtils } from "../../../utils/cache";
 import { generateRecoveryKeys, hashRecoveryKey } from "../../../lib/totp";
 import { verifyUserReauth, ReauthPayload } from "./reauth";
+import { ensureDemoDataSeeded } from "../../../lib/demoMode";
 
 /**
  * Handles WebAuthn Passkeys lifecycle endpoints:
@@ -47,6 +48,7 @@ export async function handlePasskeysRequest(
 
   // GET /api/account/passkeys — 列出当前用户的所有通行密钥
   if (!subAction && request.method === "GET") {
+    await ensureDemoDataSeeded(env, user.id);
     const passkeys = await passkeyModel.listByUser(user.id);
     return new Response(JSON.stringify(passkeys), {
       headers: { "Content-Type": "application/json" }

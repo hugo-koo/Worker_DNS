@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { H3, Intent, Callout, Button, Spinner } from "@blueprintjs/core";
 import { useTranslation } from "react-i18next";
 import { LogOut } from "lucide-react";
-import LogoIcon from "../assets/obex_cat_eye_logo-256.webp";
+import LogoIcon from "../assets/obex_cat_eye_logo.svg";
 import { DigitInput, type DigitInputRef } from "./DigitInput";
 import { hashPin, hashChallenge } from "../utils/auth";
 import { unlockSession, getUnlockNonce, ApiError } from "../services";

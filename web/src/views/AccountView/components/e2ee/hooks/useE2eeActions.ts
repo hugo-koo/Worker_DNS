@@ -8,6 +8,8 @@ import { Intent, OverlayToaster } from "@blueprintjs/core";
 import { useTranslation } from "react-i18next";
 import { e2ee } from "../../../../../services";
 import { getPasskeys } from "../../../../../services/account";
+import { useDeploymentMode } from "../../../../../hooks/useDeploymentMode";
+import { setDemoE2eeDeviceLocked } from "../../../../../utils/demoE2ee";
 
 export interface UseE2eeActionsProps {
   hasPasskey: boolean;
@@ -29,12 +31,15 @@ export function useE2eeActions({
   setProcessing
 }: UseE2eeActionsProps) {
   const { t } = useTranslation();
+  const { isDemoMode } = useDeploymentMode();
   const [isResetAlertOpen, setIsResetAlertOpen] = useState<boolean>(false);
 
   const handleUnlock = async () => {
     setProcessing(true);
     try {
-      const success = await e2ee.unlockUser();
+      const success = isDemoMode
+        ? (setDemoE2eeDeviceLocked(false), true)
+        : await e2ee.unlockUser();
       if (success) {
         setIsUnlocked(true);
         toasterRef.current?.show({

@@ -1,9 +1,23 @@
 import React from "react";
-import { Button, Intent, Spinner } from "@blueprintjs/core";
-import { KeyRound, Edit2, Trash2, ShieldCheck } from "lucide-react";
+import { Button, Intent, Spinner, Tag } from "@blueprintjs/core";
+import { KeyRound, Edit2, Trash2, ShieldCheck, Cloud, Laptop, Usb } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { formatDateTime } from "../../../../utils/date";
+import { resolveAuthenticatorInfo, type AuthenticatorKind } from "../../../../utils/aaguid";
 import type { Passkey } from "../../../../services";
+
+function renderAuthenticatorIcon(kind?: AuthenticatorKind): React.ReactNode {
+  switch (kind) {
+    case "synced":
+      return <Cloud size={18} />;
+    case "platform":
+      return <Laptop size={18} />;
+    case "hardware":
+      return <Usb size={18} />;
+    default:
+      return <KeyRound size={18} />;
+  }
+}
 
 /**
  * Props for the PasskeyList component.
@@ -62,17 +76,23 @@ export const PasskeyList: React.FC<PasskeyListProps> = ({
 
   return (
     <div className="divide-y divide-gray-100 dark:divide-gray-800 border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden">
-      {passkeys.map((pk) => (
+      {passkeys.map((pk) => {
+        const authInfo = resolveAuthenticatorInfo(pk.aaguid);
+        const showProviderTag =
+          Boolean(authInfo) &&
+          authInfo!.provider.toLowerCase() !== pk.name.trim().toLowerCase();
+
+        return (
         <div
           key={pk.id}
           className="p-3 sm:p-4 flex items-center justify-between gap-3 hover:bg-gray-50 dark:hover:bg-gray-900/40 transition-colors"
         >
           <div className="flex items-center gap-3 min-w-0">
             <div className="p-2 bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 rounded-lg shrink-0">
-              <KeyRound size={18} />
+              {renderAuthenticatorIcon(authInfo?.kind)}
             </div>
             <div className="min-w-0">
-              <div className="flex items-center min-w-0">
+              <div className="flex items-center flex-wrap gap-1.5 min-w-0">
                 <button
                   type="button"
                   onClick={() => onOpenRename(pk)}
@@ -86,6 +106,26 @@ export const PasskeyList: React.FC<PasskeyListProps> = ({
                     className="shrink-0 opacity-30 group-hover/rename:opacity-100 transition-opacity"
                   />
                 </button>
+                {showProviderTag && (
+                  <Tag minimal className="text-[10px] whitespace-nowrap">
+                    {authInfo!.provider}
+                  </Tag>
+                )}
+                {authInfo?.kind === "synced" && (
+                  <Tag minimal intent={Intent.PRIMARY} className="text-[10px] whitespace-nowrap">
+                    {t("account.passkey.kindSynced", "Synced Passkey")}
+                  </Tag>
+                )}
+                {authInfo?.kind === "platform" && (
+                  <Tag minimal intent={Intent.NONE} className="text-[10px] whitespace-nowrap">
+                    {t("account.passkey.kindPlatform", "Device Biometric")}
+                  </Tag>
+                )}
+                {authInfo?.kind === "hardware" && (
+                  <Tag minimal intent={Intent.WARNING} className="text-[10px] whitespace-nowrap">
+                    {t("account.passkey.kindHardware", "Hardware Key")}
+                  </Tag>
+                )}
               </div>
               <div className="text-xs text-gray-500 dark:text-gray-400 flex flex-wrap gap-x-3 gap-y-1 mt-0.5">
                 <span>
@@ -125,7 +165,8 @@ export const PasskeyList: React.FC<PasskeyListProps> = ({
             />
           </div>
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 };

@@ -8,7 +8,7 @@ sidebar:
 import { Image } from 'astro:assets';
 import { Aside } from '@astrojs/starlight/components';
 import loginImg from '../../../../../screenshots/dns.obex-login.webp';
-import settingsImg from '../../../../../screenshots/dns.obex-settings.webp';
+import mfaImg from '../../../../../screenshots/dns.obex-mfa.webp';
 
 DNS Worker 在後臺解析管道與 Web 控制面板中全面踐行零信任深度防禦安全標準。本篇全面解析身份鑑權協議、信封金鑰輪換機制以及核心安全環境變數。
 
@@ -48,7 +48,7 @@ sequenceDiagram
 
 在 **Account & Security Settings**（賬戶與安全設定）卡片中管理主金鑰、通行金鑰及後量子 E2EE：
 
-<Image src={settingsImg} alt="賬戶與安全設定面板" format="webp" />
+<Image src={mfaImg} alt="賬戶安全設定：多因素認證、通行金鑰與後量子 E2EE" format="webp" />
 
 服務端儲存的敏感資料（包括使用者會話令牌與加密查詢日誌）由兩層信封加密機制保護：
 
@@ -111,13 +111,6 @@ flowchart TD
 
 ---
 
-## 4. NIST SP 800-63B-4 (AAL2) 合規宣告
-
-<Aside type="note" title="合規範圍說明">
-Web 控制台的認證與會話管理架構符合 **NIST SP 800-63B-4 Authenticator Assurance Level 2 (AAL2)** 安全規範（自助註冊流程對應 **NIST SP 800-63A IAL1** 偽名化身份登記）。
+<Aside type="note" title="標準符合性與合規宣告">
+關於 **NIST SP 800-63B-4 (AAL2)** 等正式技術標準符合性宣告，請參閱同章節的 [合規宣告](/DNS-Worker/zh-tw/advanced/compliance/)。
 </Aside>
-
-- **抗釣魚多因素認證（MFA）**：支援 FIDO2/WebAuthn Passkey（ES256/RS256，嚴格校驗 RP ID、Origin、UP/UV 標誌位及單調遞增 `signCount`），以及帶 90 秒防重放視窗的 RFC 6238 TOTP 與一次性 Mod-11 恢復金鑰。
-- **記憶秘密（密碼）策略**：支援 12–128 位密碼與長短語，允許空格與 Unicode 字元（NFC 規範化），不設強制字元配額或定期強制改密；在註冊、改密與重置密碼流程中結合客戶端 HIBP k-Anonymity 匿名範圍查詢與邊緣洩露憑據請求頭進行弱/洩露密碼攔截。
-- **速率限制與敏感操作重認證**：對登入、找回密碼、PIN 解鎖與安全設定變更實施嚴格的 IP 與使用者級失敗限流；已啟用 MFA 的賬號在執行敏感操作時強制要求 MFA 二次重認證。
-- **會話生命週期與絕對超時上限**：採用 `HttpOnly; SameSite=Lax; Secure` Cookie、Double-Submit CSRF 校驗、帶重用檢測的 Refresh Token 輪換（RTR）、空閒自動鎖定，以及基於會話建立時間的**不可逾越絕對會話上限**（`SESSION_ABSOLUTE_MAX_MINUTES` / `OPTIONAL_SESSION_ABSOLUTE_MAX_DAYS`），即便持續活躍也需定期重新認證。

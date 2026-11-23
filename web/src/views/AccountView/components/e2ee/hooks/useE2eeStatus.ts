@@ -9,6 +9,8 @@ import { useTranslation } from "react-i18next";
 import type { UserInfo } from "../../../types";
 import { e2ee } from "../../../../../services";
 import type { ProfileE2eeStatus } from "../../../../../services";
+import { useDeploymentMode } from "../../../../../hooks/useDeploymentMode";
+import { isDemoE2eeDeviceUnlocked, setDemoE2eeDeviceLocked } from "../../../../../utils/demoE2ee";
 
 export interface UseE2eeStatusProps {
   user: UserInfo;
@@ -24,6 +26,7 @@ export function useE2eeStatus({
   setProcessing
 }: UseE2eeStatusProps) {
   const { t } = useTranslation();
+  const { isDemoMode } = useDeploymentMode();
 
   const [status, setStatus] = useState<ProfileE2eeStatus | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -35,13 +38,13 @@ export function useE2eeStatus({
     try {
       const data = await e2ee.getUserStatus();
       setStatus(data);
-      setIsUnlocked(e2ee.isUnlocked());
+      setIsUnlocked(e2ee.isUnlocked() || (isDemoMode && isDemoE2eeDeviceUnlocked()));
     } catch (err) {
       console.error("[useE2eeStatus] Failed to fetch E2EE status:", err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [isDemoMode]);
 
   useEffect(() => {
     loadStatus();
@@ -123,6 +126,9 @@ export function useE2eeStatus({
 
   const handleLockDevice = () => {
     e2ee.clearStorage();
+    if (isDemoMode) {
+      setDemoE2eeDeviceLocked(true);
+    }
     setIsUnlocked(false);
     toasterRef.current?.show({
       message: t("account.e2ee.lockSuccess", "已锁定，私钥已从本地清除"),

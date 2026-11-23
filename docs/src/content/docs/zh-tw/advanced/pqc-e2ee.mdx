@@ -3,18 +3,25 @@ title: 後量子零知識 E2EE
 description: NIST FIPS 203 ML-KEM-768、硬體通行金鑰與每小時輪換 KEM DEK 的架構解析。
 ---
 
+import { Image } from 'astro:assets';
+import { Aside } from '@astrojs/starlight/components';
+import mfaImg from '../../../../../screenshots/dns.obex-mfa.webp';
+
 DNS Worker 為查詢日誌提供了行業領先的**後量子零知識端到端加密（E2EE）**架構，確保即便在未來量子計算機攻擊下，歷史 DNS 訪問記錄在數學上依然保持不可逆性。
 
 ## 預設狀態與開啟方式
 
-> [!NOTE]
-> **預設停用**：系統為所有新註冊賬戶**預設關閉**端到端加密。在此預設模式下，DNS 查詢日誌以明文直接儲存，具備最優的讀寫吞吐效能、跨裝置即時可讀性以及 0 前端解密開銷。
+<Aside type="note" title="預設停用">
+系統為所有新註冊賬戶**預設關閉**端到端加密。在此預設模式下，DNS 查詢日誌以明文直接儲存，具備最優的讀寫吞吐效能、跨裝置即時可讀性以及 0 前端解密開銷。
+</Aside>
 
 ### 如何啟用 E2EE (按需開啟)
 
+<Image src={mfaImg} alt="賬戶設定：通行金鑰與後量子端到端加密 (E2EE)" format="webp" />
+
 若您追求數學層面的絕對零知識隱私：
 
-1. 進入 **Account & Security**（賬戶與安全）中的 **E2EE (端到端加密)** 卡片。
+1. 進入 **Account**（賬戶）中的 **End-to-End Encryption (E2EE)** 卡片。
 2. 點選 **通過通行金鑰生成金鑰對**（推薦，支援生物識別秒級解鎖）或 **通過恢復金鑰初始化**。
 3. 初始化成功後，所有新入庫的 DNS 日誌將自動在服務端使用 NIST FIPS 203 **P256-MLKEM768** 後量子金鑰加密後再持久化。
 4. 您可以隨時在卡片中暫停或重啟 E2EE，歷史金鑰與已加密日誌將被完整保留。

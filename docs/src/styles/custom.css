@@ -1,7 +1,35 @@
+@import '@fontsource-variable/noto-sans';
+@import '@fontsource-variable/noto-serif';
+@import '@fontsource-variable/noto-sans-mono';
+
 :root {
+  --app-font-cjk-sans: 'Noto Sans SC', 'Noto Sans TC';
+  --app-font-cjk-serif: 'Noto Serif SC', 'Noto Serif TC';
+  --sl-font: 'Noto Sans Variable', 'Noto Sans', var(--app-font-cjk-sans);
+  --sl-font-serif: 'Noto Serif Variable', 'Noto Serif', var(--app-font-cjk-serif), Georgia, 'Times New Roman', serif;
+  --sl-font-mono: 'Noto Sans Mono Variable', 'Noto Sans Mono', 'Noto Sans Variable', 'Noto Sans', var(--app-font-cjk-sans);
+  --ec-codeFontFml: var(--sl-font-mono), monospace;
   --sl-color-accent-low: #1d2b3a;
   --sl-color-accent: #3b82f6;
   --sl-color-accent-high: #93c5fd;
+}
+
+:lang(zh-CN),
+:lang(zh-cn),
+:lang(zh-Hans) {
+  --app-font-cjk-sans: 'Noto Sans SC';
+  --app-font-cjk-serif: 'Noto Serif SC';
+}
+
+:lang(zh-TW),
+:lang(zh-tw),
+:lang(zh-Hant) {
+  --app-font-cjk-sans: 'Noto Sans TC';
+  --app-font-cjk-serif: 'Noto Serif TC';
+}
+
+.font-serif {
+  font-family: var(--sl-font-serif);
 }
 
 :root[data-theme='light'] {
@@ -11,7 +39,7 @@
 }
 
 .sl-badge {
-  font-family: var(--sl-font, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
+  font-family: var(--__sl-font, var(--sl-font, sans-serif));
   white-space: nowrap;
 }
 

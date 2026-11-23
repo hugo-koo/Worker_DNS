@@ -8,6 +8,7 @@ import {
   getDemoDomain,
   isDemoMode,
 } from "../../lib/demoConfig";
+import { ensureDemoLogsForWindow } from "../../lib/demoMode";
 
 /**
  * Handle logs and analytics requests to /api/profiles/:id/logs and /api/profiles/:id/analytics
@@ -154,6 +155,10 @@ export async function handleProfileLogsAndAnalyticsRequest(
       limit = 50;
     } else if (limit > 1000) {
       limit = 1000;
+    }
+
+    if (isDemoMode(env) && !before && until >= Math.floor(Date.now() / 1000) - 3600) {
+      await ensureDemoLogsForWindow(env, user.id, profileId);
     }
 
     const results = await logModel.getLogs(profileId, {

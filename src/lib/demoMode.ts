@@ -20,6 +20,7 @@ import {
   getDemoDomain,
   isDemoMode,
 } from "./demoConfig";
+import { ensureDemoPasskeysAndE2ee } from "./demoSecuritySeed";
 
 export { DEFAULT_DEMO_DOMAIN, isDemoMode, getDemoDomain };
 
@@ -233,43 +234,34 @@ async function ensureDemoLists(
   }
 }
 
-/**
- * Seeds ~210 realistic DNS resolution logs over the last 23 hours so `/stats` (Analytics)
- * and `/logs` (Logs + DestinationMap + Country/ISP filters) immediately present rich data.
- */
-async function ensureDemoLogs(
-  env: Env,
-  logModel: LogModel,
-  primaryProfileId: string,
-  accessPoints: { id: string; name: string }[]
-): Promise<void> {
-  const hasAnyLog = await env.DB.prepare("SELECT 1 FROM logs WHERE profile_id = ? LIMIT 1")
-    .bind(primaryProfileId)
-    .first();
-  if (hasAnyLog) return;
+/** Per-isolate throttle for rolling Demo 1h log window checks (profileId -> last checked unix sec). */
+const lastRecentLogCheckInIsolate = new Map<string, number>();
+const pendingRecentLogSeedInIsolate = new Map<string, Promise<void>>();
 
+const DEMO_LOG_PRUNE_AGE_SEC = 25 * 3600;
+const DEMO_LOG_RECENT_REFRESH_SEC = 300;
+const DEMO_LOG_MIN_1H_COUNT = 45;
+
+/**
+ * Generates deterministic Demo DNS resolution `INSERT` statements for a given list of lookback offsets.
+ */
+function buildDemoLogStatements(
+  logModel: LogModel,
+  profileId: string,
+  accessPoints: { id: string; name: string }[],
+  offsetsSec: number[],
+  demoDomain: string,
+  nowSec: number,
+  seedOffset: number = 0
+): D1PreparedStatement[] {
   const apByName = new Map(accessPoints.map((ap) => [ap.name, ap.id]));
   const fallbackApId = accessPoints[0]?.id;
-  const nowSec = Math.floor(Date.now() / 1000);
-
-  // Distribute logs across last 10m (35), 10m-1h (65), and 1h-23h (110) = 210 logs total
-  const offsetsSec: number[] = [];
-  for (let i = 0; i < 35; i++) {
-    offsetsSec.push(8 + i * 16);
-  }
-  for (let i = 0; i < 65; i++) {
-    offsetsSec.push(620 + i * 45);
-  }
-  for (let i = 0; i < 110; i++) {
-    offsetsSec.push(3800 + i * 720);
-  }
-
-  const demoDomain = getDemoDomain(env);
   const statements: D1PreparedStatement[] = [];
 
   for (let i = 0; i < offsetsSec.length; i++) {
-    const tpl = DEMO_TRAFFIC_TEMPLATES[(i * 7 + 3) % DEMO_TRAFFIC_TEMPLATES.length];
-    const client = DEMO_CLIENT_POOL[(i * 3 + 1) % DEMO_CLIENT_POOL.length];
+    const idx = i + seedOffset;
+    const tpl = DEMO_TRAFFIC_TEMPLATES[(idx * 7 + 3) % DEMO_TRAFFIC_TEMPLATES.length];
+    const client = DEMO_CLIENT_POOL[(idx * 3 + 1) % DEMO_CLIENT_POOL.length];
     const apId = apByName.get(client.apName) || fallbackApId;
     const ts = nowSec - offsetsSec[i];
 
@@ -286,7 +278,7 @@ async function ensureDemoLogs(
 
     const logEntry: ResolutionLog = {
       id: generateLogId(),
-      profile_id: primaryProfileId,
+      profile_id: profileId,
       access_point_id: apId,
       timestamp: ts,
       client_ip: client.clientIp,
@@ -300,7 +292,7 @@ async function ensureDemoLogs(
       dest_country_code: tpl.destCode || null,
       dest_country: tpl.destCountry || null,
       dest_isp: tpl.destIsp || null,
-      latency: tpl.latencyMs + (i % 5),
+      latency: tpl.latencyMs + (idx % 5),
       upstream: tpl.action === "PASS" ? `https://${demoDomain}/upstream` : undefined,
       encrypt_version: 0,
     };
@@ -308,9 +300,160 @@ async function ensureDemoLogs(
     statements.push(logModel.createInsertStatement(logEntry));
   }
 
+  return statements;
+}
+
+/**
+ * Seeds ~210 realistic DNS resolution logs over the last 23 hours so `/stats` (Analytics)
+ * and `/logs` (Logs + DestinationMap + Country/ISP filters) immediately present rich data.
+ */
+async function ensureDemoLogs(
+  env: Env,
+  logModel: LogModel,
+  primaryProfileId: string,
+  accessPoints: { id: string; name: string }[]
+): Promise<void> {
+  const hasAnyLog = await env.DB.prepare("SELECT 1 FROM logs WHERE profile_id = ? LIMIT 1")
+    .bind(primaryProfileId)
+    .first();
+  if (hasAnyLog) return;
+
+  const nowSec = Math.floor(Date.now() / 1000);
+
+  // Distribute logs across last 10m (35), 10m-1h (65), and 1h-23h (110) = 210 logs total
+  const offsetsSec: number[] = [];
+  for (let i = 0; i < 35; i++) {
+    offsetsSec.push(8 + i * 16);
+  }
+  for (let i = 0; i < 65; i++) {
+    offsetsSec.push(620 + i * 45);
+  }
+  for (let i = 0; i < 110; i++) {
+    offsetsSec.push(3800 + i * 720);
+  }
+
+  const demoDomain = getDemoDomain(env);
+  const statements = buildDemoLogStatements(logModel, primaryProfileId, accessPoints, offsetsSec, demoDomain, nowSec);
+
   for (let i = 0; i < statements.length; i += 50) {
     await env.DB.batch(statements.slice(i, i + 50));
   }
+  lastRecentLogCheckInIsolate.set(primaryProfileId, nowSec);
+}
+
+/**
+ * Ensures the target Demo Mode profile always contains fresh resolution logs within the last
+ * 1 hour (and 10 minutes), topping up the rolling window and pruning aged Demo rows (>25h)
+ * so entering `/logs` in the 1h view always displays live-feeling entries without DB bloat.
+ *
+ * @param env - Worker or Serverfull environment bindings.
+ * @param userId - Authenticated user ID.
+ * @param profileId - Profile ID being queried on `/logs`.
+ */
+export async function ensureDemoLogsForWindow(
+  env: Env,
+  userId: string,
+  profileId: string
+): Promise<void> {
+  if (!isDemoMode(env) || !env.DB || !userId || !profileId) return;
+
+  const nowSec = Math.floor(Date.now() / 1000);
+  const lastChecked = lastRecentLogCheckInIsolate.get(profileId) || 0;
+  if (nowSec - lastChecked < 60) return;
+
+  const existingPromise = pendingRecentLogSeedInIsolate.get(profileId);
+  if (existingPromise) {
+    await existingPromise;
+    return;
+  }
+
+  const runRefresh = (async () => {
+    try {
+      const since1h = nowSec - 3600;
+      const statsRow = await env.DB.prepare(
+        "SELECT COUNT(1) AS cnt, MAX(timestamp) AS latest_ts FROM logs WHERE profile_id = ? AND timestamp >= ?"
+      )
+        .bind(profileId, since1h)
+        .first<{ cnt: number; latest_ts: number | null }>();
+
+      const recentCount = Number(statsRow?.cnt) || 0;
+      const latestTs = statsRow?.latest_ts ? Number(statsRow.latest_ts) : null;
+
+      if (
+        recentCount >= DEMO_LOG_MIN_1H_COUNT &&
+        latestTs !== null &&
+        nowSec - latestTs <= DEMO_LOG_RECENT_REFRESH_SEC
+      ) {
+        lastRecentLogCheckInIsolate.set(profileId, nowSec);
+        return;
+      }
+
+      const apModel = new AccessPointModel(env.DB);
+      const logModel = new LogModel(env.DB);
+      const accessPoints = await apModel.getAccessPointsByOwner(userId);
+      const demoDomain = getDemoDomain(env);
+
+      // Prune stale Demo logs older than 25 hours so the table remains bounded
+      await env.DB.prepare("DELETE FROM logs WHERE profile_id = ? AND timestamp < ?")
+        .bind(profileId, nowSec - DEMO_LOG_PRUNE_AGE_SEC)
+        .run();
+
+      const offsetsSec: number[] = [];
+      let seedOffset = nowSec % 23;
+
+      if (recentCount === 0 || latestTs === null) {
+        // Populate full 1h density (35 in last 10m + 65 in 10m..1h) and 1h..23h if empty
+        for (let i = 0; i < 35; i++) {
+          offsetsSec.push(8 + i * 16);
+        }
+        for (let i = 0; i < 65; i++) {
+          offsetsSec.push(620 + i * 45);
+        }
+
+        const hasHistorical = await env.DB.prepare("SELECT 1 FROM logs WHERE profile_id = ? LIMIT 1")
+          .bind(profileId)
+          .first();
+        if (!hasHistorical) {
+          for (let i = 0; i < 110; i++) {
+            offsetsSec.push(3800 + i * 720);
+          }
+        }
+      } else {
+        // Bridge elapsed gap from latestTs up to nowSec (plus ensure at least 45 total in 1h)
+        const gapSec = Math.max(300, nowSec - latestTs);
+        const missingForDensity = Math.max(0, DEMO_LOG_MIN_1H_COUNT - recentCount);
+        const batchCount = Math.min(60, Math.max(20, missingForDensity + Math.ceil(gapSec / 45)));
+        const span = recentCount < DEMO_LOG_MIN_1H_COUNT ? 3500 : Math.min(3500, gapSec);
+        const step = Math.max(12, Math.floor((span - 8) / batchCount));
+        for (let i = 0; i < batchCount; i++) {
+          offsetsSec.push(8 + i * step);
+        }
+        seedOffset = (nowSec + recentCount) % 29;
+      }
+
+      const statements = buildDemoLogStatements(
+        logModel,
+        profileId,
+        accessPoints,
+        offsetsSec,
+        demoDomain,
+        nowSec,
+        seedOffset
+      );
+      for (let i = 0; i < statements.length; i += 50) {
+        await env.DB.batch(statements.slice(i, i + 50));
+      }
+
+      lastRecentLogCheckInIsolate.set(profileId, nowSec);
+    } catch (err) {
+      console.error("[DemoMode] Failed to refresh Demo 1h logs window:", err);
+    } finally {
+      pendingRecentLogSeedInIsolate.delete(profileId);
+    }
+  })();
+
+  pendingRecentLogSeedInIsolate.set(profileId, runRefresh);
+  await runRefresh;
 }
 
 /**
@@ -342,6 +485,10 @@ export async function ensureDemoDataSeeded(env: Env, userId: string): Promise<vo
       const accessPoints = await ensureDemoAccessPoints(env, userId, profiles, apModel);
       const demoDomain = getDemoDomain(env);
 
+      const uniqueProfiles = [profiles.primary, profiles.office, profiles.kids].filter(
+        (p, idx, arr) => arr.findIndex((x) => x.id === p.id) === idx
+      );
+
       await Promise.all([
         ensureDemoRules(ruleModel, profiles.primary.id, DEMO_PRIMARY_RULES, demoDomain),
         profiles.kids.id !== profiles.primary.id
@@ -349,6 +496,7 @@ export async function ensureDemoDataSeeded(env: Env, userId: string): Promise<vo
           : Promise.resolve(),
         ensureDemoLists(env, listModel, profiles.primary.id),
         ensureDemoLogs(env, logModel, profiles.primary.id, accessPoints),
+        ensureDemoPasskeysAndE2ee(env, userId, uniqueProfiles),
       ]);
 
       seededUsersInIsolate.add(userId);

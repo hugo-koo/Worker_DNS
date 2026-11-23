@@ -1,0 +1,23 @@
+---
+title: 合規宣告
+description: DNS Worker 安全架構與協議標準符合性宣告集中索引。
+sidebar:
+  order: 5
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+本章集中收錄 DNS Worker 在身份認證、會話安全、密碼學與網路協議方面的**標準符合性宣告**。
+
+---
+
+## 1. NIST SP 800-63B-4 (AAL2)
+
+<Aside type="note" title="合規範圍說明">
+Web 控制台的認證與會話管理架構符合 **NIST SP 800-63B-4 Authenticator Assurance Level 2 (AAL2)** 安全規範（自助註冊流程對應 **NIST SP 800-63A IAL1** 偽名化身份登記）。關於鑑權協議與信封加密的實現細節，請參閱同章節的 [身份認證、金鑰體系與信封加密](/DNS-Worker/zh-tw/advanced/security-auth/)。
+</Aside>
+
+- **抗釣魚多因素認證（MFA）**：支援 FIDO2/WebAuthn Passkey（ES256/RS256，嚴格校驗 RP ID、Origin、UP/UV 標誌位及單調遞增 `signCount`），以及帶 90 秒防重放視窗的 RFC 6238 TOTP 與一次性 Mod-11 恢復金鑰。
+- **記憶秘密（密碼）策略**：支援 12–128 位密碼與長短語，允許空格與 Unicode 字元（NFC 規範化），不設強制字元配額或定期強制改密；在註冊、改密與重置密碼流程中結合客戶端 HIBP k-Anonymity 匿名範圍查詢與邊緣洩露憑據請求頭進行弱/洩露密碼攔截。
+- **速率限制與敏感操作重認證**：對登入、找回密碼、PIN 解鎖與安全設定變更實施嚴格的 IP 與使用者級失敗限流；已啟用 MFA 的賬號在執行敏感操作時強制要求 MFA 二次重認證。
+- **會話生命週期與絕對超時上限**：採用 `HttpOnly; SameSite=Lax; Secure` Cookie、Double-Submit CSRF 校驗、帶重用檢測的 Refresh Token 輪換（RTR）、空閒自動鎖定，以及基於會話建立時間的**不可逾越絕對會話上限**（`SESSION_ABSOLUTE_MAX_MINUTES` / `OPTIONAL_SESSION_ABSOLUTE_MAX_DAYS`），即便持續活躍也需定期重新認證。

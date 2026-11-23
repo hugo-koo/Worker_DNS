@@ -57,6 +57,74 @@ export const DEMO_ACCESS_POINT_SPECS: readonly DemoAccessPointSpec[] = [
   { name: "Smart-TV-LivingRoom", targetProfileRole: "unbound", deviceType: "android_tv" },
 ];
 
+/** Prefix shared by synthetic Passkey credentials seeded for Demo Mode showcase. */
+export const DEMO_PASSKEY_PREFIX = "demo-pk-";
+
+/**
+ * Returns true if the credential ID belongs to a synthetic Demo Mode Passkey.
+ */
+export function isDemoPasskeyCredentialId(credentialId?: string | null): boolean {
+  return typeof credentialId === "string" && credentialId.startsWith(DEMO_PASSKEY_PREFIX);
+}
+
+export interface DemoPasskeySpec {
+  idSuffix: string;
+  name: string;
+  aaguid: string;
+  transports: readonly string[];
+  algorithm: number;
+  signCount: number;
+  createdOffsetSec: number;
+  lastUsedOffsetSec: number;
+}
+
+/**
+ * Canonical demo WebAuthn Passkeys showcasing cloud-synced password managers,
+ * platform biometrics, and external FIDO2 hardware security keys.
+ */
+export const DEMO_PASSKEY_SPECS: readonly DemoPasskeySpec[] = [
+  {
+    idSuffix: "icloud-keychain",
+    name: "iCloud Keychain",
+    aaguid: "fbfc3007-154e-4ecc-8c0b-6e020557d7bd",
+    transports: ["internal", "hybrid"],
+    algorithm: -7, // ES256
+    signCount: 14,
+    createdOffsetSec: 21 * 86400,
+    lastUsedOffsetSec: 2 * 3600,
+  },
+  {
+    idSuffix: "google-password-manager",
+    name: "Google Password Manager",
+    aaguid: "ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4",
+    transports: ["internal", "hybrid"],
+    algorithm: -7,
+    signCount: 9,
+    createdOffsetSec: 18 * 86400,
+    lastUsedOffsetSec: 6 * 3600,
+  },
+  {
+    idSuffix: "windows-hello",
+    name: "Windows Hello",
+    aaguid: "08987058-cadc-4b81-b6e1-30de50dcbe96",
+    transports: ["internal"],
+    algorithm: -7,
+    signCount: 27,
+    createdOffsetSec: 12 * 86400,
+    lastUsedOffsetSec: 26 * 3600,
+  },
+  {
+    idSuffix: "yubikey",
+    name: "YubiKey",
+    aaguid: "2fc0579f-8113-47ea-b116-bb5a8db9202a",
+    transports: ["usb", "nfc"],
+    algorithm: -7,
+    signCount: 5,
+    createdOffsetSec: 7 * 86400,
+    lastUsedOffsetSec: 4 * 86400,
+  },
+];
+
 export interface DemoRuleSpec {
   type: "ALLOW" | "BLOCK" | "REDIRECT";
   pattern: string;

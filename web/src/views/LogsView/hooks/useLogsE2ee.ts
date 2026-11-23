@@ -4,6 +4,8 @@ import { useTranslation } from "react-i18next";
 import { e2ee, localDb } from "../../../services";
 import { rotateRecoveryKey } from "../../../services/account";
 import type { TimeRange } from "../types";
+import { useDeploymentMode } from "../../../hooks/useDeploymentMode";
+import { isDemoE2eeDeviceUnlocked, setDemoE2eeDeviceLocked } from "../../../utils/demoE2ee";
 
 export interface UseLogsE2eeParams {
   profileId: string;
@@ -43,6 +45,7 @@ export function useLogsE2ee({
   toasterRef
 }: UseLogsE2eeParams): UseLogsE2eeReturn {
   const { t } = useTranslation();
+  const { isDemoMode } = useDeploymentMode();
   const [isE2eeEnabled, setIsE2eeEnabled] = useState<boolean>(false);
   const [isE2eeUnlocked, setIsE2eeUnlocked] = useState<boolean>(false);
   const [unlocking, setUnlocking] = useState<boolean>(false);
@@ -77,13 +80,15 @@ export function useLogsE2ee({
       const enabled = Boolean(status.enabled || status.hasKeys);
       setIsE2eeEnabled(enabled);
 
-      const unlocked = e2ee.isProfileUnlocked(profileId);
+      const unlocked =
+        e2ee.isProfileUnlocked(profileId) || (isDemoMode && isDemoE2eeDeviceUnlocked());
       setIsE2eeUnlocked(unlocked);
 
       // Attempt automatic unlock on entry if enabled, not yet unlocked, and passkey available
       if (
         enabled &&
         !unlocked &&
+        !isDemoMode &&
         status.wrappedPasskeys &&
         status.wrappedPasskeys.length > 0 &&
         !autoUnlockAttempted.current
@@ -103,7 +108,7 @@ export function useLogsE2ee({
     } catch {
       setIsE2eeEnabled(false);
     }
-  }, [profileId, triggerPostUnlock]);
+  }, [profileId, isDemoMode, triggerPostUnlock]);
 
   useEffect(() => {
     checkE2ee();
@@ -112,6 +117,16 @@ export function useLogsE2ee({
   const handleUnlockPasskey = async (): Promise<void> => {
     try {
       setUnlocking(true);
+      if (isDemoMode) {
+        setDemoE2eeDeviceLocked(false);
+        setIsE2eeUnlocked(true);
+        toasterRef?.current?.show({
+          message: t("settings.e2eeUnlockSuccess", "私钥已成功在此设备解锁"),
+          intent: Intent.SUCCESS
+        });
+        await triggerPostUnlock();
+        return;
+      }
       const success = await e2ee.unlockProfile(profileId);
       if (success) {
         setIsE2eeUnlocked(true);

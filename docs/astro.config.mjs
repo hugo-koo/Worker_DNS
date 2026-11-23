@@ -13,8 +13,9 @@ export default defineConfig({
     starlight({
       title: 'DNS Worker',
       description: 'Privacy-First Protective DNS Resolver & DoH / DoT Server with Dual-Engine Architecture.',
+      favicon: '/favicon.svg?v=2',
       logo: {
-        src: './src/assets/logo.webp',
+        src: './src/assets/logo.svg',
       },
       social: [
         {
@@ -43,8 +44,54 @@ export default defineConfig({
           tag: 'link',
           attrs: {
             rel: 'icon',
-            type: 'image/webp',
-            href: '/DNS-Worker/favicon.webp'
+            sizes: '48x48',
+            href: '/DNS-Worker/favicon.ico?v=2'
+          }
+        },
+        {
+          tag: 'link',
+          attrs: {
+            rel: 'icon',
+            type: 'image/png',
+            sizes: '32x32',
+            href: '/DNS-Worker/favicon-32.png?v=2'
+          }
+        },
+        {
+          tag: 'link',
+          attrs: {
+            rel: 'icon',
+            type: 'image/svg+xml',
+            href: '/DNS-Worker/favicon.svg?v=2'
+          }
+        },
+        {
+          tag: 'link',
+          attrs: {
+            rel: 'apple-touch-icon',
+            href: '/DNS-Worker/apple-touch-icon.png?v=2'
+          }
+        },
+        {
+          tag: 'link',
+          attrs: {
+            rel: 'preconnect',
+            href: 'https://fonts.googleapis.com'
+          }
+        },
+        {
+          tag: 'link',
+          attrs: {
+            rel: 'preconnect',
+            href: 'https://fonts.gstatic.com',
+            crossorigin: 'anonymous'
+          }
+        },
+        {
+          tag: 'link',
+          attrs: {
+            rel: 'stylesheet',
+            href: 'https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400..700&family=Noto+Sans+TC:wght@400..700&family=Noto+Serif+SC:wght@400..700&family=Noto+Serif+TC:wght@400..700&display=swap'
           }
         },
         {
@@ -470,6 +517,16 @@ export default defineConfig({
                 'zh-tw': '身分認證、金鑰體系與信封加密',
               },
               slug: 'advanced/security-auth',
+            },
+            {
+              label: 'Compliance Statements',
+              translations: {
+                'zh-CN': '合规声明',
+                'zh-cn': '合规声明',
+                'zh-TW': '合規聲明',
+                'zh-tw': '合規聲明',
+              },
+              slug: 'advanced/compliance',
             },
           ],
         },

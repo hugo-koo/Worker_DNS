@@ -25,7 +25,7 @@ import {
   X,
 } from "lucide-react";
 import { clsx } from "clsx";
-import LogoIcon from "../assets/obex_cat_eye_logo-256.webp";
+import LogoIcon from "../assets/obex_cat_eye_logo.svg";
 import type { Profile, UserInfo } from "../types/auth";
 import { useUpstreamUpdate } from "../hooks/useUpstreamUpdate";
 import { useDeploymentMode, getDisplayHost } from "../hooks/useDeploymentMode";

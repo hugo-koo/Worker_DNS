@@ -76,11 +76,13 @@ export function attachStaticAssetHandler(env: Env, staticDir?: string): void {
           if (!assetEntry || assetEntry.mtimeMs !== stat.mtimeMs || assetEntry.etag !== etag) {
             const ext = path.extname(filePath).toLowerCase();
             const contentType = MIME_TYPES[ext] || 'application/octet-stream';
-            // HTML documents carry per-request CSP nonces and runtime config; never allow HTTP caching/304 revalidation.
+            // HTML documents carry per-request CSP nonces and runtime config; unhashed root assets (favicon, sw.js) must also revalidate.
             const cacheControl =
               ext === '.html'
                 ? 'no-store, no-cache, must-revalidate'
-                : 'public, max-age=31536000, immutable';
+                : isImmutableAsset
+                  ? 'public, max-age=31536000, immutable'
+                  : 'public, max-age=0, must-revalidate';
             const rawBuf = await fs.promises.readFile(filePath);
             const loaded: CachedStaticAsset = {
               content: new Uint8Array(rawBuf.buffer, rawBuf.byteOffset, rawBuf.byteLength),
