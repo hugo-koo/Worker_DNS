@@ -27,6 +27,8 @@ export interface SignupMfaStepProps {
   totpSetupLoading: boolean;
   onTotpSubmit: (e: React.FormEvent) => void;
   onSkip: () => void;
+  /** When true (passwordless signup), Passkey or TOTP enrollment is mandatory and skip is disabled/hidden. */
+  requireMfa?: boolean;
 }
 
 export const SignupMfaStep: React.FC<SignupMfaStepProps> = ({
@@ -42,7 +44,8 @@ export const SignupMfaStep: React.FC<SignupMfaStepProps> = ({
   totpSetupError,
   totpSetupLoading,
   onTotpSubmit,
-  onSkip
+  onSkip,
+  requireMfa = false
 }) => {
   const { t } = useTranslation();
 
@@ -50,6 +53,17 @@ export const SignupMfaStep: React.FC<SignupMfaStepProps> = ({
   if (mfaChoice === "choose") {
     return (
       <div className="space-y-4">
+        {requireMfa && (
+          <Callout intent={Intent.PRIMARY} className="rounded-xl">
+            <span className="text-xs">
+              {t(
+                "auth.passwordlessMfaRequiredHint",
+                "您选择了无密码账号注册，请绑定通行密钥 (Passkey) 或数字验证器 (TOTP) 以继续。"
+              )}
+            </span>
+          </Callout>
+        )}
+
         {passkeyRegError && (
           <Callout intent={Intent.DANGER} className="rounded-xl">
             {passkeyRegError}
@@ -138,14 +152,16 @@ export const SignupMfaStep: React.FC<SignupMfaStepProps> = ({
           </Card>
         </div>
 
-        <div className="text-center pt-2">
-          <Button
-            minimal
-            text={t("auth.skipMfaSetup", "跳过多因素认证配置，直接进入系统")}
-            onClick={onSkip}
-            className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-          />
-        </div>
+        {!requireMfa && (
+          <div className="text-center pt-2">
+            <Button
+              minimal
+              text={t("auth.skipMfaSetup", "跳过多因素认证配置，直接进入系统")}
+              onClick={onSkip}
+              className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+            />
+          </div>
+        )}
       </div>
     );
   }

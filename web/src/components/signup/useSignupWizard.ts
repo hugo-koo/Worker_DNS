@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import {
   validateUsername,
   validatePassword,
+  validateInviteCode,
   checkPasswordBreached,
   isPasswordLeaked,
   hashTotpToken,
@@ -11,6 +12,7 @@ import {
 } from "../../utils/auth";
 import {
   checkUsernameDuplicate as checkUsernameDuplicateService,
+  checkInviteCode as checkInviteCodeService,
   signup,
   setupTotp,
   confirmTotp,
@@ -27,6 +29,8 @@ interface AuthConfig {
   turnstile_site_key: string;
   turnstile_enabled_signup: boolean;
   turnstile_enabled_login: boolean;
+  has_users?: boolean;
+  invite_code_enabled?: boolean;
 }
 
 export interface UseSignupWizardProps {
@@ -52,8 +56,10 @@ export const useSignupWizard = ({
 
   // Input states
   const [username, setUsername] = useState("");
+  const [inviteCode, setInviteCode] = useState("");
   const [password, setPassword] = useState("");
   const [totpSetupToken, setTotpSetupToken] = useState("");
+  const requiresInviteCode = Boolean(authConfig?.has_users !== false && authConfig?.invite_code_enabled);
 
   // TOTP response states
   const [totpSetupData, setTotpSetupData] = useState<{
@@ -79,6 +85,7 @@ export const useSignupWizard = ({
   const [mfaChoice, setMfaChoice] = useState<"choose" | "totp">("choose");
   const [passkeyRegLoading, setPasskeyRegLoading] = useState(false);
   const [passkeyRegError, setPasskeyRegError] = useState("");
+  const [isPasswordlessSignup, setIsPasswordlessSignup] = useState(false);
 
   const { t } = useTranslation();
 
@@ -123,17 +130,32 @@ export const useSignupWizard = ({
       return;
     }
 
+    const normalizedCode = inviteCode.trim().toUpperCase();
+    if (requiresInviteCode) {
+      if (!normalizedCode) {
+        setError(t("auth.inviteCodeRequired", "请输入 6 位邀请码。"));
+        return;
+      }
+      if (!validateInviteCode(normalizedCode)) {
+        setError(t("auth.inviteCodeInvalid", "邀请码无效，请检查是否为正确的 6 位大写字母或数字。"));
+        return;
+      }
+    }
+
     setLoading(true);
     setError("");
     try {
       const exists = await checkUsernameDuplicateService(username);
       if (exists) {
         setError(t("auth.usernameExists"));
-      } else {
-        setSignupStep("password");
+        return;
       }
-    } catch (err) {
-      setError(t("auth.networkError"));
+      if (requiresInviteCode) {
+        await checkInviteCodeService(normalizedCode);
+      }
+      setSignupStep("password");
+    } catch (err: any) {
+      setError(formatApiErrorMessage(err, t));
     } finally {
       setLoading(false);
     }
@@ -148,7 +170,12 @@ export const useSignupWizard = ({
       setSignupStep("totp");
     } catch (e) {
       console.error("Network error during signup TOTP setup:", e);
-      onSuccess();
+      if (isPasswordlessSignup) {
+        setTotpSetupError(t("common.errorNetwork", "Network error"));
+        setMfaChoice("choose");
+      } else {
+        onSuccess();
+      }
     } finally {
       setTotpSetupLoading(false);
     }
@@ -250,7 +277,8 @@ export const useSignupWizard = ({
       const data = await signup({
         username,
         password: clientHash,
-        turnstileToken
+        turnstileToken,
+        ...(requiresInviteCode ? { inviteCode: inviteCode.trim().toUpperCase() } : {})
       });
 
       if (data.accessToken) {
@@ -261,6 +289,7 @@ export const useSignupWizard = ({
         setTotpRecoveryKeys([data.recoveryKey]);
       }
 
+      setIsPasswordlessSignup(false);
       setMfaChoice("choose");
       setSignupStep("totp");
     } catch (err: any) {
@@ -280,13 +309,56 @@ export const useSignupWizard = ({
     }
   };
 
+  const handleSkipPasswordSignup = async () => {
+    if (!validateUsername(username)) {
+      setError(t("auth.formatTipUsername"));
+      return;
+    }
+    if (isTurnstileEnabled && authConfig?.turnstile_site_key && !turnstileToken) {
+      setError(t("auth.turnstileRequired"));
+      return;
+    }
+
+    setLoading(true);
+    setError("");
+    try {
+      const data = await signup({
+        username,
+        skipPassword: true,
+        turnstileToken,
+        ...(requiresInviteCode ? { inviteCode: inviteCode.trim().toUpperCase() } : {})
+      });
+
+      if (data.accessToken) {
+        setAccessToken(data.accessToken);
+      }
+
+      if (data.recoveryKey) {
+        setTotpRecoveryKeys([data.recoveryKey]);
+      }
+
+      setIsPasswordlessSignup(true);
+      setMfaChoice("choose");
+      setSignupStep("totp");
+    } catch (err: any) {
+      setError(formatApiErrorMessage(err, t));
+      resetTurnstile();
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return {
     signupStep,
     setSignupStep,
     username,
     setUsername,
+    inviteCode,
+    setInviteCode,
+    requiresInviteCode,
     password,
     setPassword,
+    isPasswordlessSignup,
     mfaChoice,
     setMfaChoice,
     passkeyRegLoading,
@@ -316,6 +388,7 @@ export const useSignupWizard = ({
     handleSignupUsernameSubmit,
     handleSignupTotpConfirm,
     handleCopySignupRecoveryKeys,
-    handleSignupSubmit
+    handleSignupSubmit,
+    handleSkipPasswordSignup
   };
 };

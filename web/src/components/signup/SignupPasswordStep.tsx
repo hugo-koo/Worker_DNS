@@ -25,6 +25,8 @@ export interface SignupPasswordStepProps {
   loading: boolean;
   /** Callback to handle form submission. */
   onSubmit: (e: React.FormEvent) => void;
+  /** Optional callback to create a passwordless account by skipping password input. */
+  onSkipPassword?: () => void;
   /** Flag showing if Turnstile verification is enabled. */
   isTurnstileEnabled: boolean | undefined;
   /** Ref pointing to the Turnstile container div. */
@@ -47,6 +49,7 @@ export const SignupPasswordStep: React.FC<SignupPasswordStepProps> = ({
   setPasswordFocused,
   loading,
   onSubmit,
+  onSkipPassword,
   isTurnstileEnabled,
   turnstileRef,
   turnstileStatus
@@ -132,6 +135,20 @@ export const SignupPasswordStep: React.FC<SignupPasswordStepProps> = ({
           ? t("auth.verifying")
           : t("auth.signupBtn")}
       </Button>
+
+      {onSkipPassword && (
+        <div className="pt-2 text-center">
+          <Button
+            type="button"
+            minimal
+            fill
+            disabled={loading || turnstileStatus === "verifying" || (!!isTurnstileEnabled && turnstileStatus !== "success")}
+            onClick={onSkipPassword}
+            text={t("auth.skipPasswordSignup", "跳过密码设置，注册无密码账号")}
+            className="text-xs text-gray-500 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400"
+          />
+        </div>
+      )}
     </form>
   );
 };

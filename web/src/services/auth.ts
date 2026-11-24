@@ -16,6 +16,7 @@ export interface AuthConfig {
   optional_session_expiration_days?: number;
   has_users?: boolean;
   registration_enabled?: boolean;
+  invite_code_enabled?: boolean;
   max_users?: number | null;
   max_users_reached?: boolean;
 }
@@ -58,8 +59,10 @@ export interface LoginResponse {
 
 export interface SignupPayload {
   username: string;
-  password: string;
+  password?: string;
+  skipPassword?: boolean;
   turnstileToken: string | null;
+  inviteCode?: string;
 }
 
 export interface SignupResponse {
@@ -79,6 +82,17 @@ export async function checkUsernameDuplicate(username: string): Promise<boolean>
   if (!res.ok) throw new ApiError(res.status, await res.text());
   const data = await res.json() as { exists: boolean };
   return data.exists;
+}
+
+export async function checkInviteCode(inviteCode: string): Promise<boolean> {
+  const res = await fetch("/api/auth/check-invite-code", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ inviteCode })
+  });
+  if (!res.ok) throw new ApiError(res.status, await res.text());
+  const data = await res.json() as { valid: boolean };
+  return Boolean(data.valid);
 }
 
 export async function prelogin(payload: PreloginPayload): Promise<PreloginResponse> {

@@ -26,6 +26,7 @@ import { tuneV8Engine } from './v8';
 import { getClusterInfo, forkClusterWorkers, shutdownClusterWorkers } from './cluster';
 import { registerActiveDnsSyncPublisher, applySyncedActiveDnsConnection } from '../lib/activeDns';
 import { registerProfileKeyInvalidatePublisher, invalidateProfileKeyCache } from '../pipeline/cache';
+import { ServerfullLifecycleManager } from './lifecycle';
 
 export * from './cli';
 
@@ -98,6 +99,14 @@ async function bootstrap(): Promise<void> {
   // 3. Load environment variables & configurations
   const { config, env } = getServerfullConfig(cliArgs);
   const clusterInfo = getClusterInfo(config.workers);
+  const parsedStartedAt = Number(process.env.SERVERFULL_STARTED_AT);
+  const processStartedAt =
+    Number.isFinite(parsedStartedAt) && parsedStartedAt > 0
+      ? Math.floor(parsedStartedAt)
+      : Math.floor(Date.now() / 1000);
+  if (clusterInfo.isPrimary) {
+    process.env.SERVERFULL_STARTED_AT = String(processStartedAt);
+  }
 
   // 4. Primary Process setup and diagnostics
   if (clusterInfo.isPrimary) {
@@ -265,10 +274,12 @@ async function bootstrap(): Promise<void> {
     // Start background cron on Primary process (every 60s, non-overlapping)
     const cronTimer = startServerfullCronLoop(env, localSqliteDb);
 
-    // Fork worker processes
-    forkClusterWorkers(clusterInfo.workersCount);
-
+    let primaryShuttingDown = false;
     const shutdownPrimary = async (signal: string) => {
+      if (primaryShuttingDown) {
+        return;
+      }
+      primaryShuttingDown = true;
       console.log(`\n[Serverfull Master] Received ${signal}. Shutting down cluster...`);
       clearInterval(cronTimer);
       await shutdownClusterWorkers();
@@ -288,6 +299,11 @@ async function bootstrap(): Promise<void> {
       console.log('[Serverfull Master] Cluster shutdown complete. Goodbye.');
       process.exit(0);
     };
+
+    // Fork worker processes and relay console restart requests to primary shutdown
+    forkClusterWorkers(clusterInfo.workersCount, () => {
+      void shutdownPrimary('CONSOLE_RESTART');
+    });
 
     process.on('SIGINT', () => shutdownPrimary('SIGINT'));
     process.on('SIGTERM', () => shutdownPrimary('SIGTERM'));
@@ -334,6 +350,22 @@ async function bootstrap(): Promise<void> {
       }
     });
   }
+
+  let triggerConsoleRestart: (() => void) | null = null;
+  env.SERVERFULL_LIFECYCLE_BRIDGE = new ServerfullLifecycleManager({
+    currentVersion: getPackageVersion(),
+    startedAt: processStartedAt,
+    runtime: getActiveRuntimeDescription(),
+    packageRoot: config.packageRoot,
+    workersCount: clusterInfo.workersCount,
+    onRestart: () => {
+      if (clusterInfo.isWorker) {
+        process.send?.({ type: 'CONTROL_RESTART' });
+      } else {
+        triggerConsoleRestart?.();
+      }
+    },
+  });
 
   const certInfo = inspectTlsCertificate(config.tlsCertPath, config.tlsKeyPath);
   const canStartHttps = certInfo.configured && certInfo.filesExist && !config.disableHttps;
@@ -436,7 +468,12 @@ async function bootstrap(): Promise<void> {
   }
 
   // 8. Graceful shutdown handler
+  let isShuttingDown = false;
   const shutdown = async (signal: string) => {
+    if (isShuttingDown) {
+      return;
+    }
+    isShuttingDown = true;
     const prefix = clusterInfo.workersCount > 1 ? `[Worker #${clusterInfo.workerId || 1}]` : '[Serverfull]';
     console.log(`\n${prefix} Received ${signal}. Shutting down gracefully...`);
     if (cronTimer) clearInterval(cronTimer);
@@ -464,6 +501,10 @@ async function bootstrap(): Promise<void> {
 
     console.log(`${prefix} Services stopped. Goodbye.`);
     process.exit(0);
+  };
+
+  triggerConsoleRestart = () => {
+    void shutdown('CONSOLE_RESTART');
   };
 
   process.on('SIGINT', () => shutdown('SIGINT'));

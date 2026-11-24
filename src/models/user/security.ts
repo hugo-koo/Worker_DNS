@@ -18,7 +18,7 @@ export class UserSecurityModel {
    */
   async updatePassword(id: string, passwordHash: string, passwordVersion: number = 2): Promise<boolean> {
     const result = await this.db
-      .prepare("UPDATE users SET hashed_password = ?, password_version = ? WHERE id = ?")
+      .prepare("UPDATE users SET hashed_password = ?, password_version = ?, has_password = 1 WHERE id = ?")
       .bind(passwordHash, passwordVersion, id)
       .run();
     return result.success;

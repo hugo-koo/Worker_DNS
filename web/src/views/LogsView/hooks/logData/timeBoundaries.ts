@@ -1,8 +1,62 @@
-import type { TimeRange } from "../../types";
+import type { PresetTimeRange, TimeRange } from "../../types";
 
 export interface TimeBoundaries {
   since: number;
   until: number;
+}
+
+const PRESET_DURATION_SECONDS: Record<PresetTimeRange, number> = {
+  "10m": 600,
+  "1h": 3600,
+  "24h": 86400,
+  "7d": 604800,
+  "30d": 2592000,
+};
+
+/**
+ * Returns the duration in seconds represented by a preset log time range.
+ *
+ * @param range - Preset time range (`10m`, `1h`, `24h`, `7d`, or `30d`).
+ * @returns Window duration in seconds.
+ */
+export function getRangeDurationSeconds(range: PresetTimeRange): number {
+  return PRESET_DURATION_SECONDS[range] ?? 3600;
+}
+
+/**
+ * Formats a millisecond timestamp as a local `datetime-local` input string (`YYYY-MM-DDTHH:mm`).
+ *
+ * @param ms - Timestamp in milliseconds.
+ * @returns Formatted local date-time string.
+ */
+export function formatDateTimeLocal(ms: number): string {
+  const d = new Date(ms);
+  const pad = (n: number): string => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+/**
+ * Computes `{ start, end }` `datetime-local` strings from a cutoff end time
+ * and the selected preset window duration (`start = end - duration(baseRange)`).
+ *
+ * @param endInput - Cutoff time string parseable by `Date`.
+ * @param baseRange - Active preset window duration.
+ * @returns Computed `{ start, end }` strings, or `null` if `endInput` is invalid.
+ */
+export function buildCustomRangeFromEnd(
+  endInput: string,
+  baseRange: PresetTimeRange
+): { start: string; end: string } | null {
+  if (!endInput) return null;
+  const endMs = new Date(endInput).getTime();
+  if (Number.isNaN(endMs)) return null;
+
+  const durationMs = getRangeDurationSeconds(baseRange) * 1000;
+  const startMs = endMs - durationMs;
+  return {
+    start: formatDateTimeLocal(startMs),
+    end: formatDateTimeLocal(endMs),
+  };
 }
 
 /**
@@ -20,27 +74,6 @@ export function calculateTimeBoundaries(
     return { since, until };
   }
 
-  let since: number;
-  switch (range) {
-    case "10m":
-      since = now - 600;
-      break;
-    case "1h":
-      since = now - 3600;
-      break;
-    case "24h":
-      since = now - 86400;
-      break;
-    case "7d":
-      since = now - 604800;
-      break;
-    case "30d":
-      since = now - 2592000;
-      break;
-    default:
-      since = now - 3600;
-      break;
-  }
-
-  return { since, until: now };
+  const duration = range === "custom" ? 3600 : getRangeDurationSeconds(range);
+  return { since: now - duration, until: now };
 }

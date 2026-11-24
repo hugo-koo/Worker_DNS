@@ -102,9 +102,9 @@ export async function handleTotpAndMfaRequest(
       );
 
       await userModel.updateTOTP(user.id, normalizedSecret, storedItems as any);
-      // Only enable passwordless mode on initial enrollment if user has no passwordless restriction;
-      // keep existing totp_skip_password setting when re-enrolling.
-      if (!dbUser.totp_enabled) {
+      // Only enable passwordless mode on initial enrollment or when the account has no password;
+      // keep existing totp_skip_password setting when re-enrolling on a password-enabled account.
+      if (!dbUser.totp_enabled || dbUser.has_password === 0) {
         await userModel.updateTOTPSettings(user.id, true);
       }
       await activityLog.record(user.id, "totp_setup", clientIp, userAgent, undefined, sessionHash);
@@ -196,6 +196,10 @@ export async function handleTotpAndMfaRequest(
       const passkeys = await passkeyModel.listByUser(user.id);
       const hasPasskey = passkeys.length > 0;
 
+      if (dbUser.has_password === 0 && !hasPasskey) {
+        return new Response("cannot_remove_last_mfa_without_password", { status: 400 });
+      }
+
       await userModel.removeTOTP(user.id, hasPasskey);
       await activityLog.record(user.id, "totp_removed", clientIp, userAgent, { method: authResult.method }, sessionHash);
       return new Response(JSON.stringify({ success: true }), {
@@ -231,6 +235,9 @@ async function handleMfaSettingsPatch(
   if (!hasMfa) return new Response("MFA is not enabled", { status: 400 });
 
   const body = (await request.json()) as ReauthPayload & { skip_password: boolean };
+  if (dbUser.has_password === 0 && !body.skip_password) {
+    return new Response("passwordless_cannot_disable", { status: 400 });
+  }
   if (body.skip_password) {
     const authResult = await verifyUserReauth(dbUser, body, env, request, { sessionId: user.sessionId });
     if (!authResult.success) {

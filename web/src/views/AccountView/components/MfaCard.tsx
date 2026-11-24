@@ -32,12 +32,16 @@ export const MfaCard: React.FC<MfaCardProps> = ({ user, onRefresh }) => {
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [verifyOpen, setVerifyOpen] = useState(false);
 
+  const isPasswordlessAccount = user.has_password === false;
   const isMfaEnabled = !!(
     user.mfa_enabled ??
     (user.totp_enabled || (user.passkeys_count && user.passkeys_count > 0))
   );
 
   const handleToggleSkipPassword = async (val: boolean) => {
+    if (isPasswordlessAccount && !val) {
+      return;
+    }
     if (val) {
       // Enabling passwordless login requires step-up MFA re-authentication on the backend
       setVerifyOpen(true);
@@ -101,11 +105,19 @@ export const MfaCard: React.FC<MfaCardProps> = ({ user, onRefresh }) => {
                     "When enabled, logging in will skip the password requirement and verify your identity directly via Passkey or TOTP."
                   )}
                 </div>
+                {isPasswordlessAccount && (
+                  <div className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                    {t(
+                      "account.mfa.passwordlessLockedHint",
+                      "当前为无密码账号，不可停用无密码登录；如需停用请先在右侧“增加密码”。"
+                    )}
+                  </div>
+                )}
               </div>
               <Switch
-                checked={!!user.totp_skip_password}
+                checked={isPasswordlessAccount || !!user.totp_skip_password}
                 onChange={(e) => handleToggleSkipPassword(e.currentTarget.checked)}
-                disabled={settingsLoading}
+                disabled={settingsLoading || isPasswordlessAccount}
                 className="mb-0 shrink-0"
               />
             </div>

@@ -18,6 +18,7 @@ const PUBLIC_API_EXACT_ROUTES = new Set<string>([
   '/api/auth/signup',
   '/api/auth/prelogin',
   '/api/auth/check-username',
+  '/api/auth/check-invite-code',
   '/api/auth/config',
   '/api/auth/refresh',
   '/api/auth/logout',

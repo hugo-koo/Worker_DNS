@@ -32,8 +32,11 @@ export const ChangePasswordCard: React.FC<ChangePasswordCardProps> = ({ me, onRe
 
   const hasPasskey = !!(me?.passkeys_count && me.passkeys_count > 0);
   const hasTotp = !!me?.totp_enabled;
+  const isPasswordlessAccount = me?.has_password === false;
 
-  const [authMethod, setAuthMethod] = useState<PwAuthMethod>("password");
+  const [authMethod, setAuthMethod] = useState<PwAuthMethod>(() =>
+    me?.has_password === false ? (hasPasskey ? "passkey" : hasTotp ? "totp" : "passkey") : "password"
+  );
   const [oldPassword, setOldPassword] = useState("");
   const [showOldPassword, setShowOldPassword] = useState(false);
   const [totpToken, setTotpToken] = useState("");
@@ -44,12 +47,14 @@ export const ChangePasswordCard: React.FC<ChangePasswordCardProps> = ({ me, onRe
   const [message, setMessage] = useState<{ text: string; intent: Intent } | null>(null);
 
   useEffect(() => {
-    if (authMethod === "passkey" && !hasPasskey) {
-      setAuthMethod(hasTotp ? "totp" : "password");
+    if (isPasswordlessAccount && authMethod === "password") {
+      setAuthMethod(hasPasskey ? "passkey" : hasTotp ? "totp" : "passkey");
+    } else if (authMethod === "passkey" && !hasPasskey) {
+      setAuthMethod(hasTotp ? "totp" : isPasswordlessAccount ? "passkey" : "password");
     } else if (authMethod === "totp" && !hasTotp) {
-      setAuthMethod(hasPasskey ? "passkey" : "password");
+      setAuthMethod(hasPasskey ? "passkey" : isPasswordlessAccount ? "totp" : "password");
     }
-  }, [hasPasskey, hasTotp, authMethod]);
+  }, [hasPasskey, hasTotp, isPasswordlessAccount, authMethod]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -132,7 +137,9 @@ export const ChangePasswordCard: React.FC<ChangePasswordCardProps> = ({ me, onRe
       }
 
       setMessage({
-        text: t("account.passwordSuccess", "Password updated successfully!"),
+        text: isPasswordlessAccount
+          ? t("account.passwordAddedSuccess", "密码添加成功！")
+          : t("account.passwordSuccess", "Password updated successfully!"),
         intent: Intent.SUCCESS
       });
       setOldPassword("");
@@ -149,30 +156,40 @@ export const ChangePasswordCard: React.FC<ChangePasswordCardProps> = ({ me, onRe
     }
   };
 
+  const showMethodSelector = isPasswordlessAccount
+    ? hasPasskey && hasTotp
+    : hasPasskey || hasTotp;
+
   return (
     <Card elevation={Elevation.ONE} className="isolate" style={{ isolation: "isolate" }}>
       {/* Row 1: Title */}
       <div className="flex items-center gap-2 mb-4">
         <Key size={20} className="text-orange-500" />
-        <H4 style={{ margin: 0 }}>{t("account.changePassword", "Change Password")}</H4>
+        <H4 style={{ margin: 0 }}>
+          {isPasswordlessAccount
+            ? t("account.addPassword", "增加密码")
+            : t("account.changePassword", "修改密码")}
+        </H4>
       </div>
 
-      {/* Row 2: Verification method selector */}
-      {(hasPasskey || hasTotp) && (
+      {/* Row 2: Verification method selector (never show password option for passwordless accounts) */}
+      {showMethodSelector && (
         <div className="mb-4 isolate" style={{ isolation: "isolate" }}>
           <div className="w-full bg-gray-100/70 dark:bg-gray-800/70 p-1 rounded-lg">
             <ButtonGroup fill variant="minimal" style={{ isolation: "isolate" }}>
-              <Button
-                small
-                active={authMethod === "password"}
-                intent={authMethod === "password" ? Intent.PRIMARY : Intent.NONE}
-                icon={<Lock size={14} />}
-                text={t("account.mfa.password", "Password")}
-                onClick={() => {
-                  setAuthMethod("password");
-                  setMessage(null);
-                }}
-              />
+              {!isPasswordlessAccount && (
+                <Button
+                  small
+                  active={authMethod === "password"}
+                  intent={authMethod === "password" ? Intent.PRIMARY : Intent.NONE}
+                  icon={<Lock size={14} />}
+                  text={t("account.mfa.password", "Password")}
+                  onClick={() => {
+                    setAuthMethod("password");
+                    setMessage(null);
+                  }}
+                />
+              )}
               {hasPasskey && (
                 <Button
                   small
@@ -211,7 +228,7 @@ export const ChangePasswordCard: React.FC<ChangePasswordCardProps> = ({ me, onRe
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        {authMethod === "password" && (
+        {!isPasswordlessAccount && authMethod === "password" && (
           <FormGroup label={t("account.currentPassword", "Current Password")}>
             <InputGroup
               leftIcon="lock"
@@ -290,7 +307,11 @@ export const ChangePasswordCard: React.FC<ChangePasswordCardProps> = ({ me, onRe
           loading={loading}
           icon={authMethod === "passkey" ? <Key size={16} /> : undefined}
           text={
-            authMethod === "passkey"
+            isPasswordlessAccount
+              ? authMethod === "passkey"
+                ? t("account.addPasswordWithPasskey", "通过通行密钥验证并添加密码")
+                : t("account.addPasswordBtn", "添加密码")
+              : authMethod === "passkey"
               ? t("account.changePasswordWithPasskey", "Verify with Passkey & Update")
               : t("account.updatePassword", "Update Password")
           }

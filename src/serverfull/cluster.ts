@@ -47,8 +47,9 @@ export function getClusterInfo(configuredWorkers: number): ClusterInfo {
  * Spawns worker processes across CPU cores and monitors their health.
  *
  * @param count - Number of workers to spawn.
+ * @param onRestartRequest - Optional callback invoked when a worker requests a graceful cluster restart.
  */
-export function forkClusterWorkers(count: number): void {
+export function forkClusterWorkers(count: number, onRestartRequest?: () => void): void {
   const cpuCount = typeof os.cpus === 'function' ? os.cpus().length : 1;
   console.log(`[Cluster] Spawning ${count} worker processes across ${cpuCount} available CPU core(s)...`);
 
@@ -61,6 +62,10 @@ export function forkClusterWorkers(count: number): void {
       return;
     }
     const msgType = (message as { type?: string }).type;
+    if (msgType === 'CONTROL_RESTART') {
+      onRestartRequest?.();
+      return;
+    }
     if (msgType !== 'ACTIVE_DNS_SYNC' && msgType !== 'PROFILE_KEY_INVALIDATE') {
       return;
     }

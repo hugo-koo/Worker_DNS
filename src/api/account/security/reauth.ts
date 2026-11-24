@@ -161,9 +161,16 @@ export async function verifyUserReauth(
     return { success: true, method: "recovery_key" };
   }
 
-  // 4. Password check (oldPassword or password) — rejected alone when MFA is enabled
+  // 4. Password check (oldPassword or password) — rejected alone when MFA is enabled or password is unset
   const pwd = payload.oldPassword || payload.password;
   if (pwd) {
+    if (dbUser.has_password === 0) {
+      return {
+        success: false,
+        error: "Password is not configured for this account",
+        reason: "password_not_set"
+      };
+    }
     if (hasMfa) {
       return {
         success: false,

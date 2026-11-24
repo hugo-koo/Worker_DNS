@@ -41,7 +41,7 @@ export const ListsTable: React.FC<ListsTableProps> = ({
             <span className="truncate">{list.url}</span>
             {scopes.includes("user") && (
               <Tag intent={Intent.SUCCESS} minimal className="shrink-0 text-xs font-sans">
-                {t("filtering.tagUser", "用户")}
+                {t("filtering.tagUser", "账号")}
               </Tag>
             )}
             {scopes.includes("system") && (

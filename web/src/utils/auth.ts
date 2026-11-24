@@ -52,6 +52,18 @@ export const PASSKEY_NAME_REGEX = /^(?!\s+$)[^\p{Cc}]{1,30}$/u;
  * Requirements: exactly 4 digits.
  */
 export const PIN_REGEX = /^\d{4}$/;
+/**
+ * Invite code validation regular expression.
+ * Requirements: exactly 6 uppercase ASCII letters or digits.
+ */
+export const INVITE_CODE_REGEX = /^[A-Z0-9]{6}$/;
+
+/**
+ * Validates whether an invite code conforms to the 6-char uppercase alphanumeric format.
+ */
+export function validateInviteCode(code: string): boolean {
+  return INVITE_CODE_REGEX.test(code.trim().toUpperCase());
+}
 
 /**
  * Validates whether a passkey name matches the required format (1-30 Unicode characters).
@@ -323,10 +335,31 @@ export function formatApiErrorMessage(err: any, t: TranslationFunction): string 
     return t("auth.passkeyAuthFailed", "Passkey verification failed or was cancelled");
   }
   if (bodyText === "max_users_reached") {
-    return t("auth.maxUsersReached", "当前系统已达到用户数量上限，无法创建新用户。");
+    return t("auth.maxUsersReached", "当前系统已达到账号数量上限，无法创建新账号。");
   }
   if (bodyText === "registration_disabled") {
-    return t("auth.registrationDisabledDesc", "当前系统已暂停开放新用户注册，请联系系统管理员获取账号。");
+    return t("auth.registrationDisabledDesc", "当前系统已暂停开放新账号注册，请联系系统管理员获取账号。");
+  }
+  if (bodyText === "invite_code_required") {
+    return t("auth.inviteCodeRequired", "请输入 6 位邀请码。");
+  }
+  if (bodyText === "invite_code_invalid" || bodyText === "invalid_invite_code_format") {
+    return t("auth.inviteCodeInvalid", "邀请码无效，请检查是否为正确的 6 位大写字母或数字。");
+  }
+  if (bodyText === "invite_code_expired") {
+    return t("auth.inviteCodeExpired", "该邀请码已过期。");
+  }
+  if (bodyText === "invite_code_exhausted") {
+    return t("auth.inviteCodeExhausted", "该邀请码可用次数已耗尽。");
+  }
+  if (bodyText === "invite_code_exists") {
+    return t("account.inviteCodeExists", "该邀请码已存在，请更换其他邀请码。");
+  }
+  if (bodyText === "passwordless_cannot_disable") {
+    return t("account.mfa.passwordlessLockedHint", "当前为无密码账号，不可停用无密码登录；如需停用请先增加密码。");
+  }
+  if (bodyText === "cannot_remove_last_mfa_without_password") {
+    return t("account.mfa.cannotRemoveLastWithoutPassword", "无密码账号至少需要保留一种多因素认证方式（通行密钥或 TOTP），请先增加密码后再操作。");
   }
   if (bodyText === "password_leaked") {
     return t("auth.passwordLeaked", "Your password has been leaked.");

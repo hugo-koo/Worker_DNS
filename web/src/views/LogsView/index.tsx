@@ -25,6 +25,7 @@ export const LogsView: React.FC<LogsViewProps> = ({ profileId, onQuickAction, to
 
     // filters
     range,
+    baseRange,
     setRange,
     customRange,
     setCustomRange,
@@ -96,6 +97,7 @@ export const LogsView: React.FC<LogsViewProps> = ({ profileId, onQuickAction, to
       <LogsHeader
         profileId={profileId}
         range={range}
+        baseRange={baseRange}
         setRange={setRange}
         customRange={customRange}
         setCustomRange={setCustomRange}

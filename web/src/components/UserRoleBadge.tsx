@@ -25,7 +25,7 @@ export const UserRoleBadge: React.FC<UserRoleBadgeProps> = ({
   const isAdmin = role === "admin";
   const label = isAdmin
     ? t("account.roleAdmin", "管理员")
-    : t("account.roleUser", "用户");
+    : t("account.roleUser", "普通账号");
 
   return (
     <div

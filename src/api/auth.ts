@@ -17,7 +17,11 @@ export async function handleAuthRequest(request: Request, env: Env): Promise<Res
     const path = url.pathname;
 
     // 公开配置与辅助接口
-    if (path === '/api/auth/config' || path === '/api/auth/check-username') {
+    if (
+      path === '/api/auth/config' ||
+      path === '/api/auth/check-username' ||
+      path === '/api/auth/check-invite-code'
+    ) {
       return await handleAuthConfigRequest(request, env);
     }
 

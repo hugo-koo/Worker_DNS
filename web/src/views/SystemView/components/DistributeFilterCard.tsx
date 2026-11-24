@@ -93,12 +93,12 @@ export const DistributeFilterCard: React.FC<DistributeFilterCardProps> = ({
       const toastMessage = res.failedCount > 0
         ? t(
             "admin.distributeFilter.toastPartialSuccess",
-            "系统过滤列表已下发至 {{added}} 位用户，{{failed}} 位用户下发失败",
+            "系统过滤列表已下发至 {{added}} 个账号，{{failed}} 个账号下发失败",
             { added: res.addedCount, failed: res.failedCount }
           )
         : t(
             "admin.distributeFilter.toastSuccess",
-            "系统过滤列表已成功下发至 {{count}} 位用户",
+            "系统过滤列表已成功下发至 {{count}} 个账号",
             { count: res.addedCount }
           );
 
@@ -155,7 +155,7 @@ export const DistributeFilterCard: React.FC<DistributeFilterCardProps> = ({
       toasterRef?.current?.show({
         message: t(
           "admin.distributeFilter.toastRevokeSuccess",
-          "已成功撤回系统过滤列表，移除了 {{count}} 位用户的系统规则",
+          "已成功撤回系统过滤列表，移除了 {{count}} 个账号的系统规则",
           { count: res.revokedCount }
         ),
         intent: Intent.SUCCESS,
@@ -189,7 +189,7 @@ export const DistributeFilterCard: React.FC<DistributeFilterCardProps> = ({
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             {t(
               "admin.distributeFilter.description",
-              "向系统中所有用户账号下发系统级过滤列表。规则自动继承并应用于所有用户账号，带有“系统”标签。如果用户已存在相同规则则自动跳过。"
+              "向系统中所有账号下发系统级过滤列表。规则自动继承并应用于所有账号，带有“系统”标签。如果账号已存在相同规则则自动跳过。"
             )}
           </p>
         </div>
@@ -279,7 +279,7 @@ export const DistributeFilterCard: React.FC<DistributeFilterCardProps> = ({
                 {result.failedCount > 0
                   ? t(
                       "admin.distributeFilter.resultSummaryWithFailed",
-                      "系统共 {{total}} 位用户：成功下发至 {{added}} 位用户，跳过 {{skipped}} 位已存在该规则的用户，{{failed}} 位用户下发失败。",
+                      "系统共 {{total}} 个账号：成功下发至 {{added}} 个账号，跳过 {{skipped}} 个已存在该规则的账号，{{failed}} 个账号下发失败。",
                       {
                         total: result.totalUsers,
                         added: result.addedCount,
@@ -289,7 +289,7 @@ export const DistributeFilterCard: React.FC<DistributeFilterCardProps> = ({
                     )
                   : t(
                       "admin.distributeFilter.resultSummary",
-                      "系统共 {{total}} 位用户：成功下发至 {{added}} 位用户，跳过 {{skipped}} 位已存在该规则的用户。",
+                      "系统共 {{total}} 个账号：成功下发至 {{added}} 个账号，跳过 {{skipped}} 个已存在该规则的账号。",
                       {
                         total: result.totalUsers,
                         added: result.addedCount,
@@ -301,7 +301,7 @@ export const DistributeFilterCard: React.FC<DistributeFilterCardProps> = ({
               {result.addedUsernames.length > 0 && (
                 <div className="flex flex-wrap items-center gap-1.5 pt-1">
                   <span className="text-xs font-medium text-gray-500">
-                    {t("admin.distributeFilter.addedUsers", "下发成功用户")}:
+                    {t("admin.distributeFilter.addedUsers", "下发成功账号")}:
                   </span>
                   {result.addedUsernames.map((u) => (
                     <Tag key={u} intent={Intent.SUCCESS} minimal round>
@@ -314,7 +314,7 @@ export const DistributeFilterCard: React.FC<DistributeFilterCardProps> = ({
               {result.skippedUsernames.length > 0 && (
                 <div className="flex flex-wrap items-center gap-1.5 pt-1">
                   <span className="text-xs font-medium text-gray-500">
-                    {t("admin.distributeFilter.skippedUsers", "已存在规则用户")}:
+                    {t("admin.distributeFilter.skippedUsers", "已存在规则账号")}:
                   </span>
                   {result.skippedUsernames.map((u) => (
                     <Tag key={u} intent={Intent.NONE} minimal round>
@@ -327,7 +327,7 @@ export const DistributeFilterCard: React.FC<DistributeFilterCardProps> = ({
               {result.failedUsernames.length > 0 && (
                 <div className="flex flex-wrap items-center gap-1.5 pt-1">
                   <span className="text-xs font-medium text-red-500 dark:text-red-400">
-                    {t("admin.distributeFilter.failedUsers", "下发失败用户")}:
+                    {t("admin.distributeFilter.failedUsers", "下发失败账号")}:
                   </span>
                   {result.failedUsernames.map((u) => (
                     <Tag key={u} intent={Intent.DANGER} minimal round>
@@ -358,7 +358,7 @@ export const DistributeFilterCard: React.FC<DistributeFilterCardProps> = ({
         <p className="text-xs text-gray-500 dark:text-gray-400">
           {t(
             "admin.distributeFilter.activeDistributedDesc",
-            "当前处于系统下发状态且带有“系统”标签的规则列表。撤回后将从所有用户账号中移除此系统规则，用户自建的同名规则不受影响。"
+            "当前处于系统下发状态且带有“系统”标签的规则列表。撤回后将从所有账号中移除此系统规则，账号自建的同名规则不受影响。"
           )}
         </p>
 
@@ -394,7 +394,7 @@ export const DistributeFilterCard: React.FC<DistributeFilterCardProps> = ({
                         <p className="text-xs font-semibold leading-relaxed m-0 text-gray-800 dark:text-gray-200">
                           {t(
                             "admin.distributeFilter.revokeConfirm",
-                            "确定撤回此系统过滤列表？系统将从所有用户账号中移除此系统规则，用户自建的同名规则不受影响。"
+                            "确定撤回此系统过滤列表？系统将从所有账号中移除此系统规则，账号自建的同名规则不受影响。"
                           )}
                         </p>
                         <div className="flex justify-end gap-2">

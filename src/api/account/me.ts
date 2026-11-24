@@ -70,6 +70,7 @@ export async function handleMeRequest(
         recovery_keys_encrypted: !!(dbUser?.totp_recovery_keys_encrypted),
         timezone: dbUser?.timezone || null,
         locale: dbUser?.locale || "en-US",
+        has_password: dbUser?.has_password !== 0,
         password_version: dbUser?.password_version ?? 1,
         pin_enabled: !!(dbUser?.pin_hash),
         session_lock_timeout: dbUser?.session_lock_timeout ?? 15,

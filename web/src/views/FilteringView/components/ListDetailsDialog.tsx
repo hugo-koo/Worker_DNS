@@ -169,7 +169,7 @@ export const ListDetailsDialog: React.FC<ListDetailsDialogProps> = ({
           <div className="flex items-center gap-1.5 shrink-0">
             {(selectedList?.scopes?.includes("user") || selectedList?.scope === "user") && (
               <Tag intent={Intent.SUCCESS} minimal className="font-sans">
-                {t("filtering.tagUser", "用户")}
+                {t("filtering.tagUser", "账号")}
               </Tag>
             )}
             {(selectedList?.scopes?.includes("system") || selectedList?.scope === "system") && (
@@ -201,7 +201,7 @@ export const ListDetailsDialog: React.FC<ListDetailsDialogProps> = ({
           <Callout intent={Intent.SUCCESS} icon="info-sign" className="text-xs">
             {t(
               "filtering.userListNotice",
-              "此列表为账号级用户规则并应用于所有配置。可在当前配置中停用；如需删除，请前往「账号」管理页面。"
+              "此列表为账号级规则并应用于所有配置。可在当前配置中停用；如需删除，请前往「账号」管理页面。"
             )}
           </Callout>
         )}
@@ -510,7 +510,7 @@ export const ListDetailsDialog: React.FC<ListDetailsDialogProps> = ({
           </PopoverNext>
         ) : (
           <span className="text-xs text-gray-400 italic">
-            {t("filtering.cannotDeleteUserListDesc", "用户级与系统级列表不可在配置中删除")}
+            {t("filtering.cannotDeleteUserListDesc", "账号级与系统级列表不可在配置中删除")}
           </span>
         )}
         <div className="flex gap-2">

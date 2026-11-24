@@ -63,11 +63,57 @@ export interface ServerfullSnapshotBridge {
   } | null>;
 }
 
+export type ReleaseChannel = 'latest' | 'alpha' | 'canary';
+
+export type ServerfullInstallMethod = 'npm-global' | 'docker' | 'source' | 'npx' | 'unknown';
+
+export type ServerfullServiceManager = 'systemd' | 'docker' | 'schtasks' | 'none';
+
+export interface ReleaseChannelInfo {
+  channel: ReleaseChannel;
+  version: string | null;
+  updateAvailable: boolean;
+  updateCommand: string;
+}
+
+export interface ServerfullRuntimeStatus {
+  supported: boolean;
+  currentVersion: string;
+  currentChannel: ReleaseChannel;
+  /** Process startup Unix timestamp in seconds. */
+  startedAt: number;
+  runtime: string;
+  platform: string;
+  installMethod: ServerfullInstallMethod;
+  serviceManager: ServerfullServiceManager;
+  workersCount: number;
+  canRestart: boolean;
+  restartReason: string | null;
+  /** Last npm registry check Unix timestamp in seconds. */
+  checkedAt: number | null;
+  checkError: string | null;
+  channels: Record<ReleaseChannel, ReleaseChannelInfo>;
+}
+
+export interface ServerfullRestartResult {
+  accepted: boolean;
+  /** Current process startup Unix timestamp in seconds prior to restart. */
+  startedAt: number;
+  estimatedDowntimeSec: number;
+  message: string;
+}
+
+export interface ServerfullLifecycleBridge {
+  getStatus(options?: { forceRefresh?: boolean }): Promise<ServerfullRuntimeStatus>;
+  requestRestart(): Promise<ServerfullRestartResult>;
+}
+
 export interface Env {
   DB: D1Database;
   ACCESS_KEY_DO?: AccessKeyDoNamespace;
   ASSETS: any;
   SERVERFULL_SNAPSHOT_BRIDGE?: ServerfullSnapshotBridge;
+  SERVERFULL_LIFECYCLE_BRIDGE?: ServerfullLifecycleBridge;
   JWT_SECRET?: string;
   MAX_ACCESS_POINTS_PER_PROFILE?: string | number;
   MAX_PROFILES_PER_USER?: string | number;
@@ -143,6 +189,8 @@ export interface User {
   last_resolve_at?: number;
   timezone?: string | null;
   locale?: string | null;
+  invite_code?: string | null;
+  has_password?: number | boolean;
   password_version?: number;
   pin_hash?: string | null;
   isPaused?: boolean;

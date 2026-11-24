@@ -12,6 +12,8 @@ export interface UserInfo {
   last_resolve_at?: number;
   timezone?: string | null;
   locale?: string | null;
+  invite_code?: string | null;
+  has_password?: boolean;
   password_version?: number;
   pin_enabled?: boolean;
   session_lock_timeout?: number;

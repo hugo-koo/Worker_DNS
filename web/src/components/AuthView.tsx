@@ -24,6 +24,7 @@ export interface AuthConfig {
   optional_session_expiration_days?: number;
   has_users?: boolean;
   registration_enabled?: boolean;
+  invite_code_enabled?: boolean;
   max_users?: number | null;
   max_users_reached?: boolean;
 }

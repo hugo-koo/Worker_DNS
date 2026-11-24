@@ -94,7 +94,8 @@ export async function handleLoginRequest(request: Request, env: Env): Promise<Re
       ? allPasskeys.filter((p) => !isDemoPasskeyCredentialId(p.credential_id))
       : allPasskeys;
     const has_passkey = passkeys.length > 0;
-    const requires_password = !(user.totp_skip_password && (requires_totp || has_passkey));
+    const isPasswordlessAccount = user.has_password === 0;
+    const requires_password = !isPasswordlessAccount && !(user.totp_skip_password && (requires_totp || has_passkey));
     let passkey_options: any = null;
     let passkey_challenge: string | null = null;
 
@@ -201,6 +202,9 @@ export async function handleLoginRequest(request: Request, env: Env): Promise<Re
 
     // 验证密码 (若用户未启用免密且未提供有效 Passkey 凭据，强制校验主密码)
     if (!skipPasswordAllowed) {
+      if (user.has_password === 0) {
+        return new Response("Password is not configured for this account", { status: 400 });
+      }
       if (!password) {
         return new Response("Password is required", { status: 400 });
       }

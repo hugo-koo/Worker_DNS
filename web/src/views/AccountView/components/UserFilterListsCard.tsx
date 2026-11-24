@@ -91,7 +91,7 @@ export const UserFilterListsCard: React.FC<UserFilterListsCardProps> = ({
       await addUserList(trimmed);
       setNewUrl("");
       toasterRef?.current?.show({
-        message: t("account.userFilterLists.addSuccess", "用户级过滤规则已成功添加并应用于所有配置"),
+        message: t("account.userFilterLists.addSuccess", "账号级过滤规则已成功添加并应用于所有配置"),
         intent: Intent.SUCCESS,
         icon: "tick",
       });
@@ -165,7 +165,7 @@ export const UserFilterListsCard: React.FC<UserFilterListsCardProps> = ({
       setDeleteConfirmId(null);
       setLists((prev) => prev.filter((l) => l.id !== id));
       toasterRef?.current?.show({
-        message: t("account.userFilterLists.deleteSuccess", "已删除用户级规则"),
+        message: t("account.userFilterLists.deleteSuccess", "已删除账号级规则"),
         intent: Intent.PRIMARY,
         icon: "trash",
       });
@@ -184,12 +184,12 @@ export const UserFilterListsCard: React.FC<UserFilterListsCardProps> = ({
       <div>
         <H4 className="flex items-center gap-2 mb-1 font-semibold text-gray-900 dark:text-gray-100">
           <ListFilter className="w-5 h-5 text-indigo-500 shrink-0" />
-          <span>{t("account.userFilterLists.title", "用户级过滤列表")}</span>
+          <span>{t("account.userFilterLists.title", "账号级过滤列表")}</span>
         </H4>
         <p className="text-sm text-gray-500 dark:text-gray-400">
           {t(
             "account.userFilterLists.description",
-            "在此配置的过滤规则列表将自动应用于您的所有配置 (Profiles)。系统级规则带有“系统”标签，自建规则带有“用户”标签。"
+            "在此配置的过滤规则列表将自动应用于您的所有配置 (Profiles)。系统级规则带有“系统”标签，自建规则带有“账号”标签。"
           )}
         </p>
       </div>
@@ -281,7 +281,7 @@ export const UserFilterListsCard: React.FC<UserFilterListsCardProps> = ({
           </div>
         ) : mergedLists.length === 0 ? (
           <div className="text-center py-8 text-gray-400 text-sm border border-dashed border-gray-200 dark:border-gray-800 rounded-lg">
-            {t("account.userFilterLists.empty", "暂无用户级与系统级过滤列表。您可在上方添加自建列表。")}
+            {t("account.userFilterLists.empty", "暂无账号级与系统级过滤列表。您可在上方添加自建列表。")}
           </div>
         ) : (
           <div className="overflow-x-auto border border-gray-100 dark:border-gray-800 rounded-lg">
@@ -305,7 +305,7 @@ export const UserFilterListsCard: React.FC<UserFilterListsCardProps> = ({
                       <div className="inline-flex items-center gap-1.5">
                         {row.userItem && (
                           <Tag intent={Intent.SUCCESS} minimal round className="text-xs font-sans whitespace-nowrap">
-                            {t("filtering.tagUser", "用户")}
+                            {t("filtering.tagUser", "账号")}
                           </Tag>
                         )}
                         {row.systemItem && (

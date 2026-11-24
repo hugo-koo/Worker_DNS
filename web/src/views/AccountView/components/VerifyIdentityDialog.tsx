@@ -35,8 +35,8 @@ const getInitialMethod = (user: UserInfo | null, allowedMethods?: AuthMethod[]):
   if (allowed.includes("passkey") && user?.passkeys_count && user.passkeys_count > 0) return "passkey";
   if (allowed.includes("recovery_key")) return "recovery_key";
   if (allowed.includes("totp") && user?.totp_enabled) return "totp";
-  if (allowed.includes("password")) return "password";
-  return allowed[0] || "password";
+  if (allowed.includes("password") && user?.has_password !== false) return "password";
+  return allowed.find((m) => m !== "password" || user?.has_password !== false) || allowed[0] || "passkey";
 };
 
 export const VerifyIdentityDialog: React.FC<VerifyIdentityDialogProps> = ({
@@ -52,7 +52,7 @@ export const VerifyIdentityDialog: React.FC<VerifyIdentityDialogProps> = ({
   const allowed = allowedMethods || ["passkey", "totp", "password"];
   const hasPasskey = !!(user?.passkeys_count && user.passkeys_count > 0) && allowed.includes("passkey");
   const hasTotp = !!user?.totp_enabled && allowed.includes("totp");
-  const hasPassword = allowed.includes("password");
+  const hasPassword = allowed.includes("password") && user?.has_password !== false;
   const hasRecoveryKey = allowed.includes("recovery_key");
 
   const defaultMethod = getInitialMethod(user, allowedMethods);
@@ -81,14 +81,26 @@ export const VerifyIdentityDialog: React.FC<VerifyIdentityDialogProps> = ({
 
   // Ensure selected method remains valid if user capabilities change dynamically
   useEffect(() => {
-    if (method === "passkey" && !hasPasskey) {
-      setMethod(hasRecoveryKey ? "recovery_key" : hasTotp ? "totp" : "password");
-    } else if (method === "totp" && !hasTotp) {
-      setMethod(hasPasskey ? "passkey" : hasRecoveryKey ? "recovery_key" : "password");
-    } else if (method === "recovery_key" && !hasRecoveryKey) {
-      setMethod(hasPasskey ? "passkey" : hasTotp ? "totp" : "password");
+    const firstValid: AuthMethod = hasPasskey
+      ? "passkey"
+      : hasRecoveryKey
+      ? "recovery_key"
+      : hasTotp
+      ? "totp"
+      : hasPassword
+      ? "password"
+      : "passkey";
+    if (
+      (method === "passkey" && !hasPasskey) ||
+      (method === "totp" && !hasTotp) ||
+      (method === "recovery_key" && !hasRecoveryKey) ||
+      (method === "password" && !hasPassword)
+    ) {
+      if (method !== firstValid) {
+        setMethod(firstValid);
+      }
     }
-  }, [hasPasskey, hasTotp, hasRecoveryKey, method]);
+  }, [hasPasskey, hasTotp, hasRecoveryKey, hasPassword, method]);
 
   const handleVerifyPassword = async (e?: React.FormEvent): Promise<void> => {
     if (e) e.preventDefault();

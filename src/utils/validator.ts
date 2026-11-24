@@ -100,6 +100,22 @@ export const ACCESS_KEY_REGEX = /^[a-zA-Z0-9]{5,12}$/;
  */
 export const TOTP_TOKEN_REGEX = /^\d{6}$/;
 
+/**
+ * Invite code validation regular expression.
+ * Requirements: exactly 6 uppercase ASCII letters or digits.
+ */
+export const INVITE_CODE_REGEX = /^[A-Z0-9]{6}$/;
+
+/**
+ * Normalizes a user-supplied invite code by trimming whitespace and uppercasing ASCII letters.
+ *
+ * @param raw - Raw invite code input.
+ * @returns Normalized string, or empty string for non-string input.
+ */
+export function normalizeInviteCode(raw: unknown): string {
+  return typeof raw === "string" ? raw.trim().toUpperCase() : "";
+}
+
 const FORBIDDEN_HOSTNAMES: readonly string[] = [
   'localhost',
   'metadata.google.internal', // GCP

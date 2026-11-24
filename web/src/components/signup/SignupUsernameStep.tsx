@@ -23,17 +23,23 @@ export interface SignupUsernameStepProps {
   setUsernameFocused: (focused: boolean) => void;
   /** Callback to check username availability on backend. */
   checkUsernameDuplicate: (uname: string) => void;
+  /** Whether a 6-character invite code is required for registration. */
+  requiresInviteCode?: boolean;
+  /** Current invite code value. */
+  inviteCode?: string;
+  /** Callback to update the invite code value. */
+  setInviteCode?: (val: string) => void;
   /** Indicates if signup username submission is loading. */
   loading: boolean;
   /** Callback to handle form submission. */
   onSubmit: (e: React.FormEvent) => void;
-  /** Callback to reset or clear username specific errors. */
+  /** Callback to reset or clear username/invite errors. */
   onClearError: () => void;
 }
 
 /**
  * SignupUsernameStep is the first step of the signup wizard.
- * It handles username input, real-time availability checks, and CAPTCHA challenge.
+ * It handles username input, optional invite code entry, and real-time availability checks.
  *
  * @param props - Component props.
  * @returns React element representing username step.
@@ -44,6 +50,9 @@ export const SignupUsernameStep: React.FC<SignupUsernameStepProps> = ({
   usernameFocused,
   setUsernameFocused,
   checkUsernameDuplicate,
+  requiresInviteCode = false,
+  inviteCode = "",
+  setInviteCode,
   loading,
   onSubmit,
   onClearError
@@ -83,6 +92,30 @@ export const SignupUsernameStep: React.FC<SignupUsernameStepProps> = ({
           </div>
         </Tooltip>
       </FormGroup>
+
+      {requiresInviteCode && setInviteCode && (
+        <FormGroup
+          label={t("auth.inviteCode", "邀请码")}
+          labelFor="invite-code"
+          helperText={t("auth.inviteCodeFormatTip", "请输入 6 位大写英文字母或数字组成的邀请码")}
+        >
+          <InputGroup
+            id="invite-code"
+            leftIcon="key"
+            placeholder={t("auth.inviteCodePlaceholder", "例如 A1B2C3")}
+            size="large"
+            maxLength={6}
+            className="rounded-xl w-full font-mono uppercase tracking-widest"
+            value={inviteCode}
+            onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+              const sanitized = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
+              setInviteCode(sanitized);
+              onClearError();
+            }}
+            required
+          />
+        </FormGroup>
+      )}
 
       <Button
         fill

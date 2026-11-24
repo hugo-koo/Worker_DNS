@@ -75,13 +75,14 @@ export const SystemSettingsCard: React.FC<SystemSettingsCardProps> = ({
   };
 
   return (
-    <>
-      <div className="flex items-center gap-2">
-        <Settings size={20} className="text-gray-500" />
-        <H4 style={{ margin: 0 }}>{t("account.systemSettings", "System Settings")}</H4>
+    <Card elevation={Elevation.ONE} className="p-6 space-y-6">
+      <div>
+        <H4 className="flex items-center space-x-2 text-base font-semibold m-0">
+          <Settings className="w-5 h-5 text-gray-500" />
+          <span>{t("account.systemSettings", "System Settings")}</span>
+        </H4>
       </div>
-      <Card elevation={Elevation.ONE}>
-        <form
+      <form
           onSubmit={(e) => {
             e.preventDefault();
             if (!sysLoading) {
@@ -165,6 +166,5 @@ export const SystemSettingsCard: React.FC<SystemSettingsCardProps> = ({
         </div>
         </form>
       </Card>
-    </>
   );
 };

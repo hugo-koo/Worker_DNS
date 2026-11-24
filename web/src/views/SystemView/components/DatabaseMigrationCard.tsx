@@ -80,33 +80,31 @@ export const DatabaseMigrationCard: React.FC<DatabaseMigrationCardProps> = ({
   };
 
   return (
-    <>
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <Database size={20} className="text-gray-500" />
-          <H4 style={{ margin: 0 }}>{t("account.databaseSettings", "数据库 (管理员)")}</H4>
+    <Card elevation={Elevation.ONE} className="p-6">
+      <div className="space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <H4 className="flex items-center space-x-2 text-base font-semibold m-0">
+            <Database className="w-5 h-5 text-gray-500" />
+            <span>{t("account.databaseSettings", "数据库 (管理员)")}</span>
+          </H4>
+          {migrations ? (
+            <Tag
+              large
+              round
+              intent={isCompleted ? Intent.SUCCESS : Intent.WARNING}
+              icon={isCompleted ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+              className="whitespace-nowrap self-start sm:self-auto"
+            >
+              {isCompleted
+                ? t("account.migrationCompleted", "迁移已完成")
+                : t("account.migrationPending", "有待执行迁移")}
+            </Tag>
+          ) : (
+            <Tag large round intent={Intent.NONE} className="whitespace-nowrap self-start sm:self-auto">
+              {t("common.loading", "加载中...")}
+            </Tag>
+          )}
         </div>
-        {migrations ? (
-          <Tag
-            large
-            round
-            intent={isCompleted ? Intent.SUCCESS : Intent.WARNING}
-            icon={isCompleted ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
-            className="whitespace-nowrap self-start sm:self-auto"
-          >
-            {isCompleted
-              ? t("account.migrationCompleted", "迁移已完成")
-              : t("account.migrationPending", "有待执行迁移")}
-          </Tag>
-        ) : (
-          <Tag large round intent={Intent.NONE} className="whitespace-nowrap self-start sm:self-auto">
-            {t("common.loading", "加载中...")}
-          </Tag>
-        )}
-      </div>
-
-      <Card elevation={Elevation.ONE}>
-        <div className="space-y-5">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <span className="text-xs uppercase font-semibold text-gray-500 tracking-wider">
@@ -192,6 +190,5 @@ export const DatabaseMigrationCard: React.FC<DatabaseMigrationCardProps> = ({
           )}
         </div>
       </Card>
-    </>
   );
 };

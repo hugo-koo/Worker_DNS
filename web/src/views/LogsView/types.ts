@@ -36,4 +36,6 @@ export interface LogsViewProps {
   toasterRef?: React.RefObject<OverlayToaster | null>;
 }
 
-export type TimeRange = "10m" | "1h" | "24h" | "7d" | "30d" | "custom";
+export type PresetTimeRange = "10m" | "1h" | "24h" | "7d" | "30d";
+
+export type TimeRange = PresetTimeRange | "custom";

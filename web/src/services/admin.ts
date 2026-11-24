@@ -28,6 +28,45 @@ export async function deleteUser(id: string): Promise<void> {
   if (!res.ok) throw new Error(await res.text());
 }
 
+export interface InviteCodeInfo {
+  code: string;
+  max_uses: number;
+  remaining_uses: number;
+  expires_at: number | null;
+  last_used_at: number | null;
+  created_at: number;
+  created_by?: string | null;
+}
+
+export interface CreateInviteCodePayload {
+  code?: string;
+  max_uses: number;
+  expires_at?: number | null;
+}
+
+export async function getInviteCodes(): Promise<InviteCodeInfo[]> {
+  const res = await fetch("/api/admin/invite-codes");
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function createInviteCode(payload: CreateInviteCodePayload): Promise<InviteCodeInfo> {
+  const res = await fetch("/api/admin/invite-codes", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function deleteInviteCode(code: string): Promise<void> {
+  const res = await fetch(`/api/admin/invite-codes/${encodeURIComponent(code)}`, {
+    method: "DELETE"
+  });
+  if (!res.ok) throw new Error(await res.text());
+}
+
 export async function getSystemSettings(): Promise<Record<string, string>> {
   const res = await fetch("/api/admin/settings");
   if (!res.ok) throw new Error("Failed to fetch system settings");
@@ -281,6 +320,78 @@ export async function revokeDistributedFilter(url: string): Promise<RevokeFilter
       // fallback to raw text
     }
     throw new Error(text);
+  }
+  return res.json();
+}
+
+export type ReleaseChannel = "latest" | "alpha" | "canary";
+
+export type ServerfullInstallMethod = "npm-global" | "docker" | "source" | "npx" | "unknown";
+
+export type ServerfullServiceManager = "systemd" | "docker" | "schtasks" | "none";
+
+export interface ReleaseChannelInfo {
+  channel: ReleaseChannel;
+  version: string | null;
+  updateAvailable: boolean;
+  updateCommand: string;
+}
+
+export interface ServerfullRuntimeStatus {
+  supported: boolean;
+  currentVersion: string;
+  currentChannel: ReleaseChannel;
+  /** Process startup Unix timestamp in seconds. */
+  startedAt: number;
+  runtime: string;
+  platform: string;
+  installMethod: ServerfullInstallMethod;
+  serviceManager: ServerfullServiceManager;
+  workersCount: number;
+  canRestart: boolean;
+  restartReason: string | null;
+  /** Last npm registry check Unix timestamp in seconds. */
+  checkedAt: number | null;
+  checkError: string | null;
+  channels: Record<ReleaseChannel, ReleaseChannelInfo>;
+}
+
+export interface ServerfullRestartResult {
+  accepted: boolean;
+  startedAt: number;
+  estimatedDowntimeSec: number;
+  message: string;
+}
+
+/**
+ * Fetches Serverfull runtime capabilities and 3-channel release status (`latest`, `alpha`, `canary`).
+ */
+export async function getRuntimeStatus(forceRefresh = false): Promise<ServerfullRuntimeStatus> {
+  const query = forceRefresh ? "?refresh=1" : "";
+  const res = await fetch(`/api/admin/runtime${query}`, { cache: "no-store" });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(text || `HTTP ${res.status}`);
+  }
+  return res.json();
+}
+
+/**
+ * Requests a graceful Serverfull service shutdown so the configured supervisor (`systemd` or Docker) restarts it.
+ */
+export async function restartServerfullService(): Promise<ServerfullRestartResult> {
+  const res = await fetch("/api/admin/runtime/restart", {
+    method: "POST"
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    try {
+      const json = JSON.parse(text) as { error?: string };
+      if (json.error) throw new Error(json.error);
+    } catch {
+      // fall back to raw text
+    }
+    throw new Error(text || `HTTP ${res.status}`);
   }
   return res.json();
 }

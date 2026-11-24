@@ -427,7 +427,7 @@ export const FilteringView: React.FC<FilteringViewProps> = ({ profileId, toaster
       <div className="border-t border-gray-200 dark:border-gray-800 my-8 pt-6">
         <div className="mb-4">
           <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-            <span>{t("filtering.userAndSystemListsTitle", "用户级与系统级列表")}</span>
+            <span>{t("filtering.userAndSystemListsTitle", "账号级与系统级列表")}</span>
             <span className="text-xs font-normal text-gray-400">
               ({userAndSystemLists.length})
             </span>
@@ -444,8 +444,8 @@ export const FilteringView: React.FC<FilteringViewProps> = ({ profileId, toaster
           lists={userAndSystemLists}
           onSelect={setSelectedList}
           loading={loading}
-          emptyTitle={t("filtering.noUserSystemListsTitle", "暂无用户级与系统级列表")}
-          emptyDesc={t("filtering.noUserSystemListsDesc", "可在账号设置页面中添加应用于所有配置的用户级规则。")}
+          emptyTitle={t("filtering.noUserSystemListsTitle", "暂无账号级与系统级列表")}
+          emptyDesc={t("filtering.noUserSystemListsDesc", "可在账号设置页面中添加应用于所有配置的账号级规则。")}
         />
       </div>
 

@@ -306,7 +306,9 @@ export async function handlePasskeysRequest(
       // Automatically enable passwordless login upon initial Passkey configuration
       // (matching initial TOTP enrollment), while preserving explicit user preference
       // when adding subsequent backup Passkeys.
-      const enablePasswordless = existingPasskeysBefore.length === 0 ? true : !!dbUserBefore.totp_skip_password;
+      const enablePasswordless =
+        dbUserBefore.has_password === 0 ||
+        (existingPasskeysBefore.length === 0 ? true : !!dbUserBefore.totp_skip_password);
       await userModel.updateTOTPSettings(user.id, enablePasswordless);
 
       const dbUser = await userModel.getById(user.id);
@@ -399,6 +401,11 @@ export async function handlePasskeysRequest(
     if (!authResult.success) {
       await activityLog.record(user.id, "passkey_verify_fail", clientIp, userAgent, { reason: authResult.reason }, sessionHash);
       return new Response(authResult.error || "Authentication failed", { status: 400 });
+    }
+
+    const currentPasskeysCount = await passkeyModel.countByUser(user.id);
+    if (dbUser.has_password === 0 && currentPasskeysCount <= 1 && !dbUser.totp_enabled) {
+      return new Response("cannot_remove_last_mfa_without_password", { status: 400 });
     }
 
     await passkeyModel.delete(passkeyId, user.id);

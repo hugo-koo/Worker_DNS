@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { Tag, Button, Intent, Switch, InputGroup } from "@blueprintjs/core";
 import { useTranslation } from "react-i18next";
-import type { TimeRange } from "../types";
+import type { PresetTimeRange, TimeRange } from "../types";
 import type { AccessPoint } from "../../../types/auth";
 import { TimeRangeSelector } from "./TimeRangeSelector";
 import { StatusFilter } from "./StatusFilter";
@@ -12,6 +12,7 @@ import { IspFilter } from "./IspFilter";
 export interface LogsHeaderProps {
   profileId: string;
   range: TimeRange;
+  baseRange: PresetTimeRange;
   setRange: (r: TimeRange) => void;
   customRange: { start: string; end: string };
   setCustomRange: (cr: { start: string; end: string }) => void;
@@ -42,6 +43,7 @@ export interface LogsHeaderProps {
 export const LogsHeader: React.FC<LogsHeaderProps> = ({
   profileId,
   range,
+  baseRange,
   setRange,
   customRange,
   setCustomRange,
@@ -90,7 +92,7 @@ export const LogsHeader: React.FC<LogsHeaderProps> = ({
               {t("logs.title")}{" "}
               {(!isMobile || !isCollapsed) && (
                 <Tag minimal round>
-                  {range === "custom" ? t("analytics.custom") : range.toUpperCase()}
+                  {range === "custom" ? `${t("analytics.custom")} · ${baseRange.toUpperCase()}` : range.toUpperCase()}
                 </Tag>
               )}
               {stats && (
@@ -126,6 +128,7 @@ export const LogsHeader: React.FC<LogsHeaderProps> = ({
           <div className="flex flex-col items-stretch md:items-end gap-2">
             <TimeRangeSelector
               range={range}
+              baseRange={baseRange}
               setRange={setRange}
               customRange={customRange}
               setCustomRange={setCustomRange}
