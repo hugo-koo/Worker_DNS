@@ -2,6 +2,9 @@ import React, { useState, useEffect } from "react";
 import { Card, Elevation, Button } from "@blueprintjs/core";
 import { useTranslation } from "react-i18next";
 import { LanguageSwitcher } from "./LanguageSwitcher";
+import { ThemeSwitcher } from "./ThemeSwitcher";
+import { GitHubLinkButton } from "./GitHubLinkButton";
+import type { ThemeMode } from "../hooks/useTheme";
 import { clsx } from "clsx";
 import { ScrollingIntro } from "./ScrollingIntro";
 import { LoginForm } from "./LoginForm";
@@ -39,6 +42,10 @@ export interface AuthViewProps {
   onUnlock?: () => void;
   /** Callback triggered to log out and terminate the locked session. */
   handleLogout?: () => Promise<void>;
+  /** Active UI theme mode. */
+  theme?: ThemeMode;
+  /** Callback to update the active UI theme mode. */
+  setTheme?: (theme: ThemeMode) => void;
 }
 
 /**
@@ -55,6 +62,8 @@ export const AuthView: React.FC<AuthViewProps> = ({
   currentUser,
   onUnlock,
   handleLogout,
+  theme,
+  setTheme,
 }): React.ReactElement => {
   const [isLogin, setIsLogin] = useState<boolean>(true);
   const [isPanelVisible, setIsPanelVisible] = useState<boolean>(true);
@@ -154,8 +163,15 @@ export const AuthView: React.FC<AuthViewProps> = ({
           }
         }}
       >
-        <div className="absolute top-4 right-4 z-50">
+        <div
+          className="absolute top-4 right-4 z-50 flex items-center gap-2"
+          onClick={(e: React.MouseEvent) => e.stopPropagation()}
+        >
           <LanguageSwitcher />
+          {theme !== undefined && setTheme !== undefined && (
+            <ThemeSwitcher theme={theme} setTheme={setTheme} />
+          )}
+          <GitHubLinkButton />
         </div>
 
         <div

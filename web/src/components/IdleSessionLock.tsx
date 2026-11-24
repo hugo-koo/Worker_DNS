@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { lockSession, e2ee } from "../services";
 import type { UserInfo } from "../services";
 import { AuthView } from "./AuthView";
+import type { ThemeMode } from "../hooks/useTheme";
 
 /**
  * Properties for the IdleSessionLock component.
@@ -13,6 +14,10 @@ interface IdleSessionLockProps {
   handleLogout: () => Promise<void>;
   /** Callback triggered when user successfully enters PIN and unlocks session. */
   onUnlock?: () => void;
+  /** Active UI theme mode. */
+  theme?: ThemeMode;
+  /** Callback to update the active UI theme mode. */
+  setTheme?: (theme: ThemeMode) => void;
   /** Child application components to render when session is unlocked. */
   children: React.ReactNode;
 }
@@ -28,6 +33,8 @@ export const IdleSessionLock: React.FC<IdleSessionLockProps> = ({
   currentUser,
   handleLogout,
   onUnlock,
+  theme,
+  setTheme,
   children,
 }): React.ReactElement => {
   const [isLocked, setIsLocked] = useState<boolean>(() => {
@@ -110,6 +117,8 @@ export const IdleSessionLock: React.FC<IdleSessionLockProps> = ({
           currentUser={currentUser}
           onUnlock={handleUnlockSuccess}
           handleLogout={handleLogout}
+          theme={theme}
+          setTheme={setTheme}
         />
       </div>
     );

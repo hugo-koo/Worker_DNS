@@ -4,7 +4,6 @@ import { Spinner, OverlayToaster } from "@blueprintjs/core";
 import { useTranslation } from "react-i18next";
 import { Helmet } from "react-helmet-async";
 import { Routes, Route, useNavigate, useLocation, Navigate } from "react-router-dom";
-import { GitHubCorner } from "./components/GithubCorner";
 import { lazyWithPreload } from "./utils/lazyWithPreload";
 import { DashboardHomeView } from "./views/DashboardHomeView";
 import { MainLayout } from "./layouts/MainLayout";
@@ -101,7 +100,6 @@ function App() {
   if (isLoggedIn === null) {
     return (
       <div className="h-screen flex items-center justify-center">
-        <GitHubCorner />
         <Spinner size={50} />
       </div>
     );
@@ -121,9 +119,8 @@ function App() {
           <meta name="description" content={pageMeta.description} />
           <html lang={i18n.language} />
         </Helmet>
-        <GitHubCorner />
         <OverlayToaster position="bottom" ref={toasterRef} />
-        <AuthView onSuccess={checkAuth} />
+        <AuthView onSuccess={checkAuth} theme={theme} setTheme={setTheme} />
       </Suspense>
     );
   }
@@ -162,7 +159,13 @@ function App() {
         <html lang={i18n.language} />
       </Helmet>
       <OverlayToaster position="bottom" ref={toasterRef} />
-      <IdleSessionLock currentUser={currentUser} handleLogout={handleLogout} onUnlock={fetchProfiles}>
+      <IdleSessionLock
+        currentUser={currentUser}
+        handleLogout={handleLogout}
+        onUnlock={fetchProfiles}
+        theme={theme}
+        setTheme={setTheme}
+      >
         <Routes>
           <Route path="/" element={<Navigate to="/access-points/setup" replace />} />
           <Route path="/access-points" element={<Navigate to="/access-points/manage" replace />} />
