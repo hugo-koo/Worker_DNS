@@ -45,7 +45,7 @@ To balance engineering rigor with development agility, every guideline in this d
 ### 1.2 Minimally Invasive Modifications <Badge text="Recommended" variant="tip" />
 
 * **Rationale**: In human-AI collaborative workflows, restricting the blast radius of changes preserves existing tested code, minimizes regression risk, and keeps `git blame` histories clean.
-* **Good Practice**: When adding features like admin list revocation, extend [`src/models/list.ts`](file:///d:/Coding/OriginalProject/ObexDNS/src/models/list.ts) with `revokeSystemList` and wire the API endpoint, keeping existing query methods and schemas intact.
+* **Good Practice**: When adding features like admin list revocation, extend [`src/models/list.ts`](file:///d:/Coding/OriginalProject/DNS-Worker/src/models/list.ts) with `revokeSystemList` and wire the API endpoint, keeping existing query methods and schemas intact.
 * **Anti-Pattern**: Reformatting or renaming unrelated functions across hundreds of lines while fixing an isolated bug.
 
 ### 1.3 Modularity & Single Responsibility <Badge text="Recommended" variant="tip" />
@@ -289,7 +289,7 @@ Because schemas must run across Cloudflare D1, Turso libSQL, and standalone SQLi
 ### 6.1 Automated Verification for Core Changes <Badge text="Recommended" variant="tip" />
 
 * **Rationale**: DNS resolution, Bloom filter chunking, cryptography, and RBAC isolation have cascading effects. Changes must be accompanied by automated unit and integration tests.
-* **Good Practice**: When implementing admin list distribution and user retention, write [`test/test_distribute_filter.ts`](file:///d:/Coding/OriginalProject/ObexDNS/test/test_distribute_filter.ts) covering happy paths, privilege boundaries, and idempotency.
+* **Good Practice**: When implementing admin list distribution and user retention, write [`test/test_distribute_filter.ts`](file:///d:/Coding/OriginalProject/DNS-Worker/test/test_distribute_filter.ts) covering happy paths, privilege boundaries, and idempotency.
 
 ### 6.2 Full Baseline Verification Before Merging <Badge text="Recommended" variant="tip" />
 

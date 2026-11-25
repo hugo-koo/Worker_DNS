@@ -2,7 +2,7 @@ import { SizeCappedMap } from "../pipeline/cache";
 import { cacheUtils } from "../utils/cache";
 
 const ACTIVE_DNS_MAX_ENTRIES = 50_000;
-const CANONICAL_ACTIVE_DNS_ORIGIN = "https://active-dns.obex-dns.internal";
+const CANONICAL_ACTIVE_DNS_ORIGIN = "https://active-dns.dns-worker.internal";
 
 export interface ActiveDnsEntry {
   profileId: string;

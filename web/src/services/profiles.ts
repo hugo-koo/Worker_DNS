@@ -19,6 +19,52 @@ export async function profileFetch(input: RequestInfo | URL, init?: RequestInit)
   return res;
 }
 
+const PROFILE_METADATA_TTL_MS = 30_000;
+
+interface CachedResourceEntry<T> {
+  data: T;
+  expiresAt: number;
+}
+
+class TtlResourceCache<T> {
+  private readonly cache = new Map<string, CachedResourceEntry<T>>();
+  private readonly inFlight = new Map<string, Promise<T>>();
+
+  async getOrFetch(key: string, fetcher: () => Promise<T>): Promise<T> {
+    const cached = this.cache.get(key);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.data;
+    }
+    const existing = this.inFlight.get(key);
+    if (existing) {
+      return existing;
+    }
+    const promise = fetcher()
+      .then((data) => {
+        this.cache.set(key, { data, expiresAt: Date.now() + PROFILE_METADATA_TTL_MS });
+        return data;
+      })
+      .finally(() => {
+        this.inFlight.delete(key);
+      });
+    this.inFlight.set(key, promise);
+    return promise;
+  }
+
+  invalidate(key?: string): void {
+    if (key === undefined) {
+      this.cache.clear();
+      this.inFlight.clear();
+    } else {
+      this.cache.delete(key);
+      this.inFlight.delete(key);
+    }
+  }
+}
+
+const profileDetailsCache = new TtlResourceCache<Profile>();
+const profileAccessPointsCache = new TtlResourceCache<AccessPoint[]>();
+
 export async function getProfiles(): Promise<Profile[]> {
   const res = await profileFetch("/api/profiles");
   if (!res.ok) throw new Error("Failed to fetch profiles");
@@ -26,9 +72,11 @@ export async function getProfiles(): Promise<Profile[]> {
 }
 
 export async function getProfileDetails(profileId: string): Promise<Profile> {
-  const res = await profileFetch(`/api/profiles/${profileId}`);
-  if (!res.ok) throw new Error("Failed to fetch profile details");
-  return res.json();
+  return profileDetailsCache.getOrFetch(profileId, async () => {
+    const res = await profileFetch(`/api/profiles/${profileId}`);
+    if (!res.ok) throw new Error("Failed to fetch profile details");
+    return res.json();
+  });
 }
 
 export async function createProfile(name: string): Promise<Profile> {
@@ -44,6 +92,8 @@ export async function createProfile(name: string): Promise<Profile> {
 export async function deleteProfile(id: string): Promise<void> {
   const res = await profileFetch(`/api/profiles/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error(await res.text());
+  profileDetailsCache.invalidate(id);
+  profileAccessPointsCache.invalidate(id);
 }
 
 export async function updateProfileSettings(profileId: string, settings: GlobalProfileSettings): Promise<void> {
@@ -53,6 +103,7 @@ export async function updateProfileSettings(profileId: string, settings: GlobalP
     body: JSON.stringify(settings)
   });
   if (!res.ok) throw new Error(await res.text());
+  profileDetailsCache.invalidate(profileId);
 }
 
 export async function getProfileLists(profileId: string): Promise<FilterList[]> {
@@ -261,9 +312,11 @@ export async function toggleProfileRulesBulk(
 }
 
 export async function getProfileAccessPoints(profileId: string): Promise<AccessPoint[]> {
-  const res = await profileFetch(`/api/profiles/${profileId}/access_points`);
-  if (!res.ok) throw new Error("Failed to fetch access points");
-  return res.json();
+  return profileAccessPointsCache.getOrFetch(profileId, async () => {
+    const res = await profileFetch(`/api/profiles/${profileId}/access_points`);
+    if (!res.ok) throw new Error("Failed to fetch access points");
+    return res.json();
+  });
 }
 
 export async function getAccessPoints(): Promise<AccessPoint[]> {
@@ -287,6 +340,7 @@ export async function createAccessPoint(
     }),
   });
   if (!res.ok) throw new Error(await res.text());
+  profileAccessPointsCache.invalidate(profileId ?? undefined);
   return res.json();
 }
 
@@ -300,6 +354,7 @@ export async function updateAccessPoint(
     body: JSON.stringify(updates),
   });
   if (!res.ok) throw new Error(await res.text());
+  profileAccessPointsCache.invalidate();
   return res.json();
 }
 
@@ -316,6 +371,7 @@ export async function deleteAccessPoint(apId: string): Promise<void> {
     method: "DELETE",
   });
   if (!res.ok) throw new Error(await res.text());
+  profileAccessPointsCache.invalidate();
 }
 
 export async function addProfileAccessPoint(profileId: string, name: string): Promise<AccessPoint> {
@@ -325,6 +381,7 @@ export async function addProfileAccessPoint(profileId: string, name: string): Pr
     body: JSON.stringify({ name })
   });
   if (!res.ok) throw new Error(await res.text());
+  profileAccessPointsCache.invalidate(profileId);
   return res.json();
 }
 
@@ -333,6 +390,7 @@ export async function deleteProfileAccessPoint(profileId: string, apId: string):
     method: "DELETE"
   });
   if (!res.ok) throw new Error(await res.text());
+  profileAccessPointsCache.invalidate(profileId);
 }
 
 export async function renameProfileAccessPoint(profileId: string, apId: string, name: string): Promise<void> {
@@ -342,6 +400,7 @@ export async function renameProfileAccessPoint(profileId: string, apId: string, 
     body: JSON.stringify({ name })
   });
   if (!res.ok) throw new Error(await res.text());
+  profileAccessPointsCache.invalidate(profileId);
 }
 
 export async function rotateProfileAccessPointToken(profileId: string, apId: string): Promise<{ token: string }> {
@@ -410,4 +469,5 @@ export async function renameProfile(profileId: string, name: string): Promise<vo
     body: JSON.stringify({ name })
   });
   if (!res.ok) throw new Error(await res.text());
+  profileDetailsCache.invalidate(profileId);
 }

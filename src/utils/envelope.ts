@@ -1,3 +1,5 @@
+import { zeroizeBuffer, zeroizeBuffers } from "./memory";
+
 /**
  * Resolves the highest configured KEK version (e.g. "v1", "v2", "v101") from environment variables.
  * Scans all environment keys matching KEK_v<N> or KEK_V<N> dynamically without hardcoded version caps.
@@ -69,37 +71,47 @@ function fromBase64(base64: string): Uint8Array {
 async function importKekLegacySha256(secret: string): Promise<CryptoKey> {
   const encoder = new TextEncoder();
   const secretData = encoder.encode(secret.trim());
-  const hashBuffer = await crypto.subtle.digest("SHA-256", secretData);
-  return await crypto.subtle.importKey(
-    "raw",
-    hashBuffer,
-    { name: "AES-GCM" },
-    false,
-    ["encrypt", "decrypt"]
-  );
+  let hashBuffer: ArrayBuffer | null = null;
+  try {
+    hashBuffer = await crypto.subtle.digest("SHA-256", secretData);
+    return await crypto.subtle.importKey(
+      "raw",
+      hashBuffer,
+      { name: "AES-GCM" },
+      false,
+      ["encrypt", "decrypt"]
+    );
+  } finally {
+    zeroizeBuffers(secretData, hashBuffer);
+  }
 }
 
 async function importKekHkdf(secret: string, version: string): Promise<CryptoKey> {
   const encoder = new TextEncoder();
-  const ikm = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(secret.trim()),
-    { name: "HKDF" },
-    false,
-    ["deriveKey"]
-  );
-  return await crypto.subtle.deriveKey(
-    {
-      name: "HKDF",
-      hash: "SHA-256",
-      salt: encoder.encode("obex-envelope-kek-salt-v1"),
-      info: encoder.encode(`obex-envelope-kek:${version}`),
-    },
-    ikm,
-    { name: "AES-GCM", length: 256 },
-    false,
-    ["encrypt", "decrypt"]
-  );
+  const ikmBytes = encoder.encode(secret.trim());
+  try {
+    const ikm = await crypto.subtle.importKey(
+      "raw",
+      ikmBytes,
+      { name: "HKDF" },
+      false,
+      ["deriveKey"]
+    );
+    return await crypto.subtle.deriveKey(
+      {
+        name: "HKDF",
+        hash: "SHA-256",
+        salt: encoder.encode("obex-envelope-kek-salt-v1"),
+        info: encoder.encode(`obex-envelope-kek:${version}`),
+      },
+      ikm,
+      { name: "AES-GCM", length: 256 },
+      false,
+      ["encrypt", "decrypt"]
+    );
+  } finally {
+    zeroizeBuffer(ikmBytes);
+  }
 }
 
 async function importKekForRecord(secret: string, version: string, kdf?: string): Promise<CryptoKey> {
@@ -159,44 +171,49 @@ export async function encryptEnvelope(
   // 1. Generate plain Data Encryption Key (DEK) - 256 bits (32 bytes)
   const dekBytes = new Uint8Array(32);
   crypto.getRandomValues(dekBytes);
-  const dekKey = await importDek(dekBytes);
-
-  // 2. Encrypt plaintext data using the DEK via AES-256-GCM
   const dataIv = new Uint8Array(12);
   crypto.getRandomValues(dataIv);
   const dataBuffer = encoder.encode(plainText);
-  const encryptedDataBuffer = await crypto.subtle.encrypt(
-    additionalData ? { name: "AES-GCM", iv: dataIv, additionalData } : { name: "AES-GCM", iv: dataIv },
-    dekKey,
-    dataBuffer
-  );
-
-  const dataEncrypted: EnvelopeEncryptedData = {
-    ciphertext: toBase64(new Uint8Array(encryptedDataBuffer)),
-    iv: toBase64(dataIv)
-  };
-
-  // 3. Encrypt the DEK using the KEK via AES-256-GCM
   const dekIv = new Uint8Array(12);
   crypto.getRandomValues(dekIv);
-  const encryptedDekBuffer = await crypto.subtle.encrypt(
-    additionalData ? { name: "AES-GCM", iv: dekIv, additionalData } : { name: "AES-GCM", iv: dekIv },
-    kekKey,
-    dekBytes
-  );
 
-  const dekEncrypted: EnvelopeEncryptedDek = {
-    ciphertext: toBase64(new Uint8Array(encryptedDekBuffer)),
-    iv: toBase64(dekIv),
-    kek_version: activeVersion,
-    kdf: "hkdf-v1",
-    ...(aad ? { aad_bound: true } : {})
-  };
+  try {
+    const dekKey = await importDek(dekBytes);
 
-  return {
-    dataEncrypted: JSON.stringify(dataEncrypted),
-    dekEncrypted: JSON.stringify(dekEncrypted)
-  };
+    // 2. Encrypt plaintext data using the DEK via AES-256-GCM
+    const encryptedDataBuffer = await crypto.subtle.encrypt(
+      additionalData ? { name: "AES-GCM", iv: dataIv, additionalData } : { name: "AES-GCM", iv: dataIv },
+      dekKey,
+      dataBuffer
+    );
+
+    const dataEncrypted: EnvelopeEncryptedData = {
+      ciphertext: toBase64(new Uint8Array(encryptedDataBuffer)),
+      iv: toBase64(dataIv)
+    };
+
+    // 3. Encrypt the DEK using the KEK via AES-256-GCM
+    const encryptedDekBuffer = await crypto.subtle.encrypt(
+      additionalData ? { name: "AES-GCM", iv: dekIv, additionalData } : { name: "AES-GCM", iv: dekIv },
+      kekKey,
+      dekBytes
+    );
+
+    const dekEncrypted: EnvelopeEncryptedDek = {
+      ciphertext: toBase64(new Uint8Array(encryptedDekBuffer)),
+      iv: toBase64(dekIv),
+      kek_version: activeVersion,
+      kdf: "hkdf-v1",
+      ...(aad ? { aad_bound: true } : {})
+    };
+
+    return {
+      dataEncrypted: JSON.stringify(dataEncrypted),
+      dekEncrypted: JSON.stringify(dekEncrypted)
+    };
+  } finally {
+    zeroizeBuffers(dekBytes, dataBuffer);
+  }
 }
 
 /**
@@ -239,19 +256,24 @@ export async function decryptEnvelope(
   );
 
   const dekBytes = new Uint8Array(decryptedDekBuffer);
-  const dekKey = await importDek(dekBytes);
+  let decryptedDataBuffer: ArrayBuffer | null = null;
+  try {
+    const dekKey = await importDek(dekBytes);
 
-  // 2. Decrypt the data using the decrypted DEK
-  const encryptedDataBytes = fromBase64(dataEncrypted.ciphertext);
-  const dataIv = fromBase64(dataEncrypted.iv);
-  const decryptedDataBuffer = await crypto.subtle.decrypt(
-    additionalData ? { name: "AES-GCM", iv: dataIv, additionalData } : { name: "AES-GCM", iv: dataIv },
-    dekKey,
-    encryptedDataBytes
-  );
+    // 2. Decrypt the data using the decrypted DEK
+    const encryptedDataBytes = fromBase64(dataEncrypted.ciphertext);
+    const dataIv = fromBase64(dataEncrypted.iv);
+    decryptedDataBuffer = await crypto.subtle.decrypt(
+      additionalData ? { name: "AES-GCM", iv: dataIv, additionalData } : { name: "AES-GCM", iv: dataIv },
+      dekKey,
+      encryptedDataBytes
+    );
 
-  const decoder = new TextDecoder();
-  return decoder.decode(decryptedDataBuffer);
+    const decoder = new TextDecoder();
+    return decoder.decode(decryptedDataBuffer);
+  } finally {
+    zeroizeBuffers(dekBytes, decryptedDekBuffer, decryptedDataBuffer);
+  }
 }
 
 /**
@@ -309,24 +331,27 @@ export async function rotateEnvelopeDek(
   );
 
   const dekBytes = new Uint8Array(decryptedDekBuffer);
+  try {
+    // 2. Encrypt the DEK with the active KEK using HKDF-v1
+    const nextKekKey = await importKekHkdf(nextKekSecret, activeKekVersion);
+    const newDekIv = new Uint8Array(12);
+    crypto.getRandomValues(newDekIv);
+    const newEncryptedDekBuffer = await crypto.subtle.encrypt(
+      additionalData ? { name: "AES-GCM", iv: newDekIv, additionalData } : { name: "AES-GCM", iv: newDekIv },
+      nextKekKey,
+      dekBytes
+    );
 
-  // 2. Encrypt the DEK with the active KEK using HKDF-v1
-  const nextKekKey = await importKekHkdf(nextKekSecret, activeKekVersion);
-  const newDekIv = new Uint8Array(12);
-  crypto.getRandomValues(newDekIv);
-  const newEncryptedDekBuffer = await crypto.subtle.encrypt(
-    additionalData ? { name: "AES-GCM", iv: newDekIv, additionalData } : { name: "AES-GCM", iv: newDekIv },
-    nextKekKey,
-    dekBytes
-  );
+    const updatedDekEncrypted: EnvelopeEncryptedDek = {
+      ciphertext: toBase64(new Uint8Array(newEncryptedDekBuffer)),
+      iv: toBase64(newDekIv),
+      kek_version: activeKekVersion,
+      kdf: "hkdf-v1",
+      ...(dekEncrypted.aad_bound ? { aad_bound: true } : {})
+    };
 
-  const updatedDekEncrypted: EnvelopeEncryptedDek = {
-    ciphertext: toBase64(new Uint8Array(newEncryptedDekBuffer)),
-    iv: toBase64(newDekIv),
-    kek_version: activeKekVersion,
-    kdf: "hkdf-v1",
-    ...(dekEncrypted.aad_bound ? { aad_bound: true } : {})
-  };
-
-  return JSON.stringify(updatedDekEncrypted);
+    return JSON.stringify(updatedDekEncrypted);
+  } finally {
+    zeroizeBuffers(dekBytes, decryptedDekBuffer);
+  }
 }

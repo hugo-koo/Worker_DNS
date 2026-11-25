@@ -51,7 +51,7 @@ export function printHelp(): void {
       { label: '--default-profile <key>', desc: 'Default Profile Key or Access Point Token for standard queries' },
       { label: '-w, --workers <count|auto>', desc: 'Number of worker processes for multi-core scaling (default: 1, auto for CPU cores)' },
       { label: '--dns-cache-size <number>', desc: 'In-memory DNS resolution cache capacity (default: 20000)' },
-      { label: '--runtime <node|bun>', desc: 'Target JavaScript execution runtime engine (node, bun)' },
+      { label: '--runtime <auto|node|bun>', desc: 'Execution runtime engine (default: auto, prefers Bun >= 1.4.0 with Node.js fallback)' },
       { label: '--disable-udp', desc: 'Disable Classic UDP DNS server' },
       { label: '--disable-dot', desc: 'Disable DoT server' },
       { label: '-u, --user <username>', desc: 'User account to run background service as (default: current invoking user)' },
@@ -73,6 +73,7 @@ export function printHelp(): void {
       { label: 'TURSO_DATABASE_URL / TURSO_URL', desc: 'Turso / libSQL database URL (e.g. libsql://your-db.turso.io)' },
       { label: 'TURSO_AUTH_TOKEN', desc: 'Turso database authorization token' },
       { label: 'JWT_SECRET', desc: 'JWT secret key (recommended >= 32 characters)' },
+      { label: 'DNS_WORKER_RUNTIME / SERVERFULL_RUNTIME', desc: 'Runtime engine override (auto, node, bun; default: auto)' },
       { label: 'SERVERFULL_TLS_KEY_PATH', desc: 'Path to TLS private key for HTTPS & DoT' },
       { label: 'SERVERFULL_TLS_CERT_PATH', desc: 'Path to TLS certificate for HTTPS & DoT' }
     ],

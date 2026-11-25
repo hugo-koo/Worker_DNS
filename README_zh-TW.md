@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/web/src/assets/obex_cat_eye_logo-256.webp" alt="DNS Worker Logo" width="128">
+  <img src="https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/web/src/assets/dns_worker_cat_eye_logo-256.webp" alt="DNS Worker Logo" width="128">
   <h1>DNS Worker</h1>
   <p>隱私優先 Protective DNS 解析器 & DoH / DoT 伺服端 & 廣告攔截器</p>
   <p>保護您的網際網路第一跳</p>
@@ -43,7 +43,15 @@ npm install -g dns-worker
 dns-worker config init
 dns-worker
 # 存取主控台: http://localhost:10080
+
+# 註冊背景系統服務並啟用開機自啟：
+#   Linux (systemd)：sudo dns-worker service install   （自動啟用開機自啟，並授予 53/853 埠 CAP_NET_BIND_SERVICE 權限）
+#   Windows（系統管理員終端）：dns-worker service install  （建立 SYSTEM /sc onstart 開機排程工作並立即啟動）
+# 開機自啟開關與日常管理：
+#   sudo dns-worker service enable | disable | start | stop | restart | status | logs | uninstall
 ```
+
+> **執行環境需求與 Bun 自動啟用條件：** 需 **Node.js `>= 22.5.0`** 或 **Bun `>= 1.4.0`**（依賴內建 `node:sqlite`）。預設模式（`--runtime auto`）下，若 `PATH` 中存在 `bun` 指令且版本 `>= 1.4.0`，且未明確開啟多程序叢集（`-w`/`--workers > 1`），Serverfull 會自動以 `bun` 指令切換執行；若 `PATH` 中未找到 `bun`、版本 `< 1.4.0` 或啟動失敗，將自動無縫回退至 `node`。亦可透過 `--runtime node|bun|auto` 或環境變數 `DNS_WORKER_RUNTIME` 手動指定。
 
 #### 容器化一鍵部署 (Docker，Beta)
 ```bash
@@ -77,23 +85,23 @@ docker run -d \
 
 | 分析統計 | 解析目的地 |
 |:---:|:---:|
-| ![統計分析](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns.obex-stats.webp) | ![解析目的地](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns.obex-stats_dest.webp) |
+| ![統計分析](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns_worker-stats.webp) | ![解析目的地](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns_worker-stats_dest.webp) |
 
 | 多接入點與端點設定 | 多平台接入引導 |
 |:---:|:---:|
-| ![多接入點](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns.obex-endpoints.webp) | ![接入引導](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns.obex-setup.webp) |
+| ![多接入點](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns_worker-endpoints.webp) | ![接入引導](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns_worker-setup.webp) |
 
 | 規則設定 | 外部攔截列表 |
 |:---:|:---:|
-| ![規則設定](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns.obex-rules.webp) | ![過濾列表](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns.obex-filter.webp) |
+| ![規則設定](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns_worker-rules.webp) | ![過濾列表](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns_worker-filter.webp) |
 
 | 解析日誌 | 日誌詳情檢視 |
 |:---:|:---:|
-| ![解析日誌](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns.obex-log.webp) | ![日誌詳情](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns.obex-log_detail.webp) |
+| ![解析日誌](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns_worker-log.webp) | ![日誌詳情](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns_worker-log_detail.webp) |
 
 | 行動端統計 | 行動端日誌 |
 |:---:|:---:|
-| ![行動端統計](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns.obex-mobile_stats.webp) | ![行動端日誌](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns.obex-mobile_log.webp) |
+| ![行動端統計](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns_worker-mobile_stats.webp) | ![行動端日誌](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns_worker-mobile_log.webp) |
 
 > 💡 更多功能展示與端點設定，請部署後存取 Web 主控台或參閱 [官方文件](https://oppidi.github.io/DNS-Worker/)。
 

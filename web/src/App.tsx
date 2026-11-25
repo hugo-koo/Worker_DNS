@@ -230,7 +230,7 @@ function App() {
           />
           <Route
             path="/system"
-            element={wrapMainLayout(<SystemView onSavingChange={setIsSaving} toasterRef={toasterRef} />)}
+            element={wrapMainLayout(<SystemView currentUser={currentUser} onSavingChange={setIsSaving} toasterRef={toasterRef} />)}
           />
           <Route path="*" element={<NotFoundView />} />
         </Routes>

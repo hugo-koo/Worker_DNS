@@ -4,7 +4,7 @@ import { Card, Elevation, Button, Intent, Tabs, Tab, Callout } from "@blueprintj
 import { RefreshCw, Terminal, Cloud } from "lucide-react";
 import { LanguageSwitcher } from "../../components/LanguageSwitcher";
 import { ScrollingIntro } from "../../components/ScrollingIntro";
-import LogoIcon from "../../assets/obex_cat_eye_logo.svg";
+import LogoIcon from "../../assets/dns_worker_cat_eye_logo.svg";
 import { CliGuide } from "./components/CliGuide";
 import { DashboardGuide } from "./components/DashboardGuide";
 import { JwtGenerator } from "./components/JwtGenerator";

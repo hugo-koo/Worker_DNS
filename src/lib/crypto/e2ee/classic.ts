@@ -11,6 +11,7 @@ import {
 } from './types';
 import { toBase64, fromBase64 } from './base64';
 import { deriveRecoveryKek } from './recovery';
+import { zeroizeBuffer } from '../../../utils/memory';
 
 /**
  * Generates an ECDH P-256 keypair for log encryption and decryption.
@@ -73,22 +74,26 @@ export async function encryptSensitiveLogData(
   // 4. Encrypt sensitive payload
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const plaintextBytes = new TextEncoder().encode(JSON.stringify(sensitiveData));
-  const ciphertextBuffer = await subtle.encrypt(
-    { name: "AES-GCM", iv },
-    aesKey,
-    plaintextBytes
-  );
+  try {
+    const ciphertextBuffer = await subtle.encrypt(
+      { name: "AES-GCM", iv },
+      aesKey,
+      plaintextBytes
+    );
 
-  // 5. Export ephemeral public key
-  const ephemPkJwk = (await subtle.exportKey("jwk", ephemKeyPair.publicKey)) as JsonWebKey;
+    // 5. Export ephemeral public key
+    const ephemPkJwk = (await subtle.exportKey("jwk", ephemKeyPair.publicKey)) as JsonWebKey;
 
-  const payload: EncryptedPayload = {
-    ephem_pk: ephemPkJwk,
-    iv: toBase64(iv),
-    ciphertext: toBase64(ciphertextBuffer),
-  };
+    const payload: EncryptedPayload = {
+      ephem_pk: ephemPkJwk,
+      iv: toBase64(iv),
+      ciphertext: toBase64(ciphertextBuffer),
+    };
 
-  return JSON.stringify(payload);
+    return JSON.stringify(payload);
+  } finally {
+    zeroizeBuffer(plaintextBytes);
+  }
 }
 
 /**
@@ -142,7 +147,11 @@ export async function decryptSensitiveLogData(
     ciphertext
   );
 
-  return JSON.parse(new TextDecoder().decode(decryptedBytes)) as SensitiveLogData;
+  try {
+    return JSON.parse(new TextDecoder().decode(decryptedBytes)) as SensitiveLogData;
+  } finally {
+    zeroizeBuffer(decryptedBytes);
+  }
 }
 
 /**
@@ -168,16 +177,20 @@ export async function wrapPrivateKeyWithKek(
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const plaintext = new TextEncoder().encode(JSON.stringify(privateKeyJwk));
 
-  const encryptedBuffer = await subtle.encrypt(
-    { name: "AES-GCM", iv },
-    kek,
-    plaintext
-  );
+  try {
+    const encryptedBuffer = await subtle.encrypt(
+      { name: "AES-GCM", iv },
+      kek,
+      plaintext
+    );
 
-  return {
-    encryptedSk: toBase64(encryptedBuffer),
-    iv: toBase64(iv),
-  };
+    return {
+      encryptedSk: toBase64(encryptedBuffer),
+      iv: toBase64(iv),
+    };
+  } finally {
+    zeroizeBuffer(plaintext);
+  }
 }
 
 /**
@@ -211,7 +224,11 @@ export async function unwrapPrivateKeyWithKek(
     ciphertext
   );
 
-  return JSON.parse(new TextDecoder().decode(decryptedBuffer)) as JsonWebKey;
+  try {
+    return JSON.parse(new TextDecoder().decode(decryptedBuffer)) as JsonWebKey;
+  } finally {
+    zeroizeBuffer(decryptedBuffer);
+  }
 }
 
 /**
@@ -230,17 +247,21 @@ export async function wrapPrivateKeyWithRecoveryKey(
   const kek = await deriveRecoveryKek(plaintextRecoveryKey, salt);
 
   const plaintext = new TextEncoder().encode(JSON.stringify(privateKeyJwk));
-  const ciphertextBuffer = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv },
-    kek,
-    plaintext
-  );
+  try {
+    const ciphertextBuffer = await crypto.subtle.encrypt(
+      { name: "AES-GCM", iv },
+      kek,
+      plaintext
+    );
 
-  return {
-    encryptedSk: toBase64(ciphertextBuffer),
-    iv: toBase64(iv),
-    salt: toBase64(salt),
-  };
+    return {
+      encryptedSk: toBase64(ciphertextBuffer),
+      iv: toBase64(iv),
+      salt: toBase64(salt),
+    };
+  } finally {
+    zeroizeBuffer(plaintext);
+  }
 }
 
 /**
@@ -269,5 +290,9 @@ export async function unwrapPrivateKeyWithRecoveryKey(
     ciphertext
   );
 
-  return JSON.parse(new TextDecoder().decode(decryptedBuffer)) as JsonWebKey;
+  try {
+    return JSON.parse(new TextDecoder().decode(decryptedBuffer)) as JsonWebKey;
+  } finally {
+    zeroizeBuffer(decryptedBuffer);
+  }
 }

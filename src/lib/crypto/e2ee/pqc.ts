@@ -13,6 +13,7 @@ import {
 } from './types';
 import { toBase64, fromBase64 } from './base64';
 import { deriveRecoveryKek } from './recovery';
+import { zeroizeBuffer } from '../../../utils/memory';
 
 /**
  * Generates a post-quantum hybrid P256-MLKEM768 key pair.
@@ -21,10 +22,14 @@ import { deriveRecoveryKek } from './recovery';
  */
 export function generatePqcLogKeyPair(): PqcKeyPair {
   const keys = ml_kem768_p256.keygen();
-  return {
-    publicKeyBase64: toBase64(keys.publicKey),
-    secretKeyBase64: toBase64(keys.secretKey),
-  };
+  try {
+    return {
+      publicKeyBase64: toBase64(keys.publicKey),
+      secretKeyBase64: toBase64(keys.secretKey),
+    };
+  } finally {
+    zeroizeBuffer(keys.secretKey);
+  }
 }
 
 /**
@@ -102,18 +107,22 @@ export async function encryptSensitiveLogDataWithDek(
 ): Promise<string> {
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const plaintextBytes = new TextEncoder().encode(JSON.stringify(sensitiveData));
-  const ciphertextBuffer = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv },
-    dek,
-    plaintextBytes
-  );
+  try {
+    const ciphertextBuffer = await crypto.subtle.encrypt(
+      { name: "AES-GCM", iv },
+      dek,
+      plaintextBytes
+    );
 
-  const payload: CompactEncryptedLogPayload = {
-    iv: toBase64(iv),
-    ciphertext: toBase64(ciphertextBuffer),
-  };
+    const payload: CompactEncryptedLogPayload = {
+      iv: toBase64(iv),
+      ciphertext: toBase64(ciphertextBuffer),
+    };
 
-  return JSON.stringify(payload);
+    return JSON.stringify(payload);
+  } finally {
+    zeroizeBuffer(plaintextBytes);
+  }
 }
 
 /**
@@ -137,7 +146,11 @@ export async function decryptSensitiveLogDataWithDek(
     ciphertext as BufferSource
   );
 
-  return JSON.parse(new TextDecoder().decode(decryptedBytes)) as SensitiveLogData;
+  try {
+    return JSON.parse(new TextDecoder().decode(decryptedBytes)) as SensitiveLogData;
+  } finally {
+    zeroizeBuffer(decryptedBytes);
+  }
 }
 
 /**

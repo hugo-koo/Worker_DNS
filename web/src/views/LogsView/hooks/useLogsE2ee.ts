@@ -66,13 +66,18 @@ export function useLogsE2ee({
     autoUnlockAttempted.current = false;
   }
 
+  // Keep post-unlock callbacks in a ref so inline onUnlocked/range updates do not re-trigger GET e2ee/status
+  const postUnlockRef = useRef({ onUnlocked, fetchLogs, range });
+  postUnlockRef.current = { onUnlocked, fetchLogs, range };
+
   const triggerPostUnlock = useCallback(async () => {
-    if (onUnlocked) {
-      await onUnlocked();
-    } else if (fetchLogs && range) {
-      await fetchLogs(range, true);
+    const { onUnlocked: curOnUnlocked, fetchLogs: curFetchLogs, range: curRange } = postUnlockRef.current;
+    if (curOnUnlocked) {
+      await curOnUnlocked();
+    } else if (curFetchLogs && curRange) {
+      await curFetchLogs(curRange, true);
     }
-  }, [onUnlocked, fetchLogs, range]);
+  }, []);
 
   const checkE2ee = useCallback(async () => {
     try {

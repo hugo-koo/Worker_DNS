@@ -17,7 +17,7 @@ export function useLogFilters(profileId: string) {
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [accessPointIdFilter, setAccessPointIdFilter] = useState<string | null>(null);
   const [accessPoints, setAccessPoints] = useState<AccessPoint[]>([]);
-  const [destCountryFilter, setDestCountryFilter] = useState<string | null>(null);
+  const [destCountryFilter, setDestCountryFilterState] = useState<string | null>(null);
   const [ispFilter, setIspFilter] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -27,10 +27,11 @@ export function useLogFilters(profileId: string) {
       .catch(console.error);
   }, [profileId]);
 
-  // Reset ISP selection whenever the destination country changes
-  useEffect(() => {
+  // Reset ISP filter atomically with destination country change so useLogsFetcher fires once instead of twice
+  const setDestCountryFilter = useCallback((nextCountry: string | null) => {
+    setDestCountryFilterState(nextCountry);
     setIspFilter(null);
-  }, [destCountryFilter]);
+  }, []);
 
   return {
     range,

@@ -2,6 +2,7 @@ import { D1Database } from "@cloudflare/workers-types";
 import { LogAggregationModel } from "../aggregation";
 import { ActionCountResult, TimeSeriesTrendPoint } from "./types";
 import { computeRollupWindow, buildRollupUnionParts } from "./rollupWindow";
+import { escapeLikePattern } from "../../../utils/sql";
 
 /**
  * Handles action volume summaries and time-series trend analytics.
@@ -45,8 +46,8 @@ export class LogTrafficAnalytics {
         "SELECT action, COUNT(*) as count FROM logs WHERE profile_id = ? AND timestamp >= ? AND timestamp <= ?";
       const params: (string | number)[] = [profileId, since, until];
       if (search) {
-        queryStr += " AND domain LIKE ?";
-        params.push(`%${search}%`);
+        queryStr += " AND domain LIKE ? ESCAPE '\\'";
+        params.push(`%${escapeLikePattern(search)}%`);
       }
       if (accessPointId) {
         queryStr += " AND access_point_id = ?";

@@ -67,11 +67,6 @@ export async function parseCli(): Promise<ServerfullCliArgs> {
       allowPositionals: true
     });
 
-    if (handleRuntimeSwitch(values.runtime)) {
-      // Switched to requested runtime (Bun/Node), yield current process
-      return new Promise<never>(() => {});
-    }
-
     if (values.help || positionals[0]?.toLowerCase() === 'help') {
       printHelp();
       process.exit(0);
@@ -82,13 +77,51 @@ export async function parseCli(): Promise<ServerfullCliArgs> {
       process.exit(0);
     }
 
-    if (values.status || positionals[0]?.toLowerCase() === 'status') {
+    const subcommand = positionals[0]?.toLowerCase();
+
+    // One-shot host/CLI management commands execute directly without spawning a child runtime wrapper
+    if (subcommand === 'service') {
+      const action = positionals[1]?.toLowerCase() || 'status';
+      const targetUser = values.user as string | undefined;
+      await handleServiceAction(action, targetUser);
+      process.exit(0);
+    }
+
+    if (subcommand === 'config') {
+      const subAction = positionals[1]?.toLowerCase() || 'show';
+      const targetArg = positionals[2];
+      handleConfigCommand(subAction, targetArg);
+      process.exit(0);
+    }
+
+    if (subcommand === 'ech') {
+      handleEchCommand(values as ServerfullCliArgs);
+      process.exit(0);
+    }
+
+    if (subcommand === 'postinstall') {
+      try {
+        const { dataDir, configFile } = ensurePersistentDirs(true);
+        console.log(`[dns-worker] Initialized data directory: ${dataDir}`);
+        console.log(`[dns-worker] Initialized configuration file: ${configFile}`);
+      } catch { }
+      process.exit(0);
+    }
+
+    if (handleRuntimeSwitch(values.runtime, { workers: values.workers })) {
+      // Switched to preferred/requested runtime (Bun/Node), yield current process
+      return new Promise<never>(() => {});
+    }
+
+    checkNodeVersion();
+
+    if (values.status || subcommand === 'status') {
       const { config, env } = getServerfullConfig(values as ServerfullCliArgs);
       await showServerfullStatus(config, env.JWT_SECRET);
       process.exit(0);
     }
 
-    if (positionals[0]?.toLowerCase() === 'reset') {
+    if (subcommand === 'reset') {
       const isForce = Boolean(
         values.force ||
         values.yes ||
@@ -98,34 +131,6 @@ export async function parseCli(): Promise<ServerfullCliArgs> {
         process.argv.includes('--yes')
       );
       await handleResetCommand({ force: isForce });
-      process.exit(0);
-    }
-
-    if (positionals[0]?.toLowerCase() === 'ech') {
-      handleEchCommand(values as ServerfullCliArgs);
-      process.exit(0);
-    }
-
-    if (positionals[0]?.toLowerCase() === 'config') {
-      const subAction = positionals[1]?.toLowerCase() || 'show';
-      const targetArg = positionals[2];
-      handleConfigCommand(subAction, targetArg);
-      process.exit(0);
-    }
-
-    if (positionals[0]?.toLowerCase() === 'service') {
-      const action = positionals[1]?.toLowerCase() || 'status';
-      const targetUser = values.user as string | undefined;
-      await handleServiceAction(action, targetUser);
-      process.exit(0);
-    }
-
-    if (positionals[0]?.toLowerCase() === 'postinstall') {
-      try {
-        const { dataDir, configFile } = ensurePersistentDirs(true);
-        console.log(`[dns-worker] Initialized data directory: ${dataDir}`);
-        console.log(`[dns-worker] Initialized configuration file: ${configFile}`);
-      } catch { }
       process.exit(0);
     }
 

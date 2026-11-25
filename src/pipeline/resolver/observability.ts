@@ -1,7 +1,11 @@
 import { Context, DNSQuery, ProfileSettings, ResolutionResult } from "../../types";
 import { fetchGeoIP, resolveClientGeoCountry } from "../../utils/geoip";
-import { dnsCache } from "../cache";
-import { enqueueLog } from "../logBatcher";
+import {
+  computeDnsCacheKey,
+  MAX_DNS_CACHE_TTL_SEC,
+  setCachedDnsEntry
+} from "../cache";
+import { enqueueLog, hasProfileE2eeConfigured } from "../logBatcher";
 import { UpstreamHttpError, ParsedDNSAnswerRecord } from "./types";
 
 /**
@@ -97,22 +101,34 @@ export function recordSuccessAndCache(
         );
 
         const rcode = answer.length >= 12 ? answer[3] & 0x0f : -1;
-        const pauseExpiresMs =
-          effectiveReason === "Filtering Paused" &&
-          settings.pause_filtering?.expires_at &&
-          settings.pause_filtering.expires_at > 0
-            ? settings.pause_filtering.expires_at * 1000
-            : Infinity;
-        const cacheExpiresAt = Math.min(Date.now() + minTTL * 1000, pauseExpiresMs);
+        const isZeroRetention = Number(settings.log_retention_days) === 0;
+        const hasE2ee = await hasProfileE2eeConfigured(context.env.DB, context.profileId);
 
-        if (answer.length >= 12 && minTTL > 0 && cacheExpiresAt > Date.now() && (rcode === 0 || rcode === 3)) {
-          dnsCache.set(`${context.profileId}:${query.name.toLowerCase()}:${query.type}`, {
-            answer,
-            ttl: minTTL,
-            action,
-            reason: effectiveReason,
-            expiresAt: cacheExpiresAt
-          });
+        // Zero-retention and E2EE profiles skip Worker in-memory DNS caching completely
+        if (!isZeroRetention && !hasE2ee) {
+          const maxCacheTtlSec = Math.max(
+            1,
+            Math.min(minTTL, MAX_DNS_CACHE_TTL_SEC)
+          );
+          const pauseExpiresMs =
+            effectiveReason === "Filtering Paused" &&
+            settings.pause_filtering?.expires_at &&
+            settings.pause_filtering.expires_at > 0
+              ? settings.pause_filtering.expires_at * 1000
+              : Infinity;
+          const cacheExpiresAt = Math.min(Date.now() + maxCacheTtlSec * 1000, pauseExpiresMs);
+
+          if (answer.length >= 12 && cacheExpiresAt > Date.now() && (rcode === 0 || rcode === 3)) {
+            const cacheKey = await computeDnsCacheKey(context.profileId, query.name, query.type);
+            setCachedDnsEntry(cacheKey, {
+              profileId: context.profileId,
+              answer,
+              ttl: maxCacheTtlSec,
+              action,
+              reason: effectiveReason,
+              expiresAt: cacheExpiresAt
+            });
+          }
         }
       } catch {
         // Ignore non-critical background caching errors

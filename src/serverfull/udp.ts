@@ -12,6 +12,7 @@ import { resolveDefaultProfile, resolveProfileByKey } from '../api/doh';
 import { hasAlreadyTriedFailOpen, resolveFailOpenFallback } from '../pipeline/resolver/transport';
 import { recordActiveDnsConnection } from '../lib/activeDns';
 import { formatPortError } from './format';
+import { zeroizeBuffer } from '../utils/memory';
 
 export interface UdpServerOptions {
   port: number;
@@ -54,10 +55,13 @@ export class UdpDnsServer {
   start(): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
+        const isBun = Boolean((process.versions as Record<string, string | undefined>).bun);
+        // SO_REUSEPORT is unsupported on Windows (throws ENOTSUP 10045 under Bun) and unnecessary under single-process Bun
+        const useReusePort = process.platform !== 'win32' && !isBun;
         this.socket = dgram.createSocket({
           type: 'udp4',
           reuseAddr: true,
-          reusePort: true
+          ...(useReusePort ? { reusePort: true } : {})
         });
 
         const startupErrorHandler = (err: any) => {
@@ -190,6 +194,8 @@ export class UdpDnsServer {
       } catch (fallbackErr) {
         console.error('[UDP DNS] Fail-open upstream fallback failed:', fallbackErr);
       }
+    } finally {
+      zeroizeBuffer(msg);
     }
   }
 

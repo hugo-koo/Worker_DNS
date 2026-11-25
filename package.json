@@ -61,6 +61,7 @@
     "test:serverfull": "tsx test/test_serverfull.ts",
     "test:reset": "tsx test/test_serverfull_reset.ts",
     "test:perf": "tsx test/test_performance_and_runtime.ts",
+    "test:bun": "tsx test/test_bun_compat.ts",
     "lint": "oxlint",
     "ui:dev": "node -e \"if (!require('fs').existsSync('web/node_modules')) { require('child_process').execSync('npm run ui:install', {stdio: 'inherit'}); }\" && cd web && npm run dev",
     "ui:build": "node -e \"if (!require('fs').existsSync('web/node_modules')) { require('child_process').execSync('npm run ui:install', {stdio: 'inherit'}); }\" && cd web && npm run build",

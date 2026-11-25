@@ -130,6 +130,8 @@ export interface UpdateLogsBatchPayload {
 export interface GetEncryptedLogsPayload {
   profileId: string;
   limit?: number;
+  beforeTimestamp?: number;
+  beforeId?: number;
 }
 
 /**

@@ -1,3 +1,5 @@
+import { zeroizeBuffer, zeroizeBuffers } from "./memory";
+
 /**
  * Low-level PBKDF2 key derivation using Web Crypto API.
  * Single responsibility: performing the raw cryptographic derivation.
@@ -11,26 +13,30 @@ export async function pbkdf2(
   const encoder = new TextEncoder();
   const dataBuffer = encoder.encode(data);
 
-  const baseKey = await crypto.subtle.importKey(
-    "raw",
-    dataBuffer,
-    "PBKDF2",
-    false,
-    ["deriveBits"]
-  );
+  try {
+    const baseKey = await crypto.subtle.importKey(
+      "raw",
+      dataBuffer,
+      "PBKDF2",
+      false,
+      ["deriveBits"]
+    );
 
-  const hashBuffer = await crypto.subtle.deriveBits(
-    {
-      name: "PBKDF2",
-      salt: salt,
-      iterations: iterations,
-      hash: "SHA-256"
-    },
-    baseKey,
-    keyLength
-  );
+    const hashBuffer = await crypto.subtle.deriveBits(
+      {
+        name: "PBKDF2",
+        salt: salt,
+        iterations: iterations,
+        hash: "SHA-256"
+      },
+      baseKey,
+      keyLength
+    );
 
-  return new Uint8Array(hashBuffer);
+    return new Uint8Array(hashBuffer);
+  } finally {
+    zeroizeBuffer(dataBuffer);
+  }
 }
 
 /**
@@ -48,10 +54,13 @@ export async function hashWithPBKDF2(
 ): Promise<string> {
   const actualSalt = salt ?? crypto.getRandomValues(new Uint8Array(16));
   const derived = await pbkdf2(data, actualSalt, iterations, keyLength);
-
-  return Array.from(derived)
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+  try {
+    return Array.from(derived)
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+  } finally {
+    zeroizeBuffer(derived);
+  }
 }
 
 /**
@@ -74,11 +83,14 @@ export async function hashPassword(
   const iterations = version === 2 ? 100000 : 100000;
   
   const derived = await pbkdf2(password.normalize("NFC"), salt, iterations, 256);
-  
   const combinedBytes = new Uint8Array(salt.length + derived.length);
-  combinedBytes.set(salt);
-  combinedBytes.set(derived, salt.length);
-  return btoa(String.fromCharCode(...combinedBytes));
+  try {
+    combinedBytes.set(salt);
+    combinedBytes.set(derived, salt.length);
+    return btoa(String.fromCharCode(...combinedBytes));
+  } finally {
+    zeroizeBuffers(derived, combinedBytes);
+  }
 }
 
 export async function verifyPassword(password: string, storedHash: string, version: number = 1): Promise<boolean> {
@@ -88,22 +100,24 @@ export async function verifyPassword(password: string, storedHash: string, versi
       .split("")
       .map((c) => c.charCodeAt(0))
   );
-  
   const salt = combined.slice(0, 16);
   const originalHash = combined.slice(16);
-  
-  const iterations = version === 2 ? 100000 : 100000;
-  
-  const testHashArray = await pbkdf2(password.normalize("NFC"), salt, iterations, 256);
-  
-  if (testHashArray.length !== originalHash.length) return false;
-  
-  // Constant-time comparison
-  let result = 0;
-  for (let i = 0; i < testHashArray.length; i++) {
-    result |= testHashArray[i] ^ originalHash[i];
+  let testHashArray: Uint8Array | null = null;
+  try {
+    const iterations = version === 2 ? 100000 : 100000;
+    testHashArray = await pbkdf2(password.normalize("NFC"), salt, iterations, 256);
+
+    if (testHashArray.length !== originalHash.length) return false;
+
+    // Constant-time comparison
+    let result = 0;
+    for (let i = 0; i < testHashArray.length; i++) {
+      result |= testHashArray[i] ^ originalHash[i];
+    }
+    return result === 0;
+  } finally {
+    zeroizeBuffers(combined, salt, originalHash, testHashArray);
   }
-  return result === 0;
 }
 
 /**
@@ -129,11 +143,15 @@ export const ZBASE32_ALPHABET: string = "ybndrfg8ejkmcpqxot1uwisza345h769";
 export function generateZBase32Token(length: number = 5): string {
   const bytes = new Uint8Array(length);
   crypto.getRandomValues(bytes);
-  let token = "";
-  for (let i = 0; i < length; i++) {
-    token += ZBASE32_ALPHABET[bytes[i] & 0x1f];
+  try {
+    let token = "";
+    for (let i = 0; i < length; i++) {
+      token += ZBASE32_ALPHABET[bytes[i] & 0x1f];
+    }
+    return token;
+  } finally {
+    zeroizeBuffer(bytes);
   }
-  return token;
 }
 
 /**
@@ -142,13 +160,17 @@ export function generateZBase32Token(length: number = 5): string {
 export function generateId(length: number): string {
   const byteLength = Math.ceil(length / 2);
   const bytes = new Uint8Array(byteLength);
-  
+
   crypto.getRandomValues(bytes);
-  
-  return Array.from(bytes)
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('')
-    .slice(0, length);
+
+  try {
+    return Array.from(bytes)
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('')
+      .slice(0, length);
+  } finally {
+    zeroizeBuffer(bytes);
+  }
 }
 
 /**
@@ -161,7 +183,11 @@ export function extractSaltHex(storedHash: string): string {
       .map((c) => c.charCodeAt(0))
   );
   const salt = combined.slice(0, 16);
-  return Array.from(salt).map(b => b.toString(16).padStart(2, '0')).join('');
+  try {
+    return Array.from(salt).map(b => b.toString(16).padStart(2, '0')).join('');
+  } finally {
+    zeroizeBuffers(combined, salt);
+  }
 }
 
 /**
@@ -170,21 +196,27 @@ export function extractSaltHex(storedHash: string): string {
  */
 export async function hmacSha256(key: string | Uint8Array, data: string | Uint8Array): Promise<string> {
   const encoder = new TextEncoder();
-  const keyBuffer = typeof key === "string" ? encoder.encode(key) : key;
-  const dataBuffer = typeof data === "string" ? encoder.encode(data) : data;
+  const allocatedKey = typeof key === "string" ? encoder.encode(key) : null;
+  const allocatedData = typeof data === "string" ? encoder.encode(data) : null;
+  const keyBuffer = allocatedKey ?? (key as Uint8Array);
+  const dataBuffer = allocatedData ?? (data as Uint8Array);
 
-  const cryptoKey = await crypto.subtle.importKey(
-    "raw",
-    keyBuffer,
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"]
-  );
+  try {
+    const cryptoKey = await crypto.subtle.importKey(
+      "raw",
+      keyBuffer,
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"]
+    );
 
-  const signature = await crypto.subtle.sign("HMAC", cryptoKey, dataBuffer);
-  return Array.from(new Uint8Array(signature))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
+    const signature = await crypto.subtle.sign("HMAC", cryptoKey, dataBuffer);
+    return Array.from(new Uint8Array(signature))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+  } finally {
+    zeroizeBuffers(allocatedKey, allocatedData);
+  }
 }
 
 /**
@@ -194,9 +226,13 @@ export async function hmacSha256(key: string | Uint8Array, data: string | Uint8A
 export async function hashPin(pin: string, salt: string): Promise<string> {
   const saltBytes = new TextEncoder().encode(salt.toLowerCase());
   const derived = await pbkdf2(pin, saltBytes, 600000, 256);
-  return Array.from(derived)
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+  try {
+    return Array.from(derived)
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+  } finally {
+    zeroizeBuffers(saltBytes, derived);
+  }
 }
 
 /**

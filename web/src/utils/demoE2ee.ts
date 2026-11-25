@@ -1,4 +1,4 @@
-const DEMO_E2EE_LOCKED_KEY = "obex_demo_e2ee_locked";
+const DEMO_E2EE_LOCKED_KEY = "dns_worker_demo_e2ee_locked";
 
 /**
  * Returns whether Demo Mode E2EE is treated as unlocked on this device.

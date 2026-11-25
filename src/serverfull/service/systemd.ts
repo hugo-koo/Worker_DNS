@@ -27,8 +27,12 @@ export const SYSTEMD_SERVICE_PATH = `/etc/systemd/system/${SERVICE_FILE_NAME}`;
  * @returns Systemd unit file content string.
  */
 export function generateSystemdUnit(details: ServiceExecDetails): string {
-  const { execCmd, workDir, user } = details;
+  const { execCmd, workDir, user, nodePath } = details;
   const safeUser = /^[a-zA-Z0-9._-]+$/.test(user) ? user : 'root';
+  const isBunRuntime = path.basename(nodePath).toLowerCase().includes('bun');
+  const runtimeTuningBlock = isBunRuntime
+    ? '# JavaScriptCore (Bun) runtime engine enabled (NODE_OPTIONS V8 tuning skipped)'
+    : '# V8 Engine performance tuning for high-throughput DNS processing\nEnvironment="NODE_OPTIONS=--max-semi-space-size=64 --turbo-fast-api-calls"';
 
   return `[Unit]
 Description=DNS Worker Serverfull Service (UDP DNS, DoT & Web Dashboard)
@@ -44,8 +48,7 @@ RestartSec=5
 LimitNOFILE=65535
 LimitNPROC=65535
 
-# V8 Engine performance tuning for high-throughput DNS processing
-Environment="NODE_OPTIONS=--max-semi-space-size=64 --turbo-fast-api-calls"
+${runtimeTuningBlock}
 
 # Automatically provision and preserve /var/lib/dns-worker persistent state directory
 StateDirectory=dns-worker

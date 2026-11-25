@@ -479,7 +479,7 @@ export class ServerfullSnapshotManager implements ServerfullSnapshotBridge {
 
   public async startCapture(): Promise<ActiveSnapshotCapture> {
     if (typeof zlib.createZstdCompress !== 'function') {
-      throw new Error('ZSTD_UNSUPPORTED: Current Node.js runtime does not support native Zstd compression.');
+      throw new Error('ZSTD_UNSUPPORTED: Current JavaScript runtime does not support native Zstd compression.');
     }
 
     const cfg = this.getConfig();
@@ -525,11 +525,16 @@ export class ServerfullSnapshotManager implements ServerfullSnapshotBridge {
       throw err;
     }
 
+    const isBun = Boolean((process.versions as Record<string, string | undefined>).bun);
+    const execArgs = isBun
+      ? ['-e', CAPTURE_SUBPROCESS_SCRIPT]
+      : ['--input-type=commonjs', '-e', CAPTURE_SUBPROCESS_SCRIPT];
+
     let child: ChildProcess;
     try {
       child = spawn(
         process.execPath,
-        ['--input-type=commonjs', '-e', CAPTURE_SUBPROCESS_SCRIPT],
+        execArgs,
         {
           stdio: ['ignore', 'ignore', 'pipe'],
           env: {

@@ -4,6 +4,7 @@
  */
 
 import { TOTP_TOKEN_REGEX } from "../utils/validator";
+import { zeroizeBuffer, zeroizeBuffers } from "../utils/memory";
 
 const BASE32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 
@@ -65,7 +66,11 @@ function base32Decode(input: string): Uint8Array {
 export function generateTOTPSecret(): string {
   const bytes = new Uint8Array(20);
   crypto.getRandomValues(bytes);
-  return base32Encode(bytes);
+  try {
+    return base32Encode(bytes);
+  } finally {
+    zeroizeBuffer(bytes);
+  }
 }
 
 /**
@@ -77,31 +82,37 @@ export function generateTOTPSecret(): string {
 async function computeHOTP(secret: string, counter: number): Promise<string> {
   const keyBytes = base32Decode(secret);
   const counterBytes = new Uint8Array(8);
-  // Write counter as big-endian 64-bit integer
-  const view = new DataView(counterBytes.buffer);
-  view.setUint32(4, counter >>> 0, false);
-  view.setUint32(0, Math.floor(counter / 0x100000000) >>> 0, false);
+  let signature: ArrayBuffer | null = null;
+  let hmac: Uint8Array | null = null;
+  try {
+    // Write counter as big-endian 64-bit integer
+    const view = new DataView(counterBytes.buffer);
+    view.setUint32(4, counter >>> 0, false);
+    view.setUint32(0, Math.floor(counter / 0x100000000) >>> 0, false);
 
-  const cryptoKey = await crypto.subtle.importKey(
-    'raw',
-    keyBytes,
-    { name: 'HMAC', hash: 'SHA-1' },
-    false,
-    ['sign']
-  );
+    const cryptoKey = await crypto.subtle.importKey(
+      'raw',
+      keyBytes,
+      { name: 'HMAC', hash: 'SHA-1' },
+      false,
+      ['sign']
+    );
 
-  const signature = await crypto.subtle.sign('HMAC', cryptoKey, counterBytes);
-  const hmac = new Uint8Array(signature);
+    signature = await crypto.subtle.sign('HMAC', cryptoKey, counterBytes);
+    hmac = new Uint8Array(signature);
 
-  // Dynamic truncation
-  const offset = hmac[hmac.length - 1] & 0x0f;
-  const code =
-    ((hmac[offset] & 0x7f) << 24) |
-    ((hmac[offset + 1] & 0xff) << 16) |
-    ((hmac[offset + 2] & 0xff) << 8) |
-    (hmac[offset + 3] & 0xff);
+    // Dynamic truncation
+    const offset = hmac[hmac.length - 1] & 0x0f;
+    const code =
+      ((hmac[offset] & 0x7f) << 24) |
+      ((hmac[offset + 1] & 0xff) << 16) |
+      ((hmac[offset + 2] & 0xff) << 8) |
+      (hmac[offset + 3] & 0xff);
 
-  return (code % 1_000_000).toString().padStart(6, '0');
+    return (code % 1_000_000).toString().padStart(6, '0');
+  } finally {
+    zeroizeBuffers(keyBytes, counterBytes, hmac, signature);
+  }
 }
 
 /**
@@ -141,11 +152,16 @@ export async function verifyTOTPWithStep(
 
       if (salt) {
         const data = new TextEncoder().encode(expected + salt);
-        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-        const hashHex = Array.from(new Uint8Array(hashBuffer))
-          .map((b) => b.toString(16).padStart(2, '0'))
-          .join('');
-        if (hashHex === token) return { valid: true, timeStep: step };
+        let hashBuffer: ArrayBuffer | null = null;
+        try {
+          hashBuffer = await crypto.subtle.digest('SHA-256', data);
+          const hashHex = Array.from(new Uint8Array(hashBuffer))
+            .map((b) => b.toString(16).padStart(2, '0'))
+            .join('');
+          if (hashHex === token) return { valid: true, timeStep: step };
+        } finally {
+          zeroizeBuffers(data, hashBuffer);
+        }
       } else {
         if (expected === token) return { valid: true, timeStep: step };
       }

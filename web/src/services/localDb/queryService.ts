@@ -11,6 +11,8 @@ import type {
   LocalQueryISPsParams
 } from './types';
 import type { LocalDbWorkerBridge } from './workerBridge';
+import { e2ee } from '../e2ee';
+import { decryptRowsOnRead } from './logDecryption';
 
 /**
  * Service executing typed queries against the local SQLite database.
@@ -24,13 +26,17 @@ export class LocalDbQueryService {
 
   /**
    * Queries local logs from SQLite with pagination, search, and action filters.
+   * Performs opportunistic on-read decryption when E2EE is unlocked so scrolling into
+   * older locally-cached encrypted entries never exposes stale [Encrypted] placeholders.
    *
    * @param params - Filter and pagination criteria.
    * @returns Paginated query result with rows and summary stats.
    */
   async queryLogs(params: LocalQueryLogsParams): Promise<LocalQueryResult> {
     await this.bridge.init();
-    return this.bridge.sendRequest<LocalQueryResult>('QUERY_LOGS', params);
+    const res = await this.bridge.sendRequest<LocalQueryResult>('QUERY_LOGS', params);
+    const decryptedRows = await decryptRowsOnRead(this.bridge, e2ee, params.profileId, res.rows);
+    return decryptedRows === res.rows ? res : { ...res, rows: decryptedRows };
   }
 
   /**

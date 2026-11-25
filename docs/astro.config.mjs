@@ -235,7 +235,7 @@ export default defineConfig({
           tag: 'meta',
           attrs: {
             property: 'og:image',
-            content: 'https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns.obex-stats.webp'
+            content: 'https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns_worker-stats.webp'
           }
         },
         {
@@ -263,7 +263,7 @@ export default defineConfig({
           tag: 'meta',
           attrs: {
             name: 'twitter:image',
-            content: 'https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns.obex-stats.webp'
+            content: 'https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns_worker-stats.webp'
           }
         },
         {

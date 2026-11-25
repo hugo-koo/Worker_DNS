@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/web/src/assets/obex_cat_eye_logo-256.webp" alt="DNS Worker Logo" width="128">
+  <img src="https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/web/src/assets/dns_worker_cat_eye_logo-256.webp" alt="DNS Worker Logo" width="128">
   <h1>DNS Worker</h1>
   <p>Privacy-First Protective DNS Resolver & DoH / DoT Server & AD Blocker</p>
   <p>Protect your first hop on the internet</p>
@@ -43,7 +43,15 @@ npm install -g dns-worker
 dns-worker config init
 dns-worker
 # Web Dashboard: http://localhost:10080
+
+# Register background service & enable autostart on boot:
+#   Linux (systemd): sudo dns-worker service install   (auto-enables boot start & CAP_NET_BIND_SERVICE for ports 53/853)
+#   Windows (Admin): dns-worker service install        (creates SYSTEM /sc onstart scheduled task)
+# Manage autostart & service:
+#   sudo dns-worker service enable | disable | start | stop | restart | status | logs | uninstall
 ```
+
+> **Runtime Requirements & Bun Auto-Selection:** Requires **Node.js `>= 22.5.0`** or **Bun `>= 1.4.0`** (both require native `node:sqlite`). By default (`--runtime auto`), Serverfull checks if the `bun` command (`>= 1.4.0`) is available in `PATH` and automatically switches to `bun` unless multi-worker clustering (`-w`/`--workers > 1`) is configured. If `bun` is missing from `PATH`, outdated (`< 1.4.0`), or fails to spawn, it transparently falls back to `node`. Force an engine anytime with `--runtime node|bun|auto` or `DNS_WORKER_RUNTIME`.
 
 #### Standalone Server via Docker (Beta)
 ```bash
@@ -77,23 +85,23 @@ docker run -d \
 
 | Analytics & Insights | Destinations Map |
 |:---:|:---:|
-| ![Analytics](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns.obex-stats.webp) | ![Destinations](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns.obex-stats_dest.webp) |
+| ![Analytics](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns_worker-stats.webp) | ![Destinations](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns_worker-stats_dest.webp) |
 
 | Multi-Access Points & Endpoints | Setup Guide |
 |:---:|:---:|
-| ![Access Points](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns.obex-endpoints.webp) | ![Setup Guide](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns.obex-setup.webp) |
+| ![Access Points](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns_worker-endpoints.webp) | ![Setup Guide](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns_worker-setup.webp) |
 
 | Rules Configuration | Filter Subscriptions |
 |:---:|:---:|
-| ![Rules](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns.obex-rules.webp) | ![Filters](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns.obex-filter.webp) |
+| ![Rules](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns_worker-rules.webp) | ![Filters](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns_worker-filter.webp) |
 
 | Query Logs | Log Detail Inspector |
 |:---:|:---:|
-| ![Query Logs](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns.obex-log.webp) | ![Log Detail](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns.obex-log_detail.webp) |
+| ![Query Logs](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns_worker-log.webp) | ![Log Detail](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns_worker-log_detail.webp) |
 
 | Mobile Responsive | Mobile Logs |
 |:---:|:---:|
-| ![Mobile Stats](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns.obex-mobile_stats.webp) | ![Mobile Log](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns.obex-mobile_log.webp) |
+| ![Mobile Stats](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns_worker-mobile_stats.webp) | ![Mobile Log](https://raw.githubusercontent.com/Oppidi/DNS-Worker/main/docs/screenshots/dns_worker-mobile_log.webp) |
 
 > 💡 For live demonstrations and endpoints setup, visit your Web Dashboard after launch or refer to the [Official Documentation](https://oppidi.github.io/DNS-Worker/).
 

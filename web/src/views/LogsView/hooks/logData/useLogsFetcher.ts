@@ -5,7 +5,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import type { LogEntry, TimeRange } from "../../types";
-import { logsWs, getProfileAnalytics } from "../../../../services";
+import { logsWs, getProfileAnalytics, localDb, e2ee } from "../../../../services";
 import { calculateTimeBoundaries } from "./timeBoundaries";
 import { prefetchDomainIcons } from "./utils/prefetchIcons";
 import { fetchServerLogs } from "./strategies/serverStrategy";
@@ -46,6 +46,7 @@ export interface UseLogsFetcherReturn {
     isAutoRefresh?: boolean,
     forceSync?: boolean
   ) => Promise<void>;
+  reloadLocalLogs: (currentRange: TimeRange) => Promise<void>;
   isFetchingRef: React.MutableRefObject<boolean>;
   logsRef: React.MutableRefObject<LogEntry[]>;
 }
@@ -129,6 +130,8 @@ export function useLogsFetcher({
         if (isInitial) {
           if (!isAutoRefresh) setSyncing(true);
 
+          let serverSummaryResolved = false;
+
           // Fetch authoritative server summary stats concurrently to ensure full-dataset accuracy
           const statsParams = new URLSearchParams({ range: currentRange });
           if (currentRange === "custom" && customRange.start && customRange.end) {
@@ -144,6 +147,7 @@ export function useLogsFetcher({
           getProfileAnalytics(profileId, "summary", statsParams.toString(), { signal: controller.signal })
             .then((statsData: Array<{ action: string; count: number }> | null) => {
               if (controller.signal.aborted || !statsData) return;
+              serverSummaryResolved = true;
               const summary = { total: 0, pass: 0, block: 0, redirect: 0 };
               statsData.forEach((item) => {
                 const count = Number(item.count) || 0;
@@ -175,7 +179,7 @@ export function useLogsFetcher({
               if (realtimeRefresh && immediate.rows.length > 0) {
                 logsWs.updateCursor(immediate.rows[0].timestamp, immediate.rows[0].id);
               }
-              if (immediate.stats) {
+              if (immediate.stats && !serverSummaryResolved) {
                 setStats(immediate.stats);
               }
               setLoading(false);
@@ -197,7 +201,7 @@ export function useLogsFetcher({
             if (realtimeRefresh && localResult.result.rows.length > 0) {
               logsWs.updateCursor(localResult.result.rows[0].timestamp, localResult.result.rows[0].id);
             }
-            if (localResult.result.stats) {
+            if (localResult.result.stats && !serverSummaryResolved) {
               setStats(localResult.result.stats);
             }
           }
@@ -252,7 +256,8 @@ export function useLogsFetcher({
           ispFilter,
           searchQuery,
           lastTimestamp,
-          signal: controller.signal
+          signal: controller.signal,
+          skipStats: isInitial
         });
 
         if (controller.signal.aborted) return;
@@ -305,6 +310,51 @@ export function useLogsFetcher({
     ]
   );
 
+  const reloadLocalLogs = useCallback(
+    async (currentRange: TimeRange): Promise<void> => {
+      try {
+        const limit = realtimeRefresh ? PAGE_SIZE_IN_REALTIME : PAGE_SIZE;
+        const { since, until } = calculateTimeBoundaries(currentRange, customRange);
+        const isDbReady = await localDb.init();
+        if (isDbReady) {
+          const localResult = await localDb.queryLogs({
+            profileId,
+            search: searchQuery || undefined,
+            action: statusFilter || undefined,
+            accessPointId: accessPointIdFilter || undefined,
+            destCountry: destCountryFilter || undefined,
+            isp: ispFilter || undefined,
+            since,
+            until,
+            before: undefined,
+            limit: Math.max(limit, logsRef.current.length),
+            offset: 0
+          });
+          if (localResult.rows.length > 0) {
+            setLogs(localResult.rows);
+            return;
+          }
+        }
+        if (logsRef.current.length > 0 && e2ee.isProfileUnlocked(profileId)) {
+          const decrypted = await e2ee.decryptLogsBatch(profileId, logsRef.current);
+          setLogs(decrypted);
+        }
+      } catch {
+        // Ignore post-unlock local re-query errors
+      }
+    },
+    [
+      profileId,
+      realtimeRefresh,
+      customRange,
+      searchQuery,
+      statusFilter,
+      accessPointIdFilter,
+      destCountryFilter,
+      ispFilter
+    ]
+  );
+
   return {
     logs,
     setLogs,
@@ -318,6 +368,7 @@ export function useLogsFetcher({
     prevLatestTimestamp,
     setPrevLatestTimestamp,
     fetchLogs,
+    reloadLocalLogs,
     isFetchingRef,
     logsRef
   };

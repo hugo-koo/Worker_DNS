@@ -16,7 +16,7 @@ export interface SyncCheckpoint {
  * Service managing synchronization checkpoints for resumable chunked data transfers.
  */
 export class SyncCheckpointManager {
-  private readonly storagePrefix = "obex_sync_checkpoint_";
+  private readonly storagePrefix = "dns_worker_sync_checkpoint_";
 
   /**
    * Retrieves any active synchronization checkpoint for the given profile and exact time range.

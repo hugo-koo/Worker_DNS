@@ -6,6 +6,7 @@
 
 import type { UnlockedPrivateKey } from "./types";
 import { toBase64, fromBase64 } from "./crypto";
+import { zeroizeBuffer } from "../../utils/memory";
 
 export interface WrappedRecoveryKey {
   encryptedSk: string;
@@ -20,26 +21,30 @@ export async function deriveRecoveryKek(plaintextRecoveryKey: string, salt: Uint
   const normalized = plaintextRecoveryKey.replace(/[-\s]/g, "").toUpperCase().trim();
   const data = new TextEncoder().encode(normalized);
 
-  const baseKey = await crypto.subtle.importKey(
-    "raw",
-    data,
-    { name: "PBKDF2" },
-    false,
-    ["deriveKey"]
-  );
+  try {
+    const baseKey = await crypto.subtle.importKey(
+      "raw",
+      data,
+      { name: "PBKDF2" },
+      false,
+      ["deriveKey"]
+    );
 
-  return crypto.subtle.deriveKey(
-    {
-      name: "PBKDF2",
-      salt: salt as BufferSource,
-      iterations: 100000,
-      hash: "SHA-256",
-    },
-    baseKey,
-    { name: "AES-GCM", length: 256 },
-    false,
-    ["encrypt", "decrypt"]
-  );
+    return await crypto.subtle.deriveKey(
+      {
+        name: "PBKDF2",
+        salt: salt as BufferSource,
+        iterations: 100000,
+        hash: "SHA-256",
+      },
+      baseKey,
+      { name: "AES-GCM", length: 256 },
+      false,
+      ["encrypt", "decrypt"]
+    );
+  } finally {
+    zeroizeBuffer(data);
+  }
 }
 
 /**
@@ -54,17 +59,21 @@ export async function wrapPrivateKeyWithRecoveryKey(
   const kek = await deriveRecoveryKek(plaintextRecoveryKey, salt);
 
   const plaintext = new TextEncoder().encode(JSON.stringify(privateKey));
-  const ciphertextBuffer = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv },
-    kek,
-    plaintext
-  );
+  try {
+    const ciphertextBuffer = await crypto.subtle.encrypt(
+      { name: "AES-GCM", iv },
+      kek,
+      plaintext
+    );
 
-  return {
-    encryptedSk: toBase64(ciphertextBuffer),
-    iv: toBase64(iv),
-    salt: toBase64(salt),
-  };
+    return {
+      encryptedSk: toBase64(ciphertextBuffer),
+      iv: toBase64(iv),
+      salt: toBase64(salt),
+    };
+  } finally {
+    zeroizeBuffer(plaintext);
+  }
 }
 
 /**
@@ -87,5 +96,9 @@ export async function unwrapPrivateKeyWithRecoveryKey(
     ciphertext as BufferSource
   );
 
-  return JSON.parse(new TextDecoder().decode(decryptedBuffer)) as UnlockedPrivateKey;
+  try {
+    return JSON.parse(new TextDecoder().decode(decryptedBuffer)) as UnlockedPrivateKey;
+  } finally {
+    zeroizeBuffer(decryptedBuffer);
+  }
 }

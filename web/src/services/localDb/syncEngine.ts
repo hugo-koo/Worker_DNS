@@ -20,6 +20,8 @@ export type { SyncCheckpoint } from "./syncCheckpoint";
 export class LocalDbSyncEngine {
   /** In-flight synchronization promises per profile to deduplicate concurrent requests */
   private inFlightSyncs = new Map<string, Promise<number>>();
+  /** Cooldown tracker (60s) preventing repeated full-range gap-repair rescans on unchanged intervals */
+  private gapRepairCooldowns = new Map<string, number>();
   private readonly bridge: LocalDbWorkerBridge;
   private readonly checkpointManager: SyncCheckpointManager;
   private readonly watermarkManager: SyncWatermarkManager;
@@ -415,6 +417,7 @@ export class LocalDbSyncEngine {
 
     let totalInserted = 0;
     let passes = 0;
+    let coveredFullRange = false;
     const MAX_PASSES = 25; // Supports fetching up to 25 passes * 12,500 logs
 
     while (!signal?.aborted && passes < MAX_PASSES) {
@@ -423,6 +426,10 @@ export class LocalDbSyncEngine {
 
       if (intervals.length === 0) {
         break;
+      }
+
+      if (intervals.some((iv) => iv.start <= since && iv.end >= until - 60)) {
+        coveredFullRange = true;
       }
 
       let insertedInPass = 0;
@@ -451,9 +458,11 @@ export class LocalDbSyncEngine {
     }
 
     // Gap-repair check: incremental forward syncs (capped to 200 logs) can advance the watermark
-    // past middle gaps. If the server reports more logs in [since, until] than local SQLite holds,
-    // perform one full interval pass to backfill the missing records.
-    if (!signal?.aborted && expectedCount !== undefined && expectedCount > 0) {
+    // past middle gaps. Skip if we just scanned the full [since, until] range or repaired this window recently.
+    const gapKey = `${profileId}:${Math.floor(since / 60)}:${Math.floor(until / 60)}`;
+    const nowMs = Date.now();
+    const lastRepairedAt = this.gapRepairCooldowns.get(gapKey) || 0;
+    if (!signal?.aborted && !coveredFullRange && expectedCount !== undefined && expectedCount > 0 && nowMs - lastRepairedAt >= 60_000) {
       try {
         const localAnalytics = await this.bridge.sendRequest<{ summary?: { count: number }[] }>(
           "QUERY_ANALYTICS",
@@ -469,6 +478,7 @@ export class LocalDbSyncEngine {
           : 0;
 
         if (localCount < expectedCount) {
+          this.gapRepairCooldowns.set(gapKey, nowMs);
           const repaired = await this.syncInterval(
             profileId,
             since,

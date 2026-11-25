@@ -48,6 +48,12 @@ export interface UseAnalyticsDataReturn {
     apIdFilter?: string | null,
     force?: boolean
   ) => Promise<void>;
+  reloadLocalAnalytics: (
+    selectedRange: TimeRange,
+    customStart?: string,
+    customEnd?: string,
+    apIdFilter?: string | null
+  ) => Promise<void>;
   syncTargetRange: () => Promise<void>;
   stopSync: () => void;
 }
@@ -293,6 +299,37 @@ export function useAnalyticsData(
     }
   }, [range, accessPointIdFilter, fetchData]);
 
+  const reloadLocalAnalytics = useCallback(
+    async (
+      selectedRange: TimeRange,
+      customStart?: string,
+      customEnd?: string,
+      apIdFilter?: string | null
+    ): Promise<void> => {
+      try {
+        const isDbReady = await localDb.init();
+        if (!isDbReady) return;
+        const interval = calculateTimeInterval(selectedRange, customStart, customEnd);
+        const cacheKey = analyticsCache.buildKey(profileId, selectedRange, customStart, customEnd, apIdFilter);
+        const freshLocal = await localDb.queryAnalytics({
+          profileId,
+          since: interval.since,
+          until: interval.until,
+          bucketSec: interval.bucketSec,
+          accessPointId: apIdFilter || undefined
+        });
+        setData((curr) => {
+          const updated = mergeLocalDecryptedAnalytics(curr, freshLocal, serverFlagsRef.current);
+          analyticsCache.set(cacheKey, updated, selectedRange, customEnd);
+          return updated;
+        });
+      } catch {
+        // Ignore post-unlock local aggregation refresh errors
+      }
+    },
+    [profileId]
+  );
+
   return {
     data,
     loading,
@@ -307,6 +344,7 @@ export function useAnalyticsData(
     accessPoints,
     logRetentionDays,
     fetchData,
+    reloadLocalAnalytics,
     syncTargetRange,
     stopSync
   };

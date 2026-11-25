@@ -70,7 +70,7 @@ function runServiceUnitTests(): void {
   if (!details.nodePath || !details.user || !details.workDir || !details.execCmd) {
     throw new Error(`getServiceExecDetails missing fields: ${JSON.stringify(details)}`);
   }
-  if (!details.execCmd.includes('node') && !details.execCmd.includes('dns-worker')) {
+  if (!details.execCmd.includes('node') && !details.execCmd.includes('bun') && !details.execCmd.includes('dns-worker')) {
     throw new Error(`Unexpected execCmd format: ${details.execCmd}`);
   }
   const rootDetails = getServiceExecDetails('root');

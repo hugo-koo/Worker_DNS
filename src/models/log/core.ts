@@ -1,5 +1,6 @@
 import { D1Database, D1PreparedStatement } from "@cloudflare/workers-types";
 import { ResolutionLog } from "../../types";
+import { escapeLikePattern, normalizeBoundedLimit } from "../../utils/sql";
 
 let logSeqCounter = 0;
 
@@ -187,8 +188,8 @@ export class LogCoreModel {
       params.push(options.record_type);
     }
     if (options.search) {
-      whereClauses.push("l.domain LIKE ?");
-      params.push(`%${options.search}%`);
+      whereClauses.push("l.domain LIKE ? ESCAPE '\\'");
+      params.push(`%${escapeLikePattern(options.search)}%`);
     }
     if (options.before) {
       whereClauses.push("l.timestamp < ?");
@@ -222,11 +223,9 @@ export class LogCoreModel {
     if (options.export) {
       queryStr += " ORDER BY l.timestamp DESC LIMIT 5000";
     } else {
-      let limit = options.limit !== undefined && !isNaN(options.limit) && options.limit > 0 ? options.limit : 50;
-      if (limit > 1000) {
-        limit = 1000;
-      }
-      queryStr += ` ORDER BY l.timestamp DESC LIMIT ${limit}`;
+      const limit = normalizeBoundedLimit(options.limit, 50, 1000);
+      queryStr += " ORDER BY l.timestamp DESC LIMIT ?";
+      params.push(limit);
     }
 
     const { results } = await this.db.prepare(queryStr).bind(...params).all<ResolutionLog>();

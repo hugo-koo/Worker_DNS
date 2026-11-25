@@ -80,7 +80,10 @@ export async function queryInitialLocalLogs(
   }
 
   // Perform delta sync from server in background
+  let syncSucceeded = false;
+  let priorWatermark: Awaited<ReturnType<typeof localDb.getWatermark>> = null;
   try {
+    priorWatermark = await localDb.getWatermark(profileId);
     const inserted = await localDb.syncProfileLogs(
       profileId,
       undefined,
@@ -88,6 +91,7 @@ export async function queryInitialLocalLogs(
       signal,
       forceSync
     );
+    syncSucceeded = !signal.aborted;
 
     if (!signal.aborted && (inserted > 0 || localResult.rows.length === 0)) {
       localResult = await localDb.queryLogs({
@@ -112,7 +116,9 @@ export async function queryInitialLocalLogs(
     }
   }
 
-  if (localResult.rows.length > 0) {
+  // If local SQLite + delta sync already cover [since, now], avoid redundant Step 2 server /logs refetch
+  const coversRequestedSince = !priorWatermark || priorWatermark.earliest_timestamp <= since;
+  if (localResult.rows.length > 0 || (syncSucceeded && coversRequestedSince)) {
     return {
       success: true,
       result: {

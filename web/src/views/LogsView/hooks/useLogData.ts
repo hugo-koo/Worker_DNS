@@ -48,6 +48,7 @@ export function useLogData({
     prevLatestTimestamp,
     setPrevLatestTimestamp,
     fetchLogs,
+    reloadLocalLogs,
     isFetchingRef,
     logsRef
   } = useLogsFetcher({
@@ -125,6 +126,7 @@ export function useLogData({
     scrollContainerRef,
     lastLogElementRef,
     fetchLogs,
+    reloadLocalLogs,
     isFetchingRef,
     logsRef
   };

@@ -6,6 +6,7 @@
 import { getPasskeyAuthOptions, getPasskeys } from "../account";
 import { bufferToBase64Url } from "../../utils/webauthn";
 import { base64UrlToUint8Array } from "./crypto";
+import { zeroizeBuffer } from "../../utils/memory";
 
 export interface DerivedPasskeyKek {
   kek: Uint8Array;
@@ -88,25 +89,30 @@ export async function derivePasskeyKek(
 
   const challengeBytes = base64UrlToUint8Array(authOptions.challenge);
 
-  const credential = (await navigator.credentials.get({
-    publicKey: {
-      challenge: challengeBytes as BufferSource,
-      timeout: 60000,
-      userVerification: "preferred",
-      rpId: authOptions.rpId || window.location.hostname,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      allowCredentials: allowCredentials.map((c: any) => ({
-        ...c,
-        id: base64UrlToUint8Array(c.id) as BufferSource,
-      })),
-      extensions: {
-        prf: {
-          eval: prfEval,
-        },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any,
-    },
-  })) as PublicKeyCredential;
+  let credential: PublicKeyCredential;
+  try {
+    credential = (await navigator.credentials.get({
+      publicKey: {
+        challenge: challengeBytes as BufferSource,
+        timeout: 60000,
+        userVerification: "preferred",
+        rpId: authOptions.rpId || window.location.hostname,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        allowCredentials: allowCredentials.map((c: any) => ({
+          ...c,
+          id: base64UrlToUint8Array(c.id) as BufferSource,
+        })),
+        extensions: {
+          prf: {
+            eval: prfEval,
+          },
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any,
+      },
+    })) as PublicKeyCredential;
+  } finally {
+    zeroizeBuffer(challengeBytes);
+  }
 
   if (!credential) {
     throw new Error("Passkey assertion was cancelled or failed");

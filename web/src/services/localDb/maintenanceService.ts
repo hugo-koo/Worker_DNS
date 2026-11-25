@@ -6,7 +6,7 @@
 import type { LocalStorageInfo } from './types';
 import type { LocalDbWorkerBridge } from './workerBridge';
 
-const LOCAL_RETENTION_KEY = 'obex_local_log_retention';
+const LOCAL_RETENTION_KEY = 'dns_worker_local_log_retention';
 const DEFAULT_RETENTION_DAYS = 90;
 
 /**
@@ -53,7 +53,7 @@ export class LocalDbMaintenanceService {
     await this.bridge.init();
     await this.bridge.sendRequest('CLEAR_PROFILE', { profileId });
     try {
-      localStorage.removeItem(`obex_sync_checkpoint_${profileId}`);
+      localStorage.removeItem(`dns_worker_sync_checkpoint_${profileId}`);
     } catch {
       // Ignore storage access errors
     }
@@ -73,7 +73,7 @@ export class LocalDbMaintenanceService {
       const toRemove: string[] = [];
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
-        if (k?.startsWith('obex_sync_checkpoint_')) {
+        if (k?.startsWith('dns_worker_sync_checkpoint_')) {
           toRemove.push(k);
         }
       }

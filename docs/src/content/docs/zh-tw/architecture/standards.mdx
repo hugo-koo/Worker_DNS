@@ -45,7 +45,7 @@ DNS Worker 作為兼顧 Cloudflare Workers 邊緣計算（Serverless）與獨立
 ### 1.2 極簡侵入式修改 <Badge text="推薦" variant="tip" />
 
 * **制定理由**：在多人協作與人機協同（AI 程式設計助手）開發中，嚴格控制每次變更的程式碼修改半徑，能最大程度保護已有驗證邏輯不受波及，極大減少非必要的大範圍迴歸風險，並確保 `git blame` 歷史追溯清晰可靠。
-* **正例**：在新增“下發規則撤回”特性時，僅在 [`src/models/list.ts`](file:///d:/Coding/OriginalProject/ObexDNS/src/models/list.ts) 增補 `revokeSystemList` 並在對應 API 路由中新增分支，保持既有函式命名習慣與欄位定義不變。
+* **正例**：在新增“下發規則撤回”特性時，僅在 [`src/models/list.ts`](file:///d:/Coding/OriginalProject/DNS-Worker/src/models/list.ts) 增補 `revokeSystemList` 並在對應 API 路由中新增分支，保持既有函式命名習慣與欄位定義不變。
 * **反例**：在修復一個列表載入小缺陷時，順手對整個檢視元件的數百行無關聯程式碼做重新縮排、變數重新命名或重寫樣式，導致審查時無法快速定位關鍵改動。
 
 ### 1.3 模組化與單一職責 <Badge text="推薦" variant="tip" />
@@ -312,7 +312,7 @@ flowchart LR
 ### 6.1 核心資料與安全變更必須配齊自動化測試 <Badge text="推薦" variant="tip" />
 
 * **制定理由**：DNS 遞迴解析、Bloom 過濾器合成、加解密邏輯以及管理員多租戶隔離具有高度級聯影響，純手動驗證不僅耗時且極易遺漏越權攻擊和邊界條件。每次引入新特性必須同步編寫自動化單元/整合測試。
-* **正例**：新增“下發規則撤回與保留”功能時，編寫 [`test/test_distribute_filter.ts`](file:///d:/Coding/OriginalProject/ObexDNS/test/test_distribute_filter.ts) 完整覆蓋普通使用者保留、管理員全域性撤回、已保留規則不被撤回等所有關鍵斷言。
+* **正例**：新增“下發規則撤回與保留”功能時，編寫 [`test/test_distribute_filter.ts`](file:///d:/Coding/OriginalProject/DNS-Worker/test/test_distribute_filter.ts) 完整覆蓋普通使用者保留、管理員全域性撤回、已保留規則不被撤回等所有關鍵斷言。
 * **反例**：新增跨表事務或許可權邊界後，僅靠人工開啟網頁點選一下就合併程式碼。
 
 ### 6.2 提測與釋出前全量基線校驗 <Badge text="推薦" variant="tip" />

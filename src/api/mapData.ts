@@ -1,7 +1,7 @@
 import { Env, ExecutionContext } from '../types';
 import { getSystemVersion } from '../constants/version';
 
-const MAP_CACHE_URL = 'https://obex.local/world-110m-v3.json';
+const MAP_CACHE_URL = 'https://dns-worker.local/world-110m-v3.json';
 const UPSTREAM_MAP_URLS: readonly string[] = [
   'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json',
   'https://openlayers.org/en/latest/examples/data/topojson/world-110m.json',

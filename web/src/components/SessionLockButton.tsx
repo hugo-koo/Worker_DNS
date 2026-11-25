@@ -40,7 +40,7 @@ export const SessionLockButton: React.FC<SessionLockButtonProps> = ({
       console.warn("Failed to lock session on server", err);
     } finally {
       e2ee.clearStorage();
-      sessionStorage.setItem("obex_session_locked", "true");
+      sessionStorage.setItem("dns_worker_session_locked", "true");
       window.dispatchEvent(new Event("session_paused"));
       setLocking(false);
     }

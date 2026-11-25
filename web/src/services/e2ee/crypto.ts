@@ -5,6 +5,7 @@
  */
 
 import type { CompactEncryptedLogPayload, SensitiveLogData } from "./types";
+import { zeroizeBuffer } from "../../utils/memory";
 
 export function toBase64(bytes: Uint8Array | ArrayBuffer): string {
   const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
@@ -79,5 +80,9 @@ export async function decryptSensitiveLogDataWithDek(
     ciphertext as BufferSource
   );
 
-  return JSON.parse(new TextDecoder().decode(decryptedBytes)) as SensitiveLogData;
+  try {
+    return JSON.parse(new TextDecoder().decode(decryptedBytes)) as SensitiveLogData;
+  } finally {
+    zeroizeBuffer(decryptedBytes);
+  }
 }

@@ -16,6 +16,7 @@ import { getPortOccupant, formatOccupantSummary } from './port';
 import { isUsableJwtSecret, isStrongJwtSecret } from '../lib/jwt';
 import { inspectTlsCertificate, getCertbotCommand } from './cert';
 import { maskDatabaseUrl } from '../lib/turso';
+import { getActiveRuntimeDescription } from './commands/checkEnv';
 import { probeTcpPort, probeUdpPort } from './status/probe';
 import { inspectDatabase, inspectTursoDatabase } from './status/database';
 
@@ -219,7 +220,7 @@ export async function showServerfullStatus(config: ServerfullConfig, envJwtSecre
   const envSection = formatKeyValueSection({
     title: '\nEnvironment & Security:',
     items: [
-      { label: 'Node.js Runtime', value: `v${process.versions.node} (${process.platform} ${process.arch})` },
+      { label: 'Runtime Engine', value: `${getActiveRuntimeDescription()} (${process.platform} ${process.arch})` },
       { label: 'Config Directory', value: getDefaultConfigDir() },
       { label: 'Config Source', value: configSourceText },
       { label: 'TLS Certificate', value: tlsCertText },

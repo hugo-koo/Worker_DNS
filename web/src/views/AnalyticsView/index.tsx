@@ -62,7 +62,8 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ profileId, toaster
     setAccessPointIdFilter,
     accessPoints,
     logRetentionDays,
-    fetchData
+    fetchData,
+    reloadLocalAnalytics
   } = useAnalyticsData(profileId, toasterRef);
 
   const {
@@ -85,7 +86,7 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ profileId, toaster
     profileId,
     range,
     onUnlocked: () => {
-      fetchData(range, customRange.start, customRange.end, accessPointIdFilter);
+      return reloadLocalAnalytics(range, customRange.start, customRange.end, accessPointIdFilter);
     },
     toasterRef
   });

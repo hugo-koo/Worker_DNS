@@ -109,7 +109,8 @@ export async function handleResetCommand(options: ResetOptions = {}): Promise<vo
           .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
           .all() as Array<{ name: string }>;
         for (const { name } of tables) {
-          rawDb.exec(`DROP TABLE IF EXISTS "${name}";`);
+          const safeName = name.replace(/"/g, '""');
+          rawDb.exec(`DROP TABLE IF EXISTS "${safeName}";`);
         }
         rawDb.exec('PRAGMA wal_checkpoint(TRUNCATE);');
         rawDb.exec('VACUUM;');

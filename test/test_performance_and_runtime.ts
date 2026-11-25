@@ -109,9 +109,9 @@ if (!runtimeDesc.includes('v') || (!runtimeDesc.includes('Node.js') && !runtimeD
 }
 console.log(`   ✓ Active runtime description: ${runtimeDesc}`);
 
-const noSwitch = handleRuntimeSwitch('auto');
+const noSwitch = handleRuntimeSwitch(isBun ? 'bun' : 'node');
 if (noSwitch) {
-  throw new Error('handleRuntimeSwitch should not switch when target is auto');
+  throw new Error('handleRuntimeSwitch should not switch when target matches the active runtime');
 }
 console.log('   ✓ Runtime switch guard verified.');
 

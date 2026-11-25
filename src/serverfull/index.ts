@@ -88,10 +88,10 @@ function startServerfullCronLoop(
 }
 
 async function bootstrap(): Promise<void> {
-  // 1. Optimize V8 engine (Fast API calls) and validate active engine requirements
+  // 1. Parse CLI arguments & execute progressive runtime handoff (prefers Bun >= 1.4.0 with Node fallback) before V8 tuning
+  const cliArgs = await parseCli();
   tuneV8Engine();
   checkNodeVersion();
-  const cliArgs = await parseCli();
 
   // 2. Initialize in-memory Web Cache and HTMLRewriter polyfills
   initNodeGlobals();

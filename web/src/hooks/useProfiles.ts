@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
@@ -38,34 +38,57 @@ export function useProfiles(isLoggedIn: boolean | null) {
   const navigate = useNavigate();
   const location = useLocation();
   const { t } = useTranslation();
+  const inFlightFetchRef = useRef<Promise<void> | null>(null);
+  const lastFetchedOnAuthRef = useRef<boolean>(false);
+  const prevPathnameRef = useRef<string>(location.pathname);
 
-  const fetchProfiles = async () => {
-    try {
-      const profilesData = await getProfiles();
-      setProfiles(profilesData);
-    } catch (err) {
-      console.error("Failed to fetch profiles", err);
-    } finally {
-      setLoaded(true);
+  const fetchProfiles = useCallback(async () => {
+    if (inFlightFetchRef.current) {
+      return inFlightFetchRef.current;
     }
-  };
+    const promise = (async () => {
+      try {
+        const profilesData = await getProfiles();
+        setProfiles(profilesData);
+      } catch (err) {
+        console.error("Failed to fetch profiles", err);
+      } finally {
+        setLoaded(true);
+        inFlightFetchRef.current = null;
+      }
+    })();
+    inFlightFetchRef.current = promise;
+    return promise;
+  }, []);
 
   useEffect(() => {
     if (isLoggedIn === true) {
-      fetchProfiles();
+      lastFetchedOnAuthRef.current = true;
+      void fetchProfiles();
     } else {
+      lastFetchedOnAuthRef.current = false;
       setProfiles([]);
       setSelectedProfile(null);
       setLoaded(false);
     }
-  }, [isLoggedIn]);
+  }, [isLoggedIn, fetchProfiles]);
 
-  // 每次导航回 /dash（包括从 Account 页面返回）时重新拉取列表
+  // 仅从其他路由切回 /dash 时刷新列表，避免与初次登录挂载重复请求 GET /api/profiles
   useEffect(() => {
-    if (isLoggedIn === true && location.pathname === "/dash") {
-      fetchProfiles();
+    const prevPath = prevPathnameRef.current;
+    prevPathnameRef.current = location.pathname;
+    if (
+      isLoggedIn === true &&
+      location.pathname === "/dash" &&
+      prevPath !== "/dash" &&
+      !lastFetchedOnAuthRef.current
+    ) {
+      void fetchProfiles();
     }
-  }, [location.pathname]);
+    if (lastFetchedOnAuthRef.current) {
+      lastFetchedOnAuthRef.current = false;
+    }
+  }, [isLoggedIn, location.pathname, fetchProfiles]);
 
   const handleCreateProfile = async () => {
     const trimmed = newProfileName.trim();
@@ -87,7 +110,6 @@ export function useProfiles(isLoggedIn: boolean | null) {
     if (selectedProfile?.id === id) {
       setSelectedProfile({ ...selectedProfile, name: trimmed });
     }
-    await fetchProfiles();
   };
 
   const handleDeleteProfile = async (e: React.MouseEvent, id: string) => {

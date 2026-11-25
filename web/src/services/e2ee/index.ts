@@ -1,7 +1,8 @@
 /**
  * @file index.ts
  * @description Master facade for Client-side End-to-End Encryption (E2EE) Service.
- * Unifies KeyStore, DecryptEngine, and E2eeApi under a backwards-compatible interface.
+ * Unifies E2eeCryptoSandbox (Web Worker isolated key custody + bounded DEK cache) and E2eeApi
+ * under a backwards-compatible interface.
  */
 
 import type { LogEntry } from "../../views/LogsView/types";
@@ -12,8 +13,7 @@ import type {
   UnlockedPrivateKey,
   SensitiveLogData
 } from "./types";
-import { KeyStore } from "./keyStore";
-import { DecryptEngine } from "./decryptEngine";
+import { E2eeCryptoSandbox } from "./cryptoSandbox";
 import { E2eeApi } from "./api";
 import { derivePasskeyKek, type DerivedPasskeyKek, type DerivePasskeyKekOptions } from "./passkeyKek";
 import {
@@ -34,9 +34,8 @@ export type {
 };
 
 export class E2eeService {
-  private keyStore = new KeyStore();
-  private decryptEngine = new DecryptEngine(this.keyStore);
-  private api = new E2eeApi(this.keyStore);
+  private sandbox = new E2eeCryptoSandbox();
+  private api = new E2eeApi(this.sandbox);
 
   // ── Status & Capabilities ──
 
@@ -49,20 +48,31 @@ export class E2eeService {
   }
 
   isUnlocked(): boolean {
-    return this.keyStore.isUnlocked();
+    return this.sandbox.isUnlocked();
   }
 
   isProfileUnlocked(profileId: string): boolean {
-    return this.keyStore.isProfileUnlocked(profileId);
+    return this.sandbox.isProfileUnlocked(profileId);
   }
 
   isKeyCompatibleWithServer(sk: UnlockedPrivateKey, serverPublicKeyJson?: string | null): boolean {
-    return this.keyStore.isKeyCompatibleWithServer(sk, serverPublicKeyJson);
+    if (!serverPublicKeyJson) return true;
+    try {
+      const parsed = typeof serverPublicKeyJson === "string" ? JSON.parse(serverPublicKeyJson) : serverPublicKeyJson;
+      const serverIsPqc = parsed.alg === "P256-MLKEM768" || Boolean(parsed.pqc_pk);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const keyIsPqc = "seedBase64" in sk || (sk as any).alg === "P256-MLKEM768";
+      if (serverIsPqc && !keyIsPqc) {
+        return false;
+      }
+      return true;
+    } catch {
+      return true;
+    }
   }
 
   clearStorage(): void {
-    this.keyStore.clearStorage();
-    this.decryptEngine.clearDekCache();
+    this.sandbox.clearStorage();
   }
 
   // ── Key Derivation & Wrapping ──
@@ -114,15 +124,11 @@ export class E2eeService {
   }
 
   async disableUserE2ee(): Promise<boolean> {
-    const res = await this.api.disableUserE2ee();
-    this.decryptEngine.clearDekCache();
-    return res;
+    return this.api.disableUserE2ee();
   }
 
   async disableE2ee(profileId: string): Promise<boolean> {
-    const res = await this.api.disableE2ee(profileId);
-    this.decryptEngine.clearDekCache();
-    return res;
+    return this.api.disableE2ee(profileId);
   }
 
   // ── Unlocking & Enrollment ──
@@ -154,11 +160,11 @@ export class E2eeService {
   // ── Log Decryption ──
 
   async decryptLogEntry(profileId: string, log: LogEntry): Promise<LogEntry> {
-    return this.decryptEngine.decryptLogEntry(profileId, log);
+    return this.sandbox.decryptLogEntry(profileId, log);
   }
 
   async decryptLogsBatch(profileId: string, logs: LogEntry[]): Promise<LogEntry[]> {
-    return this.decryptEngine.decryptLogsBatch(profileId, logs);
+    return this.sandbox.decryptLogsBatch(profileId, logs);
   }
 }
 

@@ -67,7 +67,7 @@ export async function initDatabase(): Promise<boolean> {
       // First attempt: Standard OpfsDb (supports multi-tab concurrency when cross-origin isolated)
       if (sqlite3.oo1?.OpfsDb) {
         try {
-          db = new sqlite3.oo1.OpfsDb('/obex_local_logs.sqlite3', 'c');
+          db = new sqlite3.oo1.OpfsDb('/dns_worker_local_logs.sqlite3', 'c');
           isOpfs = true;
           console.log('[SQLite Worker] Successfully opened OPFS persistent database via OpfsDb');
         } catch (opfsErr) {
@@ -80,11 +80,11 @@ export async function initDatabase(): Promise<boolean> {
       if (!db && typeof sqlite3.installOpfsSAHPoolVfs === 'function') {
         try {
           const poolUtil = await sqlite3.installOpfsSAHPoolVfs({
-            name: 'obex-sahpool',
+            name: 'dns_worker-sahpool',
             clearOnInit: false,
             initialCapacity: 10,
           });
-          db = new poolUtil.OpfsSAHPoolDb('/obex_local_logs.sqlite3');
+          db = new poolUtil.OpfsSAHPoolDb('/dns_worker_local_logs.sqlite3');
           isOpfs = true;
           console.log('[SQLite Worker] Successfully opened OPFS persistent database via OpfsSAHPool');
         } catch (sahErr) {
@@ -96,7 +96,7 @@ export async function initDatabase(): Promise<boolean> {
       // Third attempt / fallback: In-memory SQLite (e.g. Incognito/Private mode or unsupported browser)
       if (!db && sqlite3.oo1?.DB) {
         console.warn('[SQLite Worker] OPFS persistence unavailable (incognito/restricted mode), falling back to in-memory SQLite');
-        db = new sqlite3.oo1.DB('/obex_local_logs_mem.sqlite3', 'c');
+        db = new sqlite3.oo1.DB('/dns_worker_local_logs_mem.sqlite3', 'c');
         isOpfs = false;
       }
 

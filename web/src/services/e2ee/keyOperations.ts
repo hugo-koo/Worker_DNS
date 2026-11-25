@@ -6,6 +6,7 @@
 import { ml_kem768_p256 } from "@noble/post-quantum/hybrid.js";
 import { toBase64 } from "./crypto";
 import type { UnlockedPrivateKey } from "./types";
+import { zeroizeBuffer } from "../../utils/memory";
 
 export interface GeneratedPqcPayload {
   publicKeyPayload: {
@@ -20,17 +21,21 @@ export interface GeneratedPqcPayload {
  */
 export function generatePqcKeyPairPayload(legacyKey?: JsonWebKey): GeneratedPqcPayload {
   const pqcKeys = ml_kem768_p256.keygen();
-  const publicKeyPayload = {
-    alg: "P256-MLKEM768" as const,
-    pqc_pk: toBase64(pqcKeys.publicKey),
-  };
-  const privateKeyObj: UnlockedPrivateKey = {
-    alg: "P256-MLKEM768",
-    seedBase64: toBase64(pqcKeys.secretKey),
-    ...(legacyKey ? { legacyKey } : {}),
-  };
+  try {
+    const publicKeyPayload = {
+      alg: "P256-MLKEM768" as const,
+      pqc_pk: toBase64(pqcKeys.publicKey),
+    };
+    const privateKeyObj: UnlockedPrivateKey = {
+      alg: "P256-MLKEM768",
+      seedBase64: toBase64(pqcKeys.secretKey),
+      ...(legacyKey ? { legacyKey } : {}),
+    };
 
-  return { publicKeyPayload, privateKeyObj };
+    return { publicKeyPayload, privateKeyObj };
+  } finally {
+    zeroizeBuffer(pqcKeys.secretKey);
+  }
 }
 
 /**
@@ -50,16 +55,20 @@ export async function wrapPrivateKeyWithKek(
 
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const plaintext = new TextEncoder().encode(JSON.stringify(privateKeyObj));
-  const encryptedBuf = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv },
-    kekKey,
-    plaintext
-  );
+  try {
+    const encryptedBuf = await crypto.subtle.encrypt(
+      { name: "AES-GCM", iv },
+      kekKey,
+      plaintext
+    );
 
-  return {
-    encryptedSk: toBase64(encryptedBuf),
-    iv: toBase64(iv),
-  };
+    return {
+      encryptedSk: toBase64(encryptedBuf),
+      iv: toBase64(iv),
+    };
+  } finally {
+    zeroizeBuffer(plaintext);
+  }
 }
 
 /**
@@ -108,5 +117,9 @@ export async function unwrapPrivateKeyWithKek(
     }
   }
 
-  return JSON.parse(new TextDecoder().decode(decryptedBuf)) as UnlockedPrivateKey;
+  try {
+    return JSON.parse(new TextDecoder().decode(decryptedBuf)) as UnlockedPrivateKey;
+  } finally {
+    zeroizeBuffer(decryptedBuf);
+  }
 }

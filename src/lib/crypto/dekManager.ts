@@ -17,6 +17,7 @@ import {
   fromBase64,
 } from "./e2ee";
 import { generateLogId } from "../../models/log/core";
+import { zeroizeBuffer } from "../../utils/memory";
 
 export interface ActiveDek {
   kemKeyId: string;
@@ -120,8 +121,13 @@ export async function rotateDek(
   const pkBytes = fromBase64(pqcPublicKeyBase64);
   const { kemCtBase64, sharedSecret } = encapsulatePqcDek(pkBytes);
 
-  // 2. Derive 256-bit AES-GCM DEK via HKDF-SHA256
-  const dek = await deriveDekFromSharedSecret(sharedSecret);
+  // 2. Derive 256-bit AES-GCM DEK via HKDF-SHA256 and scrub raw shared secret
+  let dek: CryptoKey;
+  try {
+    dek = await deriveDekFromSharedSecret(sharedSecret);
+  } finally {
+    zeroizeBuffer(sharedSecret);
+  }
 
   // 3. Generate unique kem_key_id
   const kemKeyId = `kem_${generateLogId()}`;

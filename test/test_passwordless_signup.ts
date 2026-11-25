@@ -85,7 +85,7 @@ async function sha256Hex(text: string): Promise<string> {
 
 async function run(): Promise<void> {
   const prevCaches = (globalThis as { caches?: unknown }).caches;
-  (globalThis as { caches: { default: Cache } }).caches = { default: createMockCache() };
+  (globalThis as { caches?: { default: Cache } }).caches = { default: createMockCache() };
 
   const sqlite = new DatabaseSync(":memory:");
   runMigrations(sqlite, path.join(process.cwd(), "migrations"));

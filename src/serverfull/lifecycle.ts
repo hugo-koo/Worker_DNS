@@ -124,7 +124,7 @@ export function detectServerfullEnvironment(
     installMethod = 'docker';
   } else if (existsSync(path.join(normalizedRoot, '.git'))) {
     installMethod = 'source';
-  } else if (normalizedRoot.includes('_npx')) {
+  } else if (normalizedRoot.includes('_npx') || normalizedRoot.includes('bunx')) {
     installMethod = 'npx';
   } else if (normalizedRoot.includes('node_modules')) {
     installMethod = 'npm-global';

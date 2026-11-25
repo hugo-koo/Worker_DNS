@@ -14,6 +14,7 @@ import { DEFAULT_FAIL_OPEN_UPSTREAM } from '../constants/presets';
 import { lookupAccessKeyInDo, syncResolvedProfileKeyToDo } from '../lib/accessKeyRegistry';
 import { recordActiveDnsConnection } from '../lib/activeDns';
 import { detectServerfullMode } from '../router/runtimeConfig';
+import { zeroizeBuffer } from '../utils/memory';
 
 /** In-memory throttle tracker for user last DNS resolution database updates */
 const activeThrottleMemoryMap = new Map<string, number>();
@@ -380,5 +381,7 @@ export async function handleDoHRequest(
       console.error(`[DoH Pipeline] Emergency fallback failed:`, proxyErr);
       return new Response(`Internal Server Error`, { status: 500 });
     }
+  } finally {
+    zeroizeBuffer(queryRaw);
   }
 }

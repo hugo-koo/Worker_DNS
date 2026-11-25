@@ -1,3 +1,5 @@
+import { zeroizeBuffers } from "../utils/memory";
+
 export function base64urlEncode(buf: ArrayBuffer | Uint8Array | string): string {
   let stringToEncode = "";
   if (typeof buf === "string") {
@@ -104,15 +106,20 @@ const JWT_KEY_SALT = "DNS_WORKER_JWT_KEY_SALT_v1";
  */
 export async function importJwtSecret(secret: string): Promise<CryptoKey> {
   const saltedData = new TextEncoder().encode(`${secret}:${JWT_KEY_SALT}`);
-  const secretBytes = await crypto.subtle.digest("SHA-256", saltedData);
+  let secretBytes: ArrayBuffer | null = null;
+  try {
+    secretBytes = await crypto.subtle.digest("SHA-256", saltedData);
 
-  return crypto.subtle.importKey(
-    "raw",
-    secretBytes,
-    { name: "HMAC", hash: "SHA-512" },
-    false,
-    ["sign", "verify"]
-  );
+    return await crypto.subtle.importKey(
+      "raw",
+      secretBytes,
+      { name: "HMAC", hash: "SHA-512" },
+      false,
+      ["sign", "verify"]
+    );
+  } finally {
+    zeroizeBuffers(saltedData, secretBytes);
+  }
 }
 
 export async function signJWT(payload: any, key: CryptoKey): Promise<string> {

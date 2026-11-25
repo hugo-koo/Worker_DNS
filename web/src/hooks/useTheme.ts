@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 /** Supported UI theme modes. */
 export type ThemeMode = "light" | "dark" | "system";
 
-const THEME_STORAGE_KEY = "obex_theme";
+const THEME_STORAGE_KEY = "dns_worker_theme";
 
 function readInitialTheme(): ThemeMode {
   if (typeof window === "undefined") return "dark";

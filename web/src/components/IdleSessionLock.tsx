@@ -38,7 +38,7 @@ export const IdleSessionLock: React.FC<IdleSessionLockProps> = ({
   children,
 }): React.ReactElement => {
   const [isLocked, setIsLocked] = useState<boolean>(() => {
-    return sessionStorage.getItem("obex_session_locked") === "true";
+    return sessionStorage.getItem("dns_worker_session_locked") === "true";
   });
 
   const lastActivityRef = useRef<number>(0);
@@ -69,7 +69,7 @@ export const IdleSessionLock: React.FC<IdleSessionLockProps> = ({
       if (inactiveMs >= timeoutMs) {
         e2ee.clearStorage();
         setIsLocked(true);
-        sessionStorage.setItem("obex_session_locked", "true");
+        sessionStorage.setItem("dns_worker_session_locked", "true");
         try {
           await lockSession();
         } catch (e) {
@@ -91,7 +91,7 @@ export const IdleSessionLock: React.FC<IdleSessionLockProps> = ({
     const handlePaused = (): void => {
       e2ee.clearStorage();
       setIsLocked(true);
-      sessionStorage.setItem("obex_session_locked", "true");
+      sessionStorage.setItem("dns_worker_session_locked", "true");
     };
 
     window.addEventListener("session_paused", handlePaused);
@@ -102,7 +102,7 @@ export const IdleSessionLock: React.FC<IdleSessionLockProps> = ({
 
   const handleUnlockSuccess = (): void => {
     setIsLocked(false);
-    sessionStorage.removeItem("obex_session_locked");
+    sessionStorage.removeItem("dns_worker_session_locked");
     lastActivityRef.current = Date.now();
     if (onUnlock) {
       onUnlock();

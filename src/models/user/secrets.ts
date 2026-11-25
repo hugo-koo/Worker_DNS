@@ -2,6 +2,15 @@ import { D1Database } from "@cloudflare/workers-types";
 import { UserRecord } from "./types";
 import { encryptEnvelope, decryptEnvelope, rotateEnvelopeDek } from "../../utils/envelope";
 
+const ALLOWED_SECRET_UPDATE_COLUMNS = new Set([
+  "totp_secret",
+  "totp_secret_encrypted",
+  "totp_secret_dek",
+  "totp_recovery_keys",
+  "totp_recovery_keys_encrypted",
+  "totp_recovery_keys_dek",
+]);
+
 /**
  * Handles envelope encryption, decryption, transparent migration from legacy plaintext,
  * and automatic DEK rotation for sensitive user secrets (TOTP secret & recovery keys).
@@ -97,6 +106,9 @@ export class UserSecretProcessor {
         const updateParts: string[] = [];
         const bindings: unknown[] = [];
         for (const [key, val] of Object.entries(updatedFields)) {
+          if (!ALLOWED_SECRET_UPDATE_COLUMNS.has(key)) {
+            throw new Error(`Disallowed secret update column: ${key}`);
+          }
           updateParts.push(`${key} = ?`);
           bindings.push(val);
         }

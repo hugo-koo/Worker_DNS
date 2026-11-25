@@ -1,4 +1,5 @@
 import type { TFunction } from "i18next";
+import { zeroizeBuffers } from "./memory";
 
 declare global {
   interface Window {
@@ -134,17 +135,22 @@ export async function checkPasswordBreached(
   }
 
   try {
-    const hashBuffer = await crypto.subtle.digest(
-      "SHA-1",
-      new TextEncoder().encode(normalized)
-    );
-    const sha1Hex = Array.from(new Uint8Array(hashBuffer))
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("")
-      .toUpperCase();
+    const encodedPassword = new TextEncoder().encode(normalized);
+    let hashBuffer: ArrayBuffer | null = null;
+    let prefix = "";
+    let suffix = "";
+    try {
+      hashBuffer = await crypto.subtle.digest("SHA-1", encodedPassword);
+      const sha1Hex = Array.from(new Uint8Array(hashBuffer))
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("")
+        .toUpperCase();
 
-    const prefix = sha1Hex.slice(0, 5);
-    const suffix = sha1Hex.slice(5);
+      prefix = sha1Hex.slice(0, 5);
+      suffix = sha1Hex.slice(5);
+    } finally {
+      zeroizeBuffers(encodedPassword, hashBuffer);
+    }
 
     const res = await fetch(`https://api.pwnedpasswords.com/range/${prefix}`, {
       headers: { "Add-Padding": "true" },
@@ -451,10 +457,15 @@ export function loadTurnstileScript(onLoad: () => void): void {
  */
 export async function hashTotpToken(token: string, salt: string): Promise<string> {
   const msgBuffer = new TextEncoder().encode(token + salt);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
-  return Array.from(new Uint8Array(hashBuffer))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
+  let hashBuffer: ArrayBuffer | null = null;
+  try {
+    hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+    return Array.from(new Uint8Array(hashBuffer))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+  } finally {
+    zeroizeBuffers(msgBuffer, hashBuffer);
+  }
 }
 
 /**
@@ -470,29 +481,34 @@ export async function hashPasswordClient(password: string, salt: string, iterati
   // Normalize Unicode passphrases with NFC per NIST SP 800-63B-4 § 3.1.1.2 (no-op for ASCII)
   const passwordBuffer = encoder.encode(password.normalize("NFC"));
   const saltBuffer = encoder.encode(salt.toLowerCase());
+  let hashBuffer: ArrayBuffer | null = null;
 
-  const baseKey = await crypto.subtle.importKey(
-    "raw",
-    passwordBuffer,
-    "PBKDF2",
-    false,
-    ["deriveBits", "deriveKey"]
-  );
+  try {
+    const baseKey = await crypto.subtle.importKey(
+      "raw",
+      passwordBuffer,
+      "PBKDF2",
+      false,
+      ["deriveBits", "deriveKey"]
+    );
 
-  const hashBuffer = await crypto.subtle.deriveBits(
-    {
-      name: "PBKDF2",
-      salt: saltBuffer,
-      iterations: iterations,
-      hash: "SHA-256"
-    },
-    baseKey,
-    256
-  );
+    hashBuffer = await crypto.subtle.deriveBits(
+      {
+        name: "PBKDF2",
+        salt: saltBuffer,
+        iterations: iterations,
+        hash: "SHA-256"
+      },
+      baseKey,
+      256
+    );
 
-  return Array.from(new Uint8Array(hashBuffer))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
+    return Array.from(new Uint8Array(hashBuffer))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+  } finally {
+    zeroizeBuffers(passwordBuffer, saltBuffer, hashBuffer);
+  }
 }
 
 /**
@@ -514,31 +530,37 @@ export async function deriveStoredHashClient(clientHash: string, saltHex: string
   const encoder = new TextEncoder();
   const passwordBuffer = encoder.encode(clientHash);
   const salt = hexToUint8Array(saltHex);
+  let hashBuffer: ArrayBuffer | null = null;
+  let combined: Uint8Array | null = null;
 
-  const baseKey = await crypto.subtle.importKey(
-    "raw",
-    passwordBuffer,
-    "PBKDF2",
-    false,
-    ["deriveBits", "deriveKey"]
-  );
+  try {
+    const baseKey = await crypto.subtle.importKey(
+      "raw",
+      passwordBuffer,
+      "PBKDF2",
+      false,
+      ["deriveBits", "deriveKey"]
+    );
 
-  const hashBuffer = await crypto.subtle.deriveBits(
-    {
-      name: "PBKDF2",
-      salt: salt as any,
-      iterations: 100000,
-      hash: "SHA-256"
-    },
-    baseKey,
-    256
-  );
+    hashBuffer = await crypto.subtle.deriveBits(
+      {
+        name: "PBKDF2",
+        salt: salt as any,
+        iterations: 100000,
+        hash: "SHA-256"
+      },
+      baseKey,
+      256
+    );
 
-  const combined = new Uint8Array(salt.length + hashBuffer.byteLength);
-  combined.set(salt);
-  combined.set(new Uint8Array(hashBuffer), salt.length);
+    combined = new Uint8Array(salt.length + hashBuffer.byteLength);
+    combined.set(salt);
+    combined.set(new Uint8Array(hashBuffer), salt.length);
 
-  return btoa(String.fromCharCode(...combined));
+    return btoa(String.fromCharCode(...combined));
+  } finally {
+    zeroizeBuffers(passwordBuffer, salt, hashBuffer, combined);
+  }
 }
 
 /**
@@ -549,19 +571,24 @@ export async function hmacSha256(key: string, data: string): Promise<string> {
   const encoder = new TextEncoder();
   const keyBuffer = encoder.encode(key);
   const dataBuffer = encoder.encode(data);
+  let signature: ArrayBuffer | null = null;
 
-  const cryptoKey = await crypto.subtle.importKey(
-    "raw",
-    keyBuffer,
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"]
-  );
+  try {
+    const cryptoKey = await crypto.subtle.importKey(
+      "raw",
+      keyBuffer,
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"]
+    );
 
-  const signature = await crypto.subtle.sign("HMAC", cryptoKey, dataBuffer);
-  return Array.from(new Uint8Array(signature))
-    .map(b => b.toString(16).padStart(2, '0'))
-    .join('');
+    signature = await crypto.subtle.sign("HMAC", cryptoKey, dataBuffer);
+    return Array.from(new Uint8Array(signature))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+  } finally {
+    zeroizeBuffers(keyBuffer, dataBuffer, signature);
+  }
 }
 
 /**

@@ -13,12 +13,12 @@ const clearCsrfToken = () => {
   const secureFlag = typeof window !== "undefined" && window.location.protocol === "https:" ? "; Secure" : "";
   document.cookie = `csrf_token=; Max-Age=0; path=/; SameSite=Lax${secureFlag}`;
   try {
-    sessionStorage.removeItem("obex_session_active");
-    sessionStorage.removeItem("obex_session_locked");
-    sessionStorage.removeItem("obex_username");
-    sessionStorage.removeItem("obex_user_id");
-    localStorage.removeItem("obex_username");
-    localStorage.removeItem("obex_user_id");
+    sessionStorage.removeItem("dns_worker_session_active");
+    sessionStorage.removeItem("dns_worker_session_locked");
+    sessionStorage.removeItem("dns_worker_username");
+    sessionStorage.removeItem("dns_worker_user_id");
+    localStorage.removeItem("dns_worker_username");
+    localStorage.removeItem("dns_worker_user_id");
   } catch {}
 };
 
@@ -49,12 +49,12 @@ export function useAuth(toasterRef: React.RefObject<OverlayToaster | null>) {
           const data = await refresh();
           setAccessToken(data.accessToken);
           if (data.user?.id) {
-            sessionStorage.setItem("obex_user_id", data.user.id);
-            try { localStorage.setItem("obex_user_id", data.user.id); } catch {}
+            sessionStorage.setItem("dns_worker_user_id", data.user.id);
+            try { localStorage.setItem("dns_worker_user_id", data.user.id); } catch {}
           }
           if (data.user?.username) {
-            sessionStorage.setItem("obex_username", data.user.username);
-            try { localStorage.setItem("obex_username", data.user.username); } catch {}
+            sessionStorage.setItem("dns_worker_username", data.user.username);
+            try { localStorage.setItem("dns_worker_username", data.user.username); } catch {}
           }
         } catch {
           clearCsrfToken();
@@ -68,12 +68,12 @@ export function useAuth(toasterRef: React.RefObject<OverlayToaster | null>) {
         const meData = await getMe();
         setCurrentUser(meData);
         if (meData.username) {
-          sessionStorage.setItem("obex_username", meData.username);
-          try { localStorage.setItem("obex_username", meData.username); } catch {}
+          sessionStorage.setItem("dns_worker_username", meData.username);
+          try { localStorage.setItem("dns_worker_username", meData.username); } catch {}
         }
         if (meData.id) {
-          sessionStorage.setItem("obex_user_id", meData.id);
-          try { localStorage.setItem("obex_user_id", meData.id); } catch {}
+          sessionStorage.setItem("dns_worker_user_id", meData.id);
+          try { localStorage.setItem("dns_worker_user_id", meData.id); } catch {}
         }
 
         if (meData.timezone) {
@@ -95,9 +95,9 @@ export function useAuth(toasterRef: React.RefObject<OverlayToaster | null>) {
               const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
               const payload = JSON.parse(atob(base64));
               if (payload?.userId) {
-                sessionStorage.setItem("obex_user_id", payload.userId);
-                try { localStorage.setItem("obex_user_id", payload.userId); } catch {}
-                const cachedUsername = sessionStorage.getItem("obex_username") || localStorage.getItem("obex_username") || "";
+                sessionStorage.setItem("dns_worker_user_id", payload.userId);
+                try { localStorage.setItem("dns_worker_user_id", payload.userId); } catch {}
+                const cachedUsername = sessionStorage.getItem("dns_worker_username") || localStorage.getItem("dns_worker_username") || "";
                 setCurrentUser({
                   id: payload.userId,
                   username: cachedUsername,
@@ -144,6 +144,7 @@ export function useAuth(toasterRef: React.RefObject<OverlayToaster | null>) {
   // Listen for unauthorized events from the API client / interceptor
   useEffect(() => {
     const handleUnauthorized = (e: Event) => {
+      setAccessToken(null);
       e2ee.clearStorage();
       void localDb.clearAll();
       if (typeof window !== "undefined" && "caches" in window) {
@@ -188,11 +189,13 @@ export function useAuth(toasterRef: React.RefObject<OverlayToaster | null>) {
 
   const handleLogout = async () => {
     try {
+      setAccessToken(null);
       e2ee.clearStorage();
       await logout();
     } catch (e) {
       console.error("Logout failed", e);
     } finally {
+      setAccessToken(null);
       e2ee.clearStorage();
       await localDb.clearAll();
       if (typeof window !== "undefined" && "caches" in window) {

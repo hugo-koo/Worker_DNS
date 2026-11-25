@@ -184,10 +184,10 @@ async function runTests() {
   });
   await httpsServer.start();
 
-  // ── TEST A: UDP DNS Query (Internal verification domain 'obex TXT') ──
-  console.log('\n>>> [TEST A] Testing UDP DNS Resolution (obex TXT)...');
+  // ── TEST A: UDP DNS Query (Internal verification domain 'dns_worker TXT') ──
+  console.log('\n>>> [TEST A] Testing UDP DNS Resolution (dns_worker TXT)...');
   const clientSocket = dgram.createSocket('udp4');
-  const queryPacket = buildDNSQuery('obex', 'TXT');
+  const queryPacket = buildDNSQuery('dns_worker', 'TXT');
 
   const udpPromise = new Promise<Buffer>((resolve, reject) => {
     clientSocket.on('message', (msg) => resolve(msg));
@@ -220,7 +220,7 @@ async function runTests() {
   await unauthUdpServer.start();
 
   const unauthSocket = dgram.createSocket('udp4');
-  const unauthQueryPacket = buildDNSQuery('obex', 'TXT');
+  const unauthQueryPacket = buildDNSQuery('dns_worker', 'TXT');
   const unauthPromise = new Promise<Buffer>((resolve, reject) => {
     unauthSocket.on('message', (msg) => resolve(msg));
     unauthSocket.on('error', reject);

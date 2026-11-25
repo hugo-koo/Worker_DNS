@@ -227,16 +227,26 @@ export function handleUpdateLogsBatch(payload: UpdateLogsBatchPayload): { update
  */
 export function handleGetEncryptedLogs(payload: GetEncryptedLogsPayload): { rows: WorkerLogEntry[] } {
   const db = getDatabase();
-  const limit = payload.limit || 500;
+  const limit = Math.max(1, Math.min(payload.limit || 500, 1000));
+  const conditions = ['profile_id = ?', 'encrypt_version > 0'];
+  const binds: (string | number)[] = [payload.profileId];
+
+  if (payload.beforeTimestamp !== undefined && payload.beforeId !== undefined) {
+    conditions.push('(timestamp < ? OR (timestamp = ? AND id < ?))');
+    binds.push(payload.beforeTimestamp, payload.beforeTimestamp, payload.beforeId);
+  }
+  binds.push(limit);
+
   const rows: WorkerLogEntry[] = [];
   const stmt = db.prepare(`
-    SELECT * FROM local_logs 
-    WHERE profile_id = ? AND (encrypt_version > 0 OR (is_encrypted = 1 AND encrypt_version IS NULL))
+    SELECT * FROM local_logs
+    WHERE ${conditions.join(' AND ')}
+    ORDER BY timestamp DESC, id DESC
     LIMIT ?;
   `);
 
   try {
-    stmt.bind([payload.profileId, limit]);
+    stmt.bind(binds);
     while (stmt.step()) {
       rows.push(stmt.get<WorkerLogEntry>({}));
     }

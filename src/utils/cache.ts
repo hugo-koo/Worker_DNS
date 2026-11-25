@@ -1,4 +1,4 @@
-let currentWorkerOrigin = "https://obex-dns.internal";
+let currentWorkerOrigin = "https://dns-worker.internal";
 
 export const cacheUtils = {
   /**

@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { H3, Intent, Callout, Dialog, Button, Classes } from "@blueprintjs/core";
 import { useTranslation } from "react-i18next";
 import { ArrowLeft, Copy, Check, ShieldAlert } from "lucide-react";
-import LogoIcon from "../assets/obex_cat_eye_logo.svg";
+import LogoIcon from "../assets/dns_worker_cat_eye_logo.svg";
 import { LoginUsernameStep } from "./login/LoginUsernameStep";
 import { LoginPasswordStep } from "./login/LoginPasswordStep";
 import { LoginMfaStep } from "./login/LoginMfaStep";

@@ -28,6 +28,7 @@ import { PAGE_CONTAINER_STANDARD } from "../../constants/layout";
 import { useStickyHeaderTitle } from "../../layouts/HeaderTitleContext";
 
 export interface SystemViewProps {
+  currentUser?: UserInfo | null;
   onSavingChange?: (saving: boolean) => void;
   toasterRef?: React.RefObject<OverlayToaster | null>;
 }
@@ -38,7 +39,7 @@ export interface SystemViewProps {
  *
  * @returns React element representing the system administration view.
  */
-export const SystemView: React.FC<SystemViewProps> = ({ onSavingChange, toasterRef }) => {
+export const SystemView: React.FC<SystemViewProps> = ({ currentUser, onSavingChange, toasterRef }) => {
   const [me, setMe] = useState<UserInfo | null>(null);
   const [users, setUsers] = useState<UserInfo[]>([]);
   const [loading, setLoading] = useState(true);
@@ -99,7 +100,7 @@ export const SystemView: React.FC<SystemViewProps> = ({ onSavingChange, toasterR
 
   const fetchMe = useCallback(async () => {
     try {
-      const data = await getMe();
+      const data = currentUser ?? (await getMe());
       setMe(data);
       if (data.role === "admin") {
         fetchUsers();
@@ -113,7 +114,7 @@ export const SystemView: React.FC<SystemViewProps> = ({ onSavingChange, toasterR
     } finally {
       setLoading(false);
     }
-  }, [fetchDbStatus, fetchRuntimeStatus]);
+  }, [currentUser, fetchDbStatus, fetchRuntimeStatus]);
 
   useEffect(() => {
     fetchMe();

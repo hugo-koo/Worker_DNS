@@ -1,8 +1,18 @@
 import { Env, ProfileSettings, Rule } from "../types";
 import { BloomFilter } from "../utils/bloom";
 import { cacheUtils } from "../utils/cache";
+import { zeroizeBuffer } from "../utils/memory";
 import { AdGuardProfileEngine, AdGuardPayload } from "../lib/adguard";
 import { detectServerfullMode } from "../router/runtimeConfig";
+
+export interface DnsCacheEntry {
+  profileId: string;
+  answer: Uint8Array;
+  ttl: number;
+  action: "PASS";
+  reason?: string;
+  expiresAt: number;
+}
 
 export interface ConfigCacheEntry {
   settings: ProfileSettings;
@@ -17,7 +27,10 @@ export interface ConfigCacheEntry {
  * 利用 JavaScript Map 保证的“按插入顺序迭代”特性，在 O(1) 复杂度内自动淘汰最旧的数据。
  */
 export class SizeCappedMap<K, V> extends Map<K, V> {
-  constructor(private maxEntries: number) {
+  constructor(
+    private maxEntries: number,
+    private readonly onEvict?: (value: V) => void
+  ) {
     super();
   }
 
@@ -43,16 +56,37 @@ export class SizeCappedMap<K, V> extends Map<K, V> {
     return this.maxEntries;
   }
 
+  override delete(key: K): boolean {
+    const existing = super.get(key);
+    const removed = super.delete(key);
+    if (removed && existing !== undefined) {
+      this.onEvict?.(existing);
+    }
+    return removed;
+  }
+
+  override clear(): void {
+    if (this.onEvict) {
+      for (const value of super.values()) {
+        this.onEvict(value);
+      }
+    }
+    super.clear();
+  }
+
   override set(key: K, value: V): this {
+    const previous = super.get(key);
     // 若键不存在且即将超出容量，淘汰最旧的记录 (第一项)
-    if (!this.has(key) && this.size >= this.maxEntries) {
+    if (previous === undefined && this.size >= this.maxEntries) {
       const oldestKey = this.keys().next().value;
       if (oldestKey !== undefined) {
         this.delete(oldestKey);
       }
+    } else if (previous !== undefined && previous !== value) {
+      this.onEvict?.(previous);
     }
     // 重新更新插入顺序，使其作为最近活跃项移到链表末尾
-    this.delete(key);
+    super.delete(key);
     super.set(key, value);
     return this;
   }
@@ -71,8 +105,77 @@ export const adguardMemoryMap = new SizeCappedMap<string, { engine: AdGuardProfi
 /** 默认 DNS 缓存容量为 20,000 (20k) 条，统一适用于 Serverless 与 Serverfull 模式 */
 export const DEFAULT_DNS_CACHE_SIZE = 20000;
 
-// DNS 缓存默认容量 20k，可在毫秒级内直接命中热点域名解析结果，规避向上游重复递归发包
-export const dnsCache = new SizeCappedMap<string, any>(DEFAULT_DNS_CACHE_SIZE);
+/** Maximum Worker RAM dwell time (5 minutes) for cached DNS answers to minimize plaintext query residency. */
+export const MAX_DNS_CACHE_TTL_SEC = 300;
+
+// DNS 缓存默认容量 20k；淘汰或失效时立即清零响应报文缓冲区，键名采用摘要避免明文域名驻留 Map Key
+export const dnsCache = new SizeCappedMap<string, DnsCacheEntry>(
+  DEFAULT_DNS_CACHE_SIZE,
+  (entry) => zeroizeBuffer(entry.answer)
+);
+
+let lastDnsSweepAt = 0;
+
+/**
+ * Computes an opaque SHA-256 digest key for the Worker in-memory DNS cache so
+ * plaintext queried domain names are not retained as enumerable Map keys.
+ */
+export async function computeDnsCacheKey(
+  profileId: string,
+  domain: string,
+  recordType: string
+): Promise<string> {
+  const raw = new TextEncoder().encode(`${profileId}\0${domain.toLowerCase()}\0${recordType}`);
+  try {
+    const digest = await crypto.subtle.digest("SHA-256", raw);
+    const bytes = new Uint8Array(digest);
+    let hex = "";
+    for (let i = 0; i < bytes.length; i++) {
+      hex += bytes[i].toString(16).padStart(2, "0");
+    }
+    return hex;
+  } finally {
+    zeroizeBuffer(raw);
+  }
+}
+
+/**
+ * Sweeps expired DNS cache entries from Worker memory and zeroes their answer buffers.
+ */
+export function sweepExpiredDnsCache(now: number = Date.now()): void {
+  for (const [key, entry] of dnsCache.entries()) {
+    if (!entry || now >= entry.expiresAt) {
+      dnsCache.delete(key);
+    }
+  }
+  lastDnsSweepAt = now;
+}
+
+/**
+ * Retrieves an unexpired cached DNS entry, immediately deleting and scrubbing if expired.
+ */
+export function getCachedDnsEntry(cacheKey: string, now: number = Date.now()): DnsCacheEntry | null {
+  const entry = dnsCache.get(cacheKey);
+  if (!entry) return null;
+  if (now >= entry.expiresAt || !(entry.answer instanceof Uint8Array)) {
+    dnsCache.delete(cacheKey);
+    return null;
+  }
+  return entry;
+}
+
+/**
+ * Stores a DNS answer in Worker memory with bounded TTL and periodic expired-entry sweeping.
+ */
+export function setCachedDnsEntry(cacheKey: string, entry: DnsCacheEntry, now: number = Date.now()): void {
+  if (now - lastDnsSweepAt >= 30_000) {
+    sweepExpiredDnsCache(now);
+  }
+  dnsCache.set(cacheKey, {
+    ...entry,
+    answer: new Uint8Array(entry.answer),
+  });
+}
 
 /**
  * 动态同步 DNS 缓存容量与运行时缓存上限。支持在 Serverless (Cloudflare Workers) 与 Serverfull (Node.js/Bun) 模式下统一生效。
@@ -205,8 +308,8 @@ export const pipelineCache = {
     }
     profileKeyMemoryMap.clear();
     defaultProfileMemoryCache = null;
-    for (const key of dnsCache.keys()) {
-      if (key.startsWith(`${profileId}:`)) {
+    for (const [key, entry] of dnsCache.entries()) {
+      if (entry.profileId === profileId || key.startsWith(`${profileId}:`)) {
         dnsCache.delete(key);
       }
     }
@@ -223,7 +326,7 @@ export const pipelineCache = {
         if (clearBloom) {
           tasks.push(cacheUtils.delete(cache, `bloom-bin:${profileId}`));
           // 防御性清理旧版硬编码 URL
-          tasks.push(cache.delete(`https://obex.local/bloom-bin/${profileId}`));
+          tasks.push(cache.delete(`https://dns-worker.local/bloom-bin/${profileId}`));
         }
         await Promise.all(tasks);
       }

@@ -53,6 +53,7 @@ export const LogsView: React.FC<LogsViewProps> = ({ profileId, onQuickAction, to
     scrollContainerRef,
     lastLogElementRef,
     fetchLogs,
+    reloadLocalLogs,
 
     // export
     exporting,
@@ -78,7 +79,7 @@ export const LogsView: React.FC<LogsViewProps> = ({ profileId, onQuickAction, to
   } = useLogsE2ee({
     profileId,
     range,
-    fetchLogs,
+    onUnlocked: () => reloadLocalLogs(range),
     toasterRef
   });
 

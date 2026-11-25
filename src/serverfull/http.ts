@@ -7,6 +7,7 @@
 import http from 'node:http';
 import http2 from 'node:http2';
 import fs from 'node:fs';
+import type net from 'node:net';
 import { Env } from '../types';
 import { formatPortError } from './format';
 import { attachStaticAssetHandler } from './http/assets';
@@ -42,6 +43,7 @@ export interface HttpsServerOptions {
 export class HttpServer {
   private server: http.Server | null = null;
   private isRunning: boolean = false;
+  private activeSockets = new Set<net.Socket>();
 
   constructor(private options: HttpServerOptions) {
     attachStaticAssetHandler(this.options.env, this.options.staticDir);
@@ -59,6 +61,10 @@ export class HttpServer {
       this.server.headersTimeout = 66000;
       this.server.on('connection', (socket) => {
         socket.setNoDelay(true);
+        this.activeSockets.add(socket);
+        socket.once('close', () => {
+          this.activeSockets.delete(socket);
+        });
       });
 
       const startupErrorHandler = (err: any) => {
@@ -95,11 +101,27 @@ export class HttpServer {
   stop(): Promise<void> {
     return new Promise((resolve) => {
       if (this.server && this.isRunning) {
-        this.server.close(() => {
+        let settled = false;
+        const finish = () => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
           this.isRunning = false;
           console.log('[HTTP Server] Service stopped.');
           resolve();
-        });
+        };
+        const timer = setTimeout(() => {
+          for (const sock of this.activeSockets) {
+            try { sock.destroy(); } catch {}
+          }
+          finish();
+        }, 1500);
+
+        this.server.close(finish);
+        (this.server as { closeAllConnections?: () => void }).closeAllConnections?.();
+        for (const sock of this.activeSockets) {
+          try { sock.end(); } catch {}
+        }
       } else {
         resolve();
       }
@@ -114,6 +136,8 @@ export class HttpServer {
 export class HttpsServer {
   private server: http2.Http2SecureServer | null = null;
   private isRunning: boolean = false;
+  private activeSessions = new Set<http2.ServerHttp2Session>();
+  private activeSockets = new Set<net.Socket>();
 
   constructor(private options: HttpsServerOptions) {
     attachStaticAssetHandler(this.options.env, this.options.staticDir);
@@ -146,6 +170,16 @@ export class HttpsServer {
         this.server.setTimeout(65000);
         this.server.on('connection', (socket) => {
           socket.setNoDelay(true);
+          this.activeSockets.add(socket);
+          socket.once('close', () => {
+            this.activeSockets.delete(socket);
+          });
+        });
+        this.server.on('session', (session) => {
+          this.activeSessions.add(session);
+          session.once('close', () => {
+            this.activeSessions.delete(session);
+          });
         });
 
         const startupErrorHandler = (err: any) => {
@@ -182,11 +216,30 @@ export class HttpsServer {
   stop(): Promise<void> {
     return new Promise((resolve) => {
       if (this.server && this.isRunning) {
-        this.server.close(() => {
+        let settled = false;
+        const finish = () => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
           this.isRunning = false;
           console.log('[HTTPS Server] Service stopped.');
           resolve();
-        });
+        };
+        const timer = setTimeout(() => {
+          for (const session of this.activeSessions) {
+            try { session.destroy(); } catch {}
+          }
+          for (const sock of this.activeSockets) {
+            try { sock.destroy(); } catch {}
+          }
+          finish();
+        }, 1500);
+
+        this.server.close(finish);
+        (this.server as { closeAllConnections?: () => void }).closeAllConnections?.();
+        for (const session of this.activeSessions) {
+          try { session.close(); } catch {}
+        }
       } else {
         resolve();
       }

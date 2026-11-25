@@ -1,3 +1,5 @@
+import { zeroizeBuffer } from "../../../utils/memory";
+
 /**
  * @file recovery.ts
  * @description Key Encryption Key (KEK) derivation from plaintext recovery key via PBKDF2-HMAC-SHA256.
@@ -18,24 +20,28 @@ export async function deriveRecoveryKek(
   const normalized = plaintextRecoveryKey.replace(/[-\s]/g, "").toUpperCase().trim();
   const data = new TextEncoder().encode(normalized);
 
-  const baseKey = await subtle.importKey(
-    "raw",
-    data,
-    { name: "PBKDF2" },
-    false,
-    ["deriveKey"]
-  );
+  try {
+    const baseKey = await subtle.importKey(
+      "raw",
+      data,
+      { name: "PBKDF2" },
+      false,
+      ["deriveKey"]
+    );
 
-  return subtle.deriveKey(
-    {
-      name: "PBKDF2",
-      salt: salt as BufferSource,
-      iterations: 100000,
-      hash: "SHA-256",
-    },
-    baseKey,
-    { name: "AES-GCM", length: 256 },
-    false,
-    ["encrypt", "decrypt"]
-  );
+    return await subtle.deriveKey(
+      {
+        name: "PBKDF2",
+        salt: salt as BufferSource,
+        iterations: 100000,
+        hash: "SHA-256",
+      },
+      baseKey,
+      { name: "AES-GCM", length: 256 },
+      false,
+      ["encrypt", "decrypt"]
+    );
+  } finally {
+    zeroizeBuffer(data);
+  }
 }

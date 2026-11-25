@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { H3, Intent, Callout, Button, Spinner } from "@blueprintjs/core";
 import { useTranslation } from "react-i18next";
 import { LogOut } from "lucide-react";
-import LogoIcon from "../assets/obex_cat_eye_logo.svg";
+import LogoIcon from "../assets/dns_worker_cat_eye_logo.svg";
 import { DigitInput, type DigitInputRef } from "./DigitInput";
 import { hashPin, hashChallenge } from "../utils/auth";
 import { unlockSession, getUnlockNonce, ApiError } from "../services";
@@ -39,8 +39,8 @@ export const LockScreenForm: React.FC<LockScreenFormProps> = ({
   const [attemptsRemaining, setAttemptsRemaining] = useState<number | null>(null);
   const [username, setUsername] = useState<string>(() =>
     currentUser?.username ||
-    sessionStorage.getItem("obex_username") ||
-    localStorage.getItem("obex_username") ||
+    sessionStorage.getItem("dns_worker_username") ||
+    localStorage.getItem("dns_worker_username") ||
     ""
   );
   const digitInputRef = useRef<DigitInputRef>(null);
@@ -55,12 +55,12 @@ export const LockScreenForm: React.FC<LockScreenFormProps> = ({
     getUnlockNonce()
       .then((data) => {
         if (data.userId) {
-          sessionStorage.setItem("obex_user_id", data.userId);
-          try { localStorage.setItem("obex_user_id", data.userId); } catch {}
+          sessionStorage.setItem("dns_worker_user_id", data.userId);
+          try { localStorage.setItem("dns_worker_user_id", data.userId); } catch {}
         }
         if (data.username) {
-          sessionStorage.setItem("obex_username", data.username);
-          try { localStorage.setItem("obex_username", data.username); } catch {}
+          sessionStorage.setItem("dns_worker_username", data.username);
+          try { localStorage.setItem("dns_worker_username", data.username); } catch {}
           setUsername(data.username);
         }
       })
@@ -95,18 +95,18 @@ export const LockScreenForm: React.FC<LockScreenFormProps> = ({
 
       if (nonceUsername && !username) {
         setUsername(nonceUsername);
-        sessionStorage.setItem("obex_username", nonceUsername);
-        try { localStorage.setItem("obex_username", nonceUsername); } catch {}
+        sessionStorage.setItem("dns_worker_username", nonceUsername);
+        try { localStorage.setItem("dns_worker_username", nonceUsername); } catch {}
       }
       if (nonceUserId) {
-        sessionStorage.setItem("obex_user_id", nonceUserId);
-        try { localStorage.setItem("obex_user_id", nonceUserId); } catch {}
+        sessionStorage.setItem("dns_worker_user_id", nonceUserId);
+        try { localStorage.setItem("dns_worker_user_id", nonceUserId); } catch {}
       }
 
       const userId =
         currentUser?.id ||
-        sessionStorage.getItem("obex_user_id") ||
-        localStorage.getItem("obex_user_id") ||
+        sessionStorage.getItem("dns_worker_user_id") ||
+        localStorage.getItem("dns_worker_user_id") ||
         nonceUserId;
 
       if (!userId) {
@@ -172,8 +172,8 @@ export const LockScreenForm: React.FC<LockScreenFormProps> = ({
   const displayUsername =
     username ||
     currentUser?.username ||
-    sessionStorage.getItem("obex_username") ||
-    localStorage.getItem("obex_username") ||
+    sessionStorage.getItem("dns_worker_username") ||
+    localStorage.getItem("dns_worker_username") ||
     "";
 
   return (

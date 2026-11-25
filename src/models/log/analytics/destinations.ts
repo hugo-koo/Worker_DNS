@@ -2,6 +2,7 @@ import { D1Database } from "@cloudflare/workers-types";
 import { LogAggregationModel } from "../aggregation";
 import { DestinationCountResult, ISPCountResult } from "./types";
 import { computeRollupWindow, buildRollupUnionParts, hasActiveE2eeKey } from "./rollupWindow";
+import { normalizeBoundedLimit } from "../../../utils/sql";
 
 /**
  * Handles geographic destination country and ISP distribution analytics.
@@ -31,6 +32,7 @@ export class LogDestinationAnalytics {
     accessPointId?: string,
     limit = 250
   ): Promise<DestinationCountResult[]> {
+    const safeLimit = normalizeBoundedLimit(limit, 250, 1000);
     const queryRawDestinations = async (fromTs: number, toTs: number): Promise<DestinationCountResult[]> => {
       let queryStr = `
         SELECT 
@@ -58,7 +60,8 @@ export class LogDestinationAnalytics {
         queryStr += " AND access_point_id = ?";
         params.push(accessPointId);
       }
-      queryStr += ` GROUP BY country_code ORDER BY count DESC LIMIT ${limit}`;
+      queryStr += " GROUP BY country_code ORDER BY count DESC LIMIT ?";
+      params.push(safeLimit);
       const { results } = await this.db
         .prepare(queryStr)
         .bind(...params)
@@ -137,8 +140,8 @@ export class LogDestinationAnalytics {
     );
 
     const { results } = await this.db
-      .prepare(`SELECT country_code, MAX(country) as country, SUM(count) as count FROM (${union.sql}) WHERE country_code != '' GROUP BY country_code ORDER BY count DESC LIMIT ${limit}`)
-      .bind(...union.params)
+      .prepare("SELECT country_code, MAX(country) as country, SUM(count) as count FROM (" + union.sql + ") WHERE country_code != '' GROUP BY country_code ORDER BY count DESC LIMIT ?")
+      .bind(...union.params, safeLimit)
       .all<DestinationCountResult>();
 
     return results;
@@ -165,6 +168,7 @@ export class LogDestinationAnalytics {
     accessPointId?: string,
     limit = 250
   ): Promise<ISPCountResult[]> {
+    const safeLimit = normalizeBoundedLimit(limit, 250, 1000);
     const rawLogsQuery = async (fromTs: number, toTs: number): Promise<ISPCountResult[]> => {
       let queryStr = `
         SELECT 
@@ -201,7 +205,8 @@ export class LogDestinationAnalytics {
         queryStr += " AND access_point_id = ?";
         params.push(accessPointId);
       }
-      queryStr += ` GROUP BY name ORDER BY count DESC LIMIT ${limit}`;
+      queryStr += " GROUP BY name ORDER BY count DESC LIMIT ?";
+      params.push(safeLimit);
       const { results } = await this.db
         .prepare(queryStr)
         .bind(...params)
@@ -295,8 +300,8 @@ export class LogDestinationAnalytics {
     );
 
     const { results } = await this.db
-      .prepare(`SELECT name, SUM(count) as count FROM (${union.sql}) WHERE name IS NOT NULL AND name != '' GROUP BY name ORDER BY count DESC LIMIT ${limit}`)
-      .bind(...union.params)
+      .prepare("SELECT name, SUM(count) as count FROM (" + union.sql + ") WHERE name IS NOT NULL AND name != '' GROUP BY name ORDER BY count DESC LIMIT ?")
+      .bind(...union.params, safeLimit)
       .all<{ name: string | null; count: number }>();
 
     return results.map((r) => ({

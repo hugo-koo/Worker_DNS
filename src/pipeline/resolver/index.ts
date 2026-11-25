@@ -12,6 +12,7 @@ import { processBestEffortEch } from "./ech";
 import { handleBlockOrRedirect } from "./block";
 import { recordSuccessAndCache, recordFailure } from "./observability";
 import { getDefaultUpstreamUrl } from "../../constants/presets";
+import { zeroizeBuffer } from "../../utils/memory";
 
 export * from "./types";
 export * from "./transport";
@@ -147,6 +148,10 @@ export const pipelineResolver = {
         endpoint?.diagTarget,
         endpoint?.diagMethod
       );
+    } finally {
+      if (queryRaw !== query.raw) {
+        zeroizeBuffer(queryRaw);
+      }
     }
   },
 
