@@ -171,23 +171,27 @@ function testRuntimeSpecificHelpers(): void {
   assert.strictEqual(clusterInfo.workersCount, isBun ? 1 : 4);
 
   const bunSystemd = generateSystemdUnit({
-    execCmd: '/home/u/.bun/bin/bun /opt/dns-worker/dist/serverfull.mjs',
+    execCmd: 'bun /opt/dns-worker/dist/serverfull.mjs',
     nodePath: '/home/u/.bun/bin/bun',
     scriptPath: '/opt/dns-worker/dist/serverfull.mjs',
     workDir: '/opt/dns-worker',
     user: 'dnsworker'
   });
   assert(!bunSystemd.includes('NODE_OPTIONS='), 'Bun systemd unit should omit V8 NODE_OPTIONS');
-  assert(bunSystemd.includes('ExecStart=/home/u/.bun/bin/bun'), 'Bun systemd unit must contain bun ExecStart');
+  assert(bunSystemd.includes('ExecStart=bun /opt/dns-worker/dist/serverfull.mjs'), 'Bun systemd unit must contain bare bun ExecStart');
 
   const nodeSystemd = generateSystemdUnit({
-    execCmd: '/usr/bin/node /opt/dns-worker/dist/serverfull.mjs',
-    nodePath: '/usr/bin/node',
+    execCmd: 'node /opt/dns-worker/dist/serverfull.mjs',
+    nodePath: '/home/dnsworker/.nvm/versions/node/v24.21.0/bin/node',
     scriptPath: '/opt/dns-worker/dist/serverfull.mjs',
     workDir: '/opt/dns-worker',
     user: 'dnsworker'
   });
-  assert(nodeSystemd.includes('NODE_OPTIONS='), 'Node systemd unit must preserve NODE_OPTIONS tuning');
+  assert(nodeSystemd.includes('ExecStart=node /opt/dns-worker/dist/serverfull.mjs'), 'Node systemd unit must contain bare node ExecStart');
+  assert(nodeSystemd.includes('Environment="NODE_OPTIONS=--max-semi-space-size=64"'), 'Node systemd unit must use valid NODE_OPTIONS');
+  assert(!nodeSystemd.includes('--turbo-fast-api-calls'), 'NODE_OPTIONS must omit --turbo-fast-api-calls (Node exit code 9)');
+  assert(nodeSystemd.includes('Environment="PATH=/home/dnsworker/.bun/bin:/usr/local/sbin:/usr/local/bin:'), 'Systemd unit must preserve standard PATH with ~/.bun/bin');
+  assert(!nodeSystemd.includes('/home/dnsworker/.nvm/'), 'Systemd unit must not hardcode NVM paths');
 
   console.log(`   ✓ Helpers verified under active runtime: ${desc}.`);
 }

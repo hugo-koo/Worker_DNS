@@ -47,9 +47,20 @@ export function getServiceExecDetails(targetUser?: string): ServiceExecDetails {
       ? `/home/${process.env.SUDO_USER}`
       : (process.env.HOME || process.cwd());
 
+  const isBun = Boolean((process.versions as Record<string, string | undefined>).bun);
+  const runtimeCmd = isBun ? 'bun' : 'node';
+
   let execCmd = '';
-  if (scriptPath && fs.existsSync(scriptPath)) {
-    execCmd = `"${nodePath}" "${scriptPath}"`;
+  if (process.platform === 'win32') {
+    if (scriptPath && fs.existsSync(scriptPath)) {
+      execCmd = `"${nodePath}" "${scriptPath}"`;
+    } else {
+      execCmd = 'dns-worker';
+    }
+  } else if (scriptPath && fs.existsSync(scriptPath)) {
+    // Emit bare `node` or `bun` (simple filename) so systemd resolves via the system default path without hardcoding NVM/versioned paths
+    const safeScript = /\s/.test(scriptPath) ? `"${scriptPath}"` : scriptPath;
+    execCmd = `${runtimeCmd} ${safeScript}`;
   } else {
     execCmd = 'dns-worker';
   }

@@ -29,10 +29,14 @@ export const SYSTEMD_SERVICE_PATH = `/etc/systemd/system/${SERVICE_FILE_NAME}`;
 export function generateSystemdUnit(details: ServiceExecDetails): string {
   const { execCmd, workDir, user, nodePath } = details;
   const safeUser = /^[a-zA-Z0-9._-]+$/.test(user) ? user : 'root';
-  const isBunRuntime = path.basename(nodePath).toLowerCase().includes('bun');
+  const userHome = safeUser === 'root' ? '/root' : `/home/${safeUser}`;
+  // Include user-local ~/.bun/bin alongside standard system default directories without pinning versioned NVM paths
+  const servicePath = `${userHome}/.bun/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`;
+  const execBin = execCmd.trim().split(/\s+/)[0] || '';
+  const isBunRuntime = path.posix.basename(execBin).toLowerCase().includes('bun') || path.posix.basename(nodePath).toLowerCase().includes('bun');
   const runtimeTuningBlock = isBunRuntime
     ? '# JavaScriptCore (Bun) runtime engine enabled (NODE_OPTIONS V8 tuning skipped)'
-    : '# V8 Engine performance tuning for high-throughput DNS processing\nEnvironment="NODE_OPTIONS=--max-semi-space-size=64 --turbo-fast-api-calls"';
+    : '# V8 Engine GC semi-space tuning (v8.ts applies non-NODE_OPTIONS JIT flags in-process)\nEnvironment="NODE_OPTIONS=--max-semi-space-size=64"';
 
   return `[Unit]
 Description=DNS Worker Serverfull Service (UDP DNS, DoT & Web Dashboard)
@@ -47,6 +51,7 @@ Restart=always
 RestartSec=5
 LimitNOFILE=65535
 LimitNPROC=65535
+Environment="PATH=${servicePath}"
 
 ${runtimeTuningBlock}
 
